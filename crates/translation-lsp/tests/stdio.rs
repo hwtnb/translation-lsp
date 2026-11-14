@@ -2167,6 +2167,9 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "type Q { s: String @d(a: \"# string\") }",
         ),
         ("file:///Makefile", "makefile", "s = $(info # not)"),
+        ("file:///general.scss", "scss", "$s: \"// string\";"),
+        ("file:///general.clj", "clojure", "(def s \"; string\")"),
+        ("file:///general.hs", "haskell", "s = \"-- string\""),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2187,7 +2190,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         let marker = match language {
             "ruby" | "yaml" | "toml" | "shellscript" | "powershell" | "dockerfile"
             | "dockercompose" | "graphql" | "makefile" => "#",
-            "sql" | "lua" => "--",
+            "sql" | "lua" | "haskell" => "--",
+            "clojure" => ";",
             _ => "//",
         };
         let comment = COMMENT.replace("//", marker);
@@ -2233,6 +2237,10 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             // Protocol Buffers strings cannot span lines.
             "proto" => format!("option t =\n\"{}\";", comment.replace('\n', " ")),
             "graphql" => format!("\"\"\"\n{comment}\n\"\"\"\ntype T {{ a: Int }}"),
+            // SCSS and Haskell strings cannot span lines.
+            "scss" => format!("$t: \"{}\";", comment.replace('\n', " ")),
+            "haskell" => format!("t = \"{}\"", comment.replace('\n', " ")),
+            "clojure" => format!("(def t \"{comment}\")"),
             // The body of `define` is a value.
             "makefile" => format!("define T\n{comment}\nendef"),
             "ruby" => format!("t = \"{comment}\""),
@@ -2288,6 +2296,10 @@ fn adjacent_block_start_and_unclosed_blocks_do_not_reuse_previous_preview() {
         ("file:///blocks.astro", "astro", "<!--", "-->"),
         ("file:///blocks.css", "css", "/*", "*/"),
         ("file:///blocks.html", "html", "<!--", "-->"),
+        ("file:///blocks.scss", "scss", "/*", "*/"),
+        ("file:///blocks.hs", "haskell", "{-", "-}"),
+        ("file:///blocks.ml", "ocaml", "(*", "*)"),
+        ("file:///blocks.mli", "ocaml.interface", "(*", "*)"),
     ] {
         let first = format!(
             "{opening} Retry only if the remote service\nreports a temporary failure. {closing}"
@@ -3249,17 +3261,32 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
             "dockercompose",
             sample!("compose.yaml"),
         ),
+        ("file:///comment.scss", "scss", sample!("comment.scss")),
+        ("file:///comment.clj", "clojure", sample!("comment.clj")),
+        ("file:///comment.hs", "haskell", sample!("comment.hs")),
+        ("file:///comment.ml", "ocaml", sample!("comment.ml")),
+        (
+            "file:///comment.mli",
+            "ocaml.interface",
+            sample!("comment.mli"),
+        ),
     ] {
-        // Zig and Make end lines at LF only.
-        let endings: &[&str] = if matches!(language, "zig" | "makefile") {
+        // Zig, Make, and Haskell end lines at LF only.
+        let endings: &[&str] = if matches!(language, "zig" | "makefile" | "haskell") {
             &["\n", "\r\n"]
         } else {
             &["\n", "\r\n", "\r"]
         };
+        // A `;` comes before the comment in the Protocol Buffers sample.
+        let (openings, closing): (&[char], _) = match language {
+            "clojure" => (&[';'], "failure."),
+            "ocaml" | "ocaml.interface" => (&['('], "failure. *)"),
+            _ => (&['/', '#', '-'], "failure."),
+        };
         for ending in endings {
             let source = source.replace('\n', ending);
-            let start = source.find(['/', '#', '-']).unwrap();
-            let end = source.find("failure.").unwrap() + "failure.".len();
+            let start = source.find(openings).unwrap();
+            let end = source.find(closing).unwrap() + closing.len();
             let original = &source[start..end];
             let range = range_for(
                 &source.replace(ending, "\n"),
@@ -3354,6 +3381,78 @@ fn html_and_css_samples_translate_their_comments_and_those_of_scripts_and_styles
         }
         let key = source.find("retry_count").unwrap();
         assert!(client.hover(uri, position(&source[..key])).is_null());
+        client.close(uri);
+    }
+    client.finish(true);
+}
+
+#[test]
+fn scss_clojure_haskell_and_ocaml_samples_translate_their_comments() {
+    let mut client = Client::new(&[]);
+    let ocaml = "(* Retry only if the remote service\n   reports a temporary failure. *)";
+    for (uri, language, source, comment, others, literals) in [
+        (
+            "file:///comment.scss",
+            "scss",
+            sample!("comment.scss"),
+            "// Retry only if the remote service\n// reports a temporary failure.",
+            &["/// The delay", "/* The icon", "// A URL"][..],
+            &["//example.com", "// not a comment"][..],
+        ),
+        (
+            "file:///comment.clj",
+            "clojure",
+            sample!("comment.clj"),
+            ";; Retry only if the remote service\n;; reports a temporary failure.",
+            &[";; The delay", "; The first", "; A character"],
+            &["The docstring", "; not a comment", "\\;)"],
+        ),
+        (
+            "file:///comment.hs",
+            "haskell",
+            sample!("comment.hs"),
+            "-- Retry only if the remote service\n-- reports a temporary failure.",
+            &["-- | The delay", "{- The service", "-- 503"],
+            &["-- not a comment", "a --> b"],
+        ),
+        (
+            "file:///comment.ml",
+            "ocaml",
+            sample!("comment.ml"),
+            ocaml,
+            &["(** The delay", "(* A comment"],
+            &["(* not a comment *)", "(* not a comment either"],
+        ),
+        (
+            "file:///comment.mli",
+            "ocaml.interface",
+            sample!("comment.mli"),
+            ocaml,
+            &["(** The delay"],
+            &[],
+        ),
+    ] {
+        client.open(uri, language, source, 1);
+        let range = range_for(source, comment);
+        for point in ["start", "end"] {
+            assert_preview(
+                &client.hover(uri, range[point].clone()),
+                comment,
+                COMMENT_JA,
+                &range,
+            );
+        }
+        // The mock refuses every other text, so a refusal shows that Hover
+        // took the text for a comment.
+        for text in others {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            let hover = client.request_hover(uri, at);
+            assert_error(client.receive(hover, TIMEOUT), -32803);
+        }
+        for text in literals {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            assert!(client.hover(uri, at).is_null(), "{language} {text}");
+        }
         client.close(uri);
     }
     client.finish(true);
@@ -3558,8 +3657,9 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
             json!({"features": {"languages": {"javascriptreact": {"comment_hover": false}}}}),
             "features.languages keys must be one of rust, javascript, typescript, \
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
-             vue, svelte, astro, xml, css, sql, lua, zig, proto, graphql, json, jsonc, yaml, toml, shellscript, \
-             powershell, dockerfile, dockercompose, makefile, markdown, plaintext",
+             vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
+             ocaml, ocaml.interface, json, jsonc, yaml, toml, shellscript, powershell, dockerfile, \
+             dockercompose, makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),

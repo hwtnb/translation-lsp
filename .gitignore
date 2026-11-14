@@ -20,3 +20,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Caches of the Clojure language server.
+/.clj-kondo/.cache/
+/.lsp/.cache/

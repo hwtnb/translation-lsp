@@ -1,0 +1,13 @@
+// Retry only if the remote service
+// reports a temporary failure.
+$retry_count: 3;
+
+/// The delay before the first retry.
+/// It doubles with each attempt.
+$retry-delay: 200ms;
+
+/* The icon comes from the same host as the page. */
+.retry {
+  background: url(//example.com/retry.png); // A URL that starts with // is no comment.
+  content: "// not a comment";
+}

@@ -6,7 +6,7 @@ This page lists the languages whose comments are translated on Hover, the rules 
 
 ## Supported languages
 
-Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
+Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
 
 ## Comment extraction
 
@@ -21,7 +21,7 @@ Where the text is unfinished, or where the server cannot read it as the language
 - An unclosed block comment is not translated, and no comment after it is found, until it is closed.
 - An unclosed string or other literal hides the comments after it, or ends at the end of its line, as the language reads it.
 - Around a syntax error, or where the language can read the text in more than one way, a comment is left out, or extraction stops there. The comments before that point remain available.
-- In the forms described under Java, Ruby, HTML, XML, and SQL, text that the language does not read as a comment can be taken as one.
+- In the forms described under Java, Ruby, HTML, XML, SQL, and Haskell, text that the language does not read as a comment can be taken as one.
 
 In all of these cases, select the text and use `Translate selection to …` to translate it.
 
@@ -99,6 +99,10 @@ The server reads HTML without building the tree of the document. Where the tree 
 
 CSS supports `/* ... */`. Text inside strings and inside an unquoted `url( ... )` is not treated as a comment. An unclosed comment hides everything after it.
 
+### SCSS
+
+SCSS supports `//` and `/* ... */`, also inside a value or a selector, as in `margin: 0 // note`. Sass keeps `//` in the value of a custom property, as in `--x: a // b`; the server takes it for a comment there too. Consecutive `///` lines, the documentation comments of SassDoc, are translated together, apart from `//` lines; `////` starts an ordinary comment. Text inside strings, the strings inside `#{ ... }`, and an unquoted `url( ... )`, as in `url(//example.com/a.png)`, is not treated as a comment. A string inside `#{ ... }` that is itself inside a string of the same quotes, as in `"#{"//"}"`, ends the outer string, so a `//` or `/*` in it is taken for a comment. A backslash makes the character after it part of a name, so `\//` starts no comment. An unclosed block comment hides everything after it.
+
 ### Vue.js, Svelte, and Astro
 
 A component file is read part by part. `<!-- ... -->` in the markup is a comment, as in HTML, and text inside tags and their attribute values, and inside `<textarea>`, is not. The comments of a script are read as in a JavaScript or TypeScript file, and those of a style sheet as in CSS. A syntax error that stops the reading of a script hides the comments after it in that script.
@@ -142,6 +146,26 @@ Protocol Buffers supports `//` and `/* ... */`, which do not nest, as `protoc` r
 ### GraphQL
 
 GraphQL supports `#` comments. Text inside strings and block strings `"""..."""` is not treated as a comment. A description is a string, so Hover does not translate it; select it and use `Translate selection to …`. An unclosed string ends at the end of its line. An unclosed block string hides everything after it.
+
+### Clojure
+
+Clojure supports `;` comments. Every `;` at the start of a comment, up to 255, is part of its mark, so consecutive `;;` lines are translated together, apart from `;` lines. A comment ends at CR or LF, as Clojure's reader ends it. A `;` inside a form that `#_` discards, or inside `(comment ...)`, starts a comment; the forms of `(comment ...)` themselves are code. Text inside strings, regular expressions `#"..."`, and character literals such as `\;`, `\"`, and `\newline` is not treated as a comment, and neither is a docstring. `#!` starts a comment to the end of the line, which is skipped, as a shebang is. A `#!` inside a symbol or a keyword, as in `a#!b`, starts nothing. Neither does one right after a number, as in `1#!x`, where Clojure starts a comment. An unclosed string or regular expression hides everything after it.
+
+A character literal that Clojure refuses, such as `\\#!`, runs to the end of its token, as a valid one does, so a `#!` in it starts no comment.
+
+### Haskell
+
+Haskell supports `--` comments and `{- ... -}` block comments, which nest, as GHC reads them with no language extension. Two or more `-` start a comment only where they are not part of an operator: `-->`, `|--`, and `--|` are operators, and `---` and `-- |` start comments. A comment ends at LF; the CR of a CRLF is not part of it, and a CR alone does not end it. Every `-` at the start of a comment, up to 255, is part of its mark, so consecutive `---` lines are translated together, apart from `--` lines.
+
+The Haddock comments `-- |` and `-- ^` are translated together with the `--` lines right after them, and without their `|` and `^`, as are `{-|`, `{-^`, `{- |`, and `{- ^`. `{-#` starts a pragma, which is not a comment; the text after it is read as code, as GHC reads the pragmas it knows, so a comment inside `{-# RULES ... #-}` is found. Text inside strings and character literals such as `'"'` is not treated as a comment; `'` after a name, as in `foldl'`, and before one, as in `'name` and `''Type`, starts no character literal. A quasi-quotation such as `[name| ... |]` and the lines of the C preprocessor are read as code, as GHC reads them without the extensions. An unclosed string ends at the end of its line. An unclosed block comment hides everything after it.
+
+GHC decides whether a character outside ASCII belongs to an operator by its Unicode category. The server counts every such character that is neither a letter, a digit, nor whitespace as part of an operator, except the common brackets and quotation marks such as `「`, `（`, `“`, and `«`, which GHC does not count. A comment written right after `--` with another such character, as in `--⟨note⟩`, is therefore not found. In a pragma that GHC does not know, such as a misspelled `{-# INLNE f #-}`, GHC reads a comment; the server reads code there, so a `--` inside it can be taken as a comment.
+
+### OCaml
+
+OCaml and OCaml interfaces support `(* ... *)` comments, which nest, and the documentation comments `(** ... *)`; `(***` starts an ordinary comment, and `(*)` starts a comment, as it does for OCaml. Inside a comment, OCaml reads strings, quoted strings such as `{|...|}` and `{id|...|id}`, and character literals, so a `*)` inside one of them does not end the comment, and a `"` in `'"'` starts no string. Outside comments, text inside these literals, also inside `{%ext|...|}`, is not treated as a comment. `'` after a name, as in `x'`, and before one, as in the type variable `'a`, starts no character literal. The `*` after the opening `(` and before the closing `)` of a comment is not translated. An unclosed comment, string, or quoted string hides everything after it.
+
+In the delimiter of a quoted string, every letter outside ASCII counts as lowercase, and the closing delimiter must have the same bytes. So `{É|`, which opens no quoted string for OCaml, opens one here, and one that OCaml closes with another Unicode form of the same letters stays open; both hide the comments after them.
 
 ### JSON, YAML, and TOML
 
@@ -245,6 +269,8 @@ For Java, Kotlin, Swift, and SQL files, install Zed's [Java extension](https://g
 For Vue.js, Svelte, and Astro files, install Zed's [Vue extension](https://github.com/zed-extensions/vue), [Svelte extension](https://github.com/zed-extensions/svelte), and [Astro extension](https://github.com/zed-extensions/astro). The settings keys are `Vue.js`, `Svelte`, and `Astro`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
 For XML, Lua, Zig, Protocol Buffers, GraphQL, and makefiles, install Zed's [XML extension](https://github.com/sweetppro/zed-xml), [Lua extension](https://github.com/zed-extensions/lua), [Zig extension](https://github.com/zed-extensions/zig), [Proto extension](https://github.com/zed-industries/zed/tree/main/extensions/proto), [GraphQL extension](https://github.com/11bit/zed-extension-graphql), and [Make extension](https://github.com/caius/zed-make). The settings keys are `XML`, `Lua`, `Zig`, `Proto`, `GraphQL`, and `Make`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
+
+For SCSS, Clojure, Haskell, and OCaml files, install Zed's [SCSS extension](https://github.com/bajrangCoder/zed-scss), [Clojure extension](https://github.com/zed-extensions/clojure), [Haskell extension](https://github.com/zed-extensions/haskell), and [OCaml extension](https://github.com/zed-extensions/ocaml). The OCaml extension provides both OCaml and OCaml interfaces. The settings keys are `SCSS`, `Clojure`, `Haskell`, `OCaml`, and `OCaml Interface`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
 JSON, JSONC, and YAML are built into Zed. For TOML files, install Zed's [TOML extension](https://github.com/zed-extensions/toml). The settings keys are `JSON`, `JSONC`, `YAML`, and `TOML`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 

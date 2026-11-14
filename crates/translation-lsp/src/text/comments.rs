@@ -18,6 +18,7 @@ use crate::language::Language;
 use component::Dialect;
 
 mod c_family;
+mod clojure;
 mod component;
 mod csharp;
 mod css;
@@ -25,11 +26,13 @@ mod data;
 mod dockerfile;
 mod go;
 mod graphql;
+mod haskell;
 mod html;
 mod java;
 mod kotlin;
 mod lua;
 mod make;
+mod ocaml;
 mod php;
 mod powershell;
 mod proto;
@@ -49,8 +52,11 @@ enum LineKind {
     CSharp(u8),
     CFamily(&'static str),
     Python,
-    /// Ends at CR or LF, after an opening of this many bytes.
+    /// A comment after an opening of this many bytes.
     Plain(u8),
+    /// A Haddock comment `-- |` or `-- ^`, after an opening of four bytes.
+    /// The `--` lines right after it, which are `Plain(2)`, belong to it.
+    Haddock,
 }
 
 enum Kind {
@@ -173,12 +179,16 @@ impl Comments {
             Language::Svelte => Some(component::parse(Dialect::Svelte, text)),
             Language::Astro => Some(component::parse(Dialect::Astro, text)),
             Language::Css => Some(css::parse(text)),
+            Language::Scss => Some(css::parse_with_line_comments(text)),
             Language::Php => Some(php::parse(text)),
             Language::Sql => Some(sql::parse(text)),
             Language::Lua => Some(lua::parse(text)),
             Language::Zig => Some(zig::parse(text)),
             Language::Proto => Some(proto::parse(text)),
             Language::GraphQl => Some(graphql::parse(text)),
+            Language::Clojure => Some(clojure::parse(text)),
+            Language::Haskell => Some(haskell::parse(text)),
+            Language::OCaml | Language::OCamlInterface => Some(ocaml::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),
@@ -296,6 +306,7 @@ impl Comments {
                     continue;
                 }
                 Kind::Line(LineKind::Python) => 1,
+                Kind::Line(LineKind::Haddock) => 4,
                 Kind::Line(LineKind::CFamily(prefix)) => prefix.len() as u8,
                 Kind::Line(
                     LineKind::JavaScript(opening)
@@ -322,7 +333,12 @@ impl Comments {
         else {
             return false;
         };
-        if left_kind != right_kind {
+        let joined = match (left_kind, right_kind) {
+            (LineKind::Haddock, LineKind::Plain(2)) => true,
+            (LineKind::Haddock, _) | (_, LineKind::Haddock) => false,
+            _ => left_kind == right_kind,
+        };
+        if !joined {
             return false;
         }
         let indent = |comment: &Comment| {

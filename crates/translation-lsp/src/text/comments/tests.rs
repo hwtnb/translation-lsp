@@ -1760,6 +1760,19 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "{{",
         "{/",
         "(/[",
+        "#!",
+        "#\"",
+        "\\a",
+        "{-",
+        "{-#",
+        "-- |",
+        "'\\",
+        "0x1F'",
+        "(*",
+        "{|",
+        "{a|",
+        "{%a ",
+        "'\"'",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1789,6 +1802,10 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "graphql",
         "xml",
         "makefile",
+        "scss",
+        "clojure",
+        "haskell",
+        "ocaml",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -1996,6 +2013,23 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "}}",
         "{/",
         "(/[",
+        "#!",
+        "#\"",
+        "\\a",
+        "{-",
+        "-}",
+        "{-#",
+        "#-}",
+        "-- |",
+        "foldl'",
+        "0x1F'",
+        "(*",
+        "*)",
+        "{|",
+        "|}",
+        "{a|",
+        "|a}",
+        "{%a ",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2033,6 +2067,10 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "graphql",
         "xml",
         "makefile",
+        "scss",
+        "clojure",
+        "haskell",
+        "ocaml",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -3257,6 +3295,179 @@ fn graphql_comments_exclude_strings_and_descriptions() {
         ["# line", "# trailing", "# after block", "# after unclosed"]
     );
     assert_eq!(bodies("graphql", "# One\n# two\ntype T\n"), ["One\ntwo"]);
+}
+
+fn scss(text: &str) -> Vec<String> {
+    sources("scss", "untitled:comment", text)
+}
+
+#[test]
+fn scss_comments_exclude_strings_urls_and_interpolated_strings() {
+    let text = concat!(
+        "// line\n",
+        "a { background: url(//example.com/a.png); } // after url\n",
+        "$x: #{\"// not\" + 1}; /* a // b */\n",
+        "// c /* d\n",
+        "b { c: \"x//y\"; d: url(\"//q\"); } // after quoted url\n",
+    );
+    assert_eq!(
+        scss(text),
+        [
+            "// line",
+            "// after url",
+            "/* a // b */",
+            "// c /* d",
+            "// after quoted url",
+        ]
+    );
+    // `///` lines are documentation for SassDoc, apart from the `//` and
+    // `////` lines around them.
+    assert_eq!(
+        bodies("scss", "/// One\n/// two\n// Three\n//// Four\n"),
+        ["One\ntwo", "Three\n// Four"]
+    );
+    assert_eq!(
+        vue("<style lang=\"scss\">\n/// One\n// Two\n</style>"),
+        ["/// One", "// Two"]
+    );
+}
+
+fn clojure(text: &str) -> Vec<String> {
+    sources("clojure", "untitled:comment", text)
+}
+
+#[test]
+fn clojure_comments_exclude_strings_regular_expressions_and_characters() {
+    let text = concat!(
+        "#!/usr/bin/env bb ; hidden\n",
+        "; line\n",
+        "(def s \"a;b \\\" ;not\") ;; trailing\n",
+        "#\"re;g\\\";not\" \\; \\\" ;after characters\n",
+        "\\newline;after a name\n",
+        "(a#!b) ;after a symbol\n",
+        "#_(;in discarded\n 1) (comment ;in comment\n \"a\")\n",
+        "(f #! hidden\n) \"unclosed ;not\n",
+        "; not",
+    );
+    assert_eq!(
+        clojure(text),
+        [
+            "; line",
+            ";; trailing",
+            ";after characters",
+            ";after a name",
+            ";after a symbol",
+            ";in discarded",
+            ";in comment",
+        ]
+    );
+    // Every `;` at the start is a mark; a CR alone ends a comment, as it does
+    // for Clojure's reader.
+    assert_eq!(clojure(";a\r(b) ;c"), [";a", ";c"]);
+    assert_eq!(
+        bodies("clojure", ";; One\n;; two\n;;; Three\n; Four\n"),
+        ["One\ntwo", "Three", "Four"]
+    );
+}
+
+fn haskell(text: &str) -> Vec<String> {
+    sources("haskell", "untitled:comment", text)
+}
+
+#[test]
+fn haskell_comments_exclude_operators_strings_characters_and_pragmas() {
+    let text = concat!(
+        "a = 1 -- line\n",
+        "b = x --> y |-- z <-- w --| v\n",
+        "--- dashes\n",
+        "{- block {- nested -} -}\n",
+        "{-# INLINE f #-} -- after pragma\n",
+        "{-# RULES \"f\" f x = x -- in rules\n  #-}\n",
+        "s = \"-- not {- not\" ++ \"a\\  \\b -- not\"\n",
+        "c = '\"' -- after character\n",
+        "d = foldl' 'x' ''T 'name -- after quotes\n",
+        "e = 0x1F'\"' -- after number\n",
+        "f = x--→ y --\u{300c}bracket\n",
+        "u = \"unclosed -- not\n",
+        "-- after unclosed\n",
+        "{- unclosed",
+    );
+    assert_eq!(
+        haskell(text),
+        [
+            "-- line",
+            "--- dashes",
+            "{- block {- nested -} -}",
+            "-- after pragma",
+            "-- in rules",
+            "-- after character",
+            "-- after quotes",
+            "-- after number",
+            "--\u{300c}bracket",
+            "-- after unclosed",
+        ]
+    );
+    // A CRLF ends a comment before its CR; a CR alone ends none.
+    assert_eq!(haskell("-- a\r\n-- b\rc\n"), ["-- a", "-- b\rc"]);
+    // A Haddock comment takes the `--` lines after it, and no line before.
+    assert_eq!(
+        bodies(
+            "haskell",
+            "-- One\n-- | Two\n-- three\n-- | Four\n-- ^ Five\n-- six\n--- Seven\n"
+        ),
+        ["One", "Two\nthree", "Four", "Five\nsix", "Seven"]
+    );
+    assert_eq!(
+        bodies(
+            "haskell",
+            "{-| One -}\n{- ^ Two -}\n{------\n  Three\n  ------}\n{--}"
+        ),
+        ["One ", "Two ", "Three", ""]
+    );
+}
+
+fn ocaml(text: &str) -> Vec<String> {
+    sources("ocaml", "untitled:comment", text)
+}
+
+#[test]
+fn ocaml_comments_nest_and_read_strings_inside_them() {
+    let text = concat!(
+        "(* line (* nested *) \"*)\" '\"' {|*)|} {id|(*|id} *)\n",
+        "let s = \"(* not\" ^ {|(* not|} ^ {%ext|(* not|} ^ {%%ext id|*)|id}\n",
+        "let c = '\"' (* after character *)\n",
+        "type 'a t = 'a list (* after type variable *)\n",
+        "let f' = it's (* after name *)\n",
+        "(**) (*) e *) (*** f *) (** g *)\n",
+        "(* it's \"*)\" *)\n",
+        "let u = \"unclosed (* not\n",
+    );
+    assert_eq!(
+        ocaml(text),
+        [
+            "(* line (* nested *) \"*)\" '\"' {|*)|} {id|(*|id} *)",
+            "(* after character *)",
+            "(* after type variable *)",
+            "(* after name *)",
+            "(**)",
+            "(*) e *)",
+            "(*** f *)",
+            "(** g *)",
+            "(* it's \"*)\" *)",
+        ]
+    );
+    assert!(ocaml("(* unclosed \"*)\" *").is_empty());
+    assert_eq!(
+        bodies(
+            "ocaml",
+            "(* One *)\n(** Two *)\n(*** Three **)\n(**********)\n(*\n  Four\n  five\n*)"
+        ),
+        ["One ", "Two ", "Three ", "", "Four\nfive"]
+    );
+    assert_eq!(
+        bodies("ocaml.interface", "(** One *)\nval x : int"),
+        ["One "]
+    );
 }
 
 fn vue(text: &str) -> Vec<String> {

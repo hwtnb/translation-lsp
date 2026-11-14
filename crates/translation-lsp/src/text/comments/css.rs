@@ -9,7 +9,8 @@ pub(super) fn parse(text: &str) -> Vec<Comment> {
 }
 
 /// Reads SCSS or Less, where `//` also starts a comment that runs to the end
-/// of the line.
+/// of the line. `///` lines, but not `////` lines, are documentation
+/// comments, as for SassDoc.
 pub(super) fn parse_with_line_comments(text: &str) -> Vec<Comment> {
     read(text, true)
 }
@@ -40,7 +41,12 @@ fn read(text: &str, line_comments: bool) -> Vec<Comment> {
                     .iter()
                     .position(|byte| matches!(byte, b'\n' | b'\r'))
                     .map_or(bytes.len(), |length| index + length);
-                comments.push(Comment::line(start..index, 2));
+                let documentation =
+                    bytes[start..index].starts_with(b"///") && bytes.get(start + 3) != Some(&b'/');
+                comments.push(Comment::line(
+                    start..index,
+                    if documentation { 3 } else { 2 },
+                ));
             }
             quote @ (b'"' | b'\'') => index = string(bytes, index + 1, quote),
             _ if starts_number(bytes, index) => {
