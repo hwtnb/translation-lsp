@@ -1773,6 +1773,16 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "{a|",
         "{%a ",
         "'\"'",
+        "s\"",
+        "s\"\"\"",
+        "s\"${",
+        "s\"\"\"${",
+        "'{",
+        "'a",
+        "r'",
+        "r'''",
+        "'${",
+        "'''${",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1806,6 +1816,8 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "clojure",
         "haskell",
         "ocaml",
+        "scala",
+        "dart",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2030,6 +2042,14 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "{a|",
         "|a}",
         "{%a ",
+        "s\"",
+        "s\"\"\"",
+        "'{",
+        "'a",
+        "r'",
+        "r\"\"\"",
+        "'${",
+        "a_+",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2071,6 +2091,8 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "clojure",
         "haskell",
         "ocaml",
+        "scala",
+        "dart",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -3467,6 +3489,123 @@ fn ocaml_comments_nest_and_read_strings_inside_them() {
     assert_eq!(
         bodies("ocaml.interface", "(** One *)\nval x : int"),
         ["One "]
+    );
+}
+
+fn scala(text: &str) -> Vec<String> {
+    sources("scala", "untitled:comment", text)
+}
+
+#[test]
+fn scala_comments_nest_and_include_those_in_interpolations() {
+    let text = concat!(
+        "#!x // line\n",
+        "/** Scaladoc /* nested */ end */\n",
+        "val s = \"// not \\\" /* not\" + \"\"\"// not\n\"\" /* not */\"\"\"\" // after strings\n",
+        "val i = s\"// not ${a /* in block */ + \"// not\"} $$ $\" // not\" // after interpolated\n",
+        "val m = f\"\"\"// not ${ \"\"\"/* not */\"\"\" } \"\"\"\" // after multiline\n",
+        "val r = raw\"\\\" // not\" + if\"${ // not\" // after keyword\n",
+        "val c = '\"' + '\\'' + '\\",
+        "u0027' + '/' // after characters\n",
+        "val q = 'name + '+// after quoted operator\n",
+        "val e = '{ 1 /* in quote */ } + `a//b` // after name\n",
+        "val x = <a>// in XML</a>\n",
+        "val u = \"unclosed // not\n",
+        "/* unclosed /* */",
+    );
+    assert_eq!(
+        scala(text),
+        [
+            "// line",
+            "/** Scaladoc /* nested */ end */",
+            "// after strings",
+            "/* in block */",
+            "// after interpolated",
+            "// after multiline",
+            "// after keyword",
+            "// after characters",
+            "// after quoted operator",
+            "/* in quote */",
+            "// after name",
+            "// in XML</a>",
+            "/* unclosed /* */",
+        ]
+    );
+    // `$` and `_a` are interpolators; a number and a name between backticks
+    // are not.
+    assert_eq!(
+        scala("$\"${1 /* a */}\" _a\"${2 /* b */}\""),
+        ["/* a */", "/* b */"]
+    );
+    assert!(scala("1\"${ /* not */ }\" `s`\"${ /* not */ }\"").is_empty());
+    // A leading `_` ends before operator characters, so `_+` starts no
+    // interpolated string; after a second `_` or a letter, they belong to
+    // the name.
+    assert_eq!(
+        scala("val a = List(\"a\").map(_+\"$\") // c\nval b = 1 // d"),
+        ["// c", "// d"]
+    );
+    assert!(scala("val a = _+\"${ 1 /* not */ }\"").is_empty());
+    assert_eq!(
+        scala("__+\"${ 1 /* a */ }\" a_+\"${ 2 /* b */ }\""),
+        ["/* a */", "/* b */"]
+    );
+    assert_eq!(
+        bodies(
+            "scala",
+            "// One\n// two\n/// Three\nval a = 1\n/** Four\n  * five\n  */"
+        ),
+        ["One\ntwo\n/ Three", "Four\nfive"]
+    );
+}
+
+fn dart(text: &str) -> Vec<String> {
+    sources("dart", "untitled:comment", text)
+}
+
+#[test]
+fn dart_comments_nest_and_include_those_in_interpolations() {
+    let text = concat!(
+        "#!/usr/bin/env dart // not\n",
+        "/// Doc.\n",
+        "/* outer /* nested */ end */\n",
+        "var s = '// not \\' /* not' + \"// not $a\" // after strings\n",
+        "var i = '// not ${a /* in interpolation */ + '// not ${b /* deeper */}'} \\${ /* not */ }'; // after\n",
+        "var m = '''// not ${ ''' /* not */ ''' } '''' // not'; // after three\n",
+        "var r = r'// not \\' + r\"\"\"\n/* not */\"\"\" // after raw\n",
+        "var x = xr'\\' // not'; // after name\n",
+        "var n = 1r'\\'; // after number\n",
+        "var b = '${ {'a': '}'} } // not'; // after braces\n",
+        "#!x // not first\n",
+        "var u = \"unclosed // not\n",
+        "/* unclosed /* */",
+    );
+    assert_eq!(
+        dart(text),
+        [
+            "/// Doc.",
+            "/* outer /* nested */ end */",
+            "// after strings",
+            "/* in interpolation */",
+            "/* deeper */",
+            "// after",
+            "// after three",
+            "// after raw",
+            "// after name",
+            "// after number",
+            "// after braces",
+            "// not first",
+            "/* unclosed /* */",
+        ]
+    );
+    // A script tag after a byte order mark is no comment either.
+    assert_eq!(dart("\u{feff}#!x // not\n// after"), ["// after"]);
+    assert_eq!(
+        bodies(
+            "dart",
+            "/// One\n/// two\n// Three\nvoid f() {}\n/** Four */"
+        ),
+        ["One\ntwo", "Three", "Four "]
     );
 }
 

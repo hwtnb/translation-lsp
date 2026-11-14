@@ -2170,6 +2170,16 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         ("file:///general.scss", "scss", "$s: \"// string\";"),
         ("file:///general.clj", "clojure", "(def s \"; string\")"),
         ("file:///general.hs", "haskell", "s = \"-- string\""),
+        (
+            "file:///general.scala",
+            "scala",
+            "val s = \"// string\" + s\"// ${\"/* string */\"}\"",
+        ),
+        (
+            "file:///general.dart",
+            "dart",
+            "var s = r'// string' + '${\"/* string */\"}';",
+        ),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2241,6 +2251,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "scss" => format!("$t: \"{}\";", comment.replace('\n', " ")),
             "haskell" => format!("t = \"{}\"", comment.replace('\n', " ")),
             "clojure" => format!("(def t \"{comment}\")"),
+            "scala" => format!("val t = \"\"\"{comment}\"\"\""),
+            "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
             // The body of `define` is a value.
             "makefile" => format!("define T\n{comment}\nendef"),
             "ruby" => format!("t = \"{comment}\""),
@@ -2300,6 +2312,8 @@ fn adjacent_block_start_and_unclosed_blocks_do_not_reuse_previous_preview() {
         ("file:///blocks.hs", "haskell", "{-", "-}"),
         ("file:///blocks.ml", "ocaml", "(*", "*)"),
         ("file:///blocks.mli", "ocaml.interface", "(*", "*)"),
+        ("file:///blocks.scala", "scala", "/*", "*/"),
+        ("file:///blocks.dart", "dart", "/*", "*/"),
     ] {
         let first = format!(
             "{opening} Retry only if the remote service\nreports a temporary failure. {closing}"
@@ -3270,6 +3284,8 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
             "ocaml.interface",
             sample!("comment.mli"),
         ),
+        ("file:///comment.scala", "scala", sample!("comment.scala")),
+        ("file:///comment.dart", "dart", sample!("comment.dart")),
     ] {
         // Zig, Make, and Haskell end lines at LF only.
         let endings: &[&str] = if matches!(language, "zig" | "makefile" | "haskell") {
@@ -3430,6 +3446,61 @@ fn scss_clojure_haskell_and_ocaml_samples_translate_their_comments() {
             ocaml,
             &["(** The delay"],
             &[],
+        ),
+    ] {
+        client.open(uri, language, source, 1);
+        let range = range_for(source, comment);
+        for point in ["start", "end"] {
+            assert_preview(
+                &client.hover(uri, range[point].clone()),
+                comment,
+                COMMENT_JA,
+                &range,
+            );
+        }
+        // The mock refuses every other text, so a refusal shows that Hover
+        // took the text for a comment.
+        for text in others {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            let hover = client.request_hover(uri, at);
+            assert_error(client.receive(hover, TIMEOUT), -32803);
+        }
+        for text in literals {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            assert!(client.hover(uri, at).is_null(), "{language} {text}");
+        }
+        client.close(uri);
+    }
+    client.finish(true);
+}
+
+#[test]
+fn scala_and_dart_samples_translate_their_comments() {
+    let mut client = Client::new(&[]);
+    let comment = "// Retry only if the remote service\n// reports a temporary failure.";
+    for (uri, language, source, others, literals) in [
+        (
+            "file:///comment.scala",
+            "scala",
+            sample!("comment.scala"),
+            &["/** The delay", "/* A comment", "// 503", "/* The delay of"][..],
+            &[
+                "// not a comment\"",
+                "/* not a comment either",
+                "// not a comment:",
+            ][..],
+        ),
+        (
+            "file:///comment.dart",
+            "dart",
+            sample!("comment.dart"),
+            &["/// The delay", "/* A comment", "// 503", "/* The delay of"],
+            &[
+                "// not a comment'",
+                "/* not a comment either",
+                "// not a comment in",
+                "// not a comment:",
+            ],
         ),
     ] {
         client.open(uri, language, source, 1);
@@ -3658,8 +3729,8 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
             "features.languages keys must be one of rust, javascript, typescript, \
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
-             ocaml, ocaml.interface, json, jsonc, yaml, toml, shellscript, powershell, dockerfile, \
-             dockercompose, makefile, markdown, plaintext",
+             ocaml, ocaml.interface, scala, dart, json, jsonc, yaml, toml, shellscript, powershell, \
+             dockerfile, dockercompose, makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),

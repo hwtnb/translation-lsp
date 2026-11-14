@@ -33,6 +33,8 @@ pub(crate) enum Language {
     Haskell,
     OCaml,
     OCamlInterface,
+    Scala,
+    Dart,
     Json,
     Jsonc,
     Yaml,
@@ -48,7 +50,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 43] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -79,6 +81,8 @@ impl Language {
         Self::Haskell,
         Self::OCaml,
         Self::OCamlInterface,
+        Self::Scala,
+        Self::Dart,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -125,6 +129,8 @@ impl Language {
             Self::Haskell => "haskell",
             Self::OCaml => "ocaml",
             Self::OCamlInterface => "ocaml.interface",
+            Self::Scala => "scala",
+            Self::Dart => "dart",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

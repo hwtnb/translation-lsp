@@ -22,6 +22,7 @@ mod clojure;
 mod component;
 mod csharp;
 mod css;
+mod dart;
 mod data;
 mod dockerfile;
 mod go;
@@ -38,6 +39,7 @@ mod powershell;
 mod proto;
 mod python;
 mod ruby;
+mod scala;
 mod shell;
 mod sql;
 mod swift;
@@ -189,6 +191,8 @@ impl Comments {
             Language::Clojure => Some(clojure::parse(text)),
             Language::Haskell => Some(haskell::parse(text)),
             Language::OCaml | Language::OCamlInterface => Some(ocaml::parse(text)),
+            Language::Scala => Some(scala::parse(text)),
+            Language::Dart => Some(dart::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),

@@ -6,7 +6,7 @@ This page lists the languages whose comments are translated on Hover, the rules 
 
 ## Supported languages
 
-Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
+Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
 
 ## Comment extraction
 
@@ -21,7 +21,7 @@ Where the text is unfinished, or where the server cannot read it as the language
 - An unclosed block comment is not translated, and no comment after it is found, until it is closed.
 - An unclosed string or other literal hides the comments after it, or ends at the end of its line, as the language reads it.
 - Around a syntax error, or where the language can read the text in more than one way, a comment is left out, or extraction stops there. The comments before that point remain available.
-- In the forms described under Java, Ruby, HTML, XML, SQL, and Haskell, text that the language does not read as a comment can be taken as one.
+- In the forms described under Java, Ruby, HTML, XML, SQL, Haskell, Scala, and Dart, text that the language does not read as a comment can be taken as one.
 
 In all of these cases, select the text and use `Translate selection to …` to translate it.
 
@@ -167,6 +167,20 @@ OCaml and OCaml interfaces support `(* ... *)` comments, which nest, and the doc
 
 In the delimiter of a quoted string, every letter outside ASCII counts as lowercase, and the closing delimiter must have the same bytes. So `{É|`, which opens no quoted string for OCaml, opens one here, and one that OCaml closes with another Unicode form of the same letters stays open; both hide the comments after them.
 
+### Scala
+
+Scala supports `//` and `/* ... */`, which nest, including Scaladoc comments `/** ... */`. `//` and `/*` start a comment also right after an operator, as in `a +// note`. Text inside strings, strings of three quotes `"""..."""`, character literals, and names between backticks is not treated as a comment. A name right before a quote, such as `s` in `s"..."`, starts an interpolated string, unless it is a keyword such as `if`; a comment inside `${ ... }` of an interpolated string is a comment, and `$$` and `$"` stand for `$` and `"`. `'` before a name or an operator, as in `'name`, and before the `{` or `[` of a quote starts no character literal; a comment inside `'{ ... }` is a comment. A line that starts with `#!` is read as code, as Scala's lexer reads it. An unclosed string ends at the end of its line. An unclosed string of three quotes or block comment hides everything after it.
+
+The server does not follow XML literals: the text of one, as in `<a>// x</a>`, is read as code, so a `//`, `/*`, or quotation mark in it is taken as it would be in code.
+
+Scala counts some characters outside ASCII as part of a name where the server does not: a symbol such as `→` after the `_` of a name, and a combining mark or formatting character that is not a letter, such as U+0301 or U+200C. The server ends the name there. So it can miss the interpolated string that such a name starts, as in `a_→"..."`, and with it the comments inside its `${ ... }`. In rare forms it starts one that Scala does not, and takes text inside its `${ ... }` as a comment. A name right after a number, as in `1s"..."`, starts no interpolated string here either.
+
+### Dart
+
+Dart supports `//` and `/* ... */`, which nest, including the documentation comments `///` and `/** ... */`. Consecutive `///` lines are translated together, apart from `//` lines. Text inside strings, strings of three quotes such as `'''...'''`, and raw strings such as `r'...'` is not treated as a comment. A comment inside `${ ... }` of a string that is not raw is a comment. A script tag `#!` on the first line is skipped. An unclosed string ends at the end of its line. An unclosed string of three quotes or block comment hides everything after it.
+
+Where Dart reports an error, the server does not follow how Dart reads on. A string left unclosed inside `${ ... }` hides the rest of its line, or everything after it when it has three quotes; Dart takes that quote for the end of the outer string instead, so it finds the comments that follow. Around other unmatched quotes inside `${ ... }`, and at an `r` before a quote right after an unfinished number such as `0x` or `1e`, the server can miss a comment or take text inside a string as one.
+
 ### JSON, YAML, and TOML
 
 JSON and JSONC support `//` and `/* ... */`; YAML and TOML support `#`. Only comments are automatic targets. To translate a key or a string value, select it and use `Translate selection to …`.
@@ -271,6 +285,8 @@ For Vue.js, Svelte, and Astro files, install Zed's [Vue extension](https://githu
 For XML, Lua, Zig, Protocol Buffers, GraphQL, and makefiles, install Zed's [XML extension](https://github.com/sweetppro/zed-xml), [Lua extension](https://github.com/zed-extensions/lua), [Zig extension](https://github.com/zed-extensions/zig), [Proto extension](https://github.com/zed-industries/zed/tree/main/extensions/proto), [GraphQL extension](https://github.com/11bit/zed-extension-graphql), and [Make extension](https://github.com/caius/zed-make). The settings keys are `XML`, `Lua`, `Zig`, `Proto`, `GraphQL`, and `Make`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
 For SCSS, Clojure, Haskell, and OCaml files, install Zed's [SCSS extension](https://github.com/bajrangCoder/zed-scss), [Clojure extension](https://github.com/zed-extensions/clojure), [Haskell extension](https://github.com/zed-extensions/haskell), and [OCaml extension](https://github.com/zed-extensions/ocaml). The OCaml extension provides both OCaml and OCaml interfaces. The settings keys are `SCSS`, `Clojure`, `Haskell`, `OCaml`, and `OCaml Interface`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
+
+For Scala and Dart files, install Zed's [Scala extension](https://github.com/scalameta/metals-zed) and [Dart extension](https://github.com/zed-extensions/dart). The settings keys are `Scala` and `Dart`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
 JSON, JSONC, and YAML are built into Zed. For TOML files, install Zed's [TOML extension](https://github.com/zed-extensions/toml). The settings keys are `JSON`, `JSONC`, `YAML`, and `TOML`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
