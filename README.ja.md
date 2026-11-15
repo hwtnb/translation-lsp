@@ -6,6 +6,18 @@ ZedでRust、JavaScript／JSX、TypeScript／TSX、C#、C、C++、Python、Go、
 
 ChatGPTを使う場合は、本人のChatGPTアカウントで接続し、ChatGPTプランの利用を許可します。Anthropic APIとOpenAI APIのプロバイダーは、本人のAPIキーでそれぞれのAPIを呼びます。OpenAI互換のプロバイダーは、OpenRouter、Gemini API、Ollama、LM Studioなど、指定したサービスを呼びます。APIキーは、保存した場合にだけ送ります。DeepL APIとGoogle Cloud Translationのプロバイダーは、本人のAPIキーでそれぞれの翻訳サービスを呼びます。プロバイダーを選ぶまでは、文章を外部へ送りません。
 
+- **ホバー:** コメントにマウスポインターを重ねると、訳文を読めます。
+
+  ![Zedのホバー表示に出た、ドキュメンテーションコメントの訳文。コード例を含むMarkdownとして表示されている](docs/images/hover.png)
+
+- **CodeLens:** CodeLensを有効にすると、訳文の1行目がコメントの上に出ます。クリックすると全体を読めます。
+
+  ![コメントの上のCodeLensの行に出た訳文の1行目と、カードに表示した訳文の全体](docs/images/codelens.png)
+
+- **単語の意味:** 単語を選択すると、その語の意味と用例をモデルに尋ねて表示します。
+
+  ![選択した単語「argument」の意味と用例を表示したホバー](docs/images/dictionary.png)
+
 ## 導入
 
 Translation LSPは、開発用拡張として導入します。Zedがチェックアウトから拡張をビルドし、拡張が言語サーバーを取得します。

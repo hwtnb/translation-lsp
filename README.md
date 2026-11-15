@@ -6,6 +6,18 @@ Translate comments in Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, 
 
 The ChatGPT provider uses your ChatGPT account with permission to use your plan. The Anthropic API and OpenAI API providers call those APIs with your API key. The OpenAI-compatible provider calls a service you name, such as OpenRouter, the Gemini API, Ollama, or LM Studio, with an API key only when you save one. The DeepL API and Google Cloud Translation providers call those translation services with your API key. Until you select a provider, the extension sends no text to an external service.
 
+- **Hover:** Hover over a comment to read its translation.
+
+  ![A translated doc comment in Zed's Hover, shown as Markdown with its code example](docs/images/hover.png)
+
+- **CodeLens:** With CodeLens on, the first line of the translation shows above the comment; click it to read all of it.
+
+  ![A CodeLens line above a comment with the first line of the translation, and the whole translation in a card](docs/images/codelens.png)
+
+- **Word lookup:** Select a word to ask the model for its meanings and an example.
+
+  ![The meanings and an example of the selected word "argument" in Hover](docs/images/dictionary.png)
+
 ## Installation
 
 Install Translation LSP as a development extension: Zed builds the extension from a checkout, and the extension downloads the language server.
