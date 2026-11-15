@@ -26,11 +26,12 @@ pub(crate) struct Preview<C> {
     pub hover: HoverSettings,
 }
 
-/// What a translation is, which decides how Hover shows it.
+/// What a translation is, which decides how Hover and its CodeLens show it.
 #[derive(Clone)]
 pub(crate) enum Form {
-    /// A dictionary entry in Markdown.
-    Entry,
+    /// A dictionary entry in Markdown, with the line that a CodeLens shows
+    /// for it, cut to fit.
+    Entry(String),
     /// The translation of a Markdown document, which is Markdown, with the
     /// URLs of its original.
     Markdown(Urls),
@@ -65,7 +66,7 @@ impl<C> Preview<C> {
             return None;
         }
         let body = match (&self.form, self.hover.format) {
-            (Form::Entry, _) => self.translation.clone(),
+            (Form::Entry(_), _) => self.translation.clone(),
             // A link to elsewhere would be one the original does not have.
             (Form::Markdown(urls), HoverFormat::Markdown) => {
                 markdown::document(&self.translation, urls)
@@ -94,11 +95,20 @@ impl<C> Preview<C> {
         })
     }
 
+    /// The text whose first line a CodeLens shows: the term and its first
+    /// meaning for a dictionary entry, and the translation otherwise.
+    pub fn lens_text(&self) -> &str {
+        match &self.form {
+            Form::Entry(line) => line,
+            Form::Markdown(_) | Form::Text(_) => &self.translation,
+        }
+    }
+
     /// The translation as the Markdown of an editor message. Zed wraps the
     /// lines of a message but not those of a code block in it, so the text is
     /// escaped instead of fenced.
     pub fn message(&self) -> String {
-        if matches!(self.form, Form::Entry) {
+        if matches!(self.form, Form::Entry(_)) {
             self.translation.clone()
         } else {
             plain_text(&self.translation)
@@ -330,8 +340,12 @@ mod tests {
         // An entry is Markdown in both formats, and so is the translation of a
         // Markdown document in Markdown.
         for (form, format, body) in [
-            (Form::Entry, HoverFormat::Markdown, translation),
-            (Form::Entry, HoverFormat::Text, translation),
+            (
+                Form::Entry(String::new()),
+                HoverFormat::Markdown,
+                translation,
+            ),
+            (Form::Entry(String::new()), HoverFormat::Text, translation),
             (
                 Form::Markdown(Urls::default()),
                 HoverFormat::Markdown,

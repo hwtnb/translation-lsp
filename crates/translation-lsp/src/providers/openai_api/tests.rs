@@ -6,6 +6,7 @@ use super::*;
 use crate::{
     config::OpenAiSpeed,
     providers::{
+        Kind,
         anthropic::test_support::KeyDirectory,
         credential_directory,
         error::ErrorKind,

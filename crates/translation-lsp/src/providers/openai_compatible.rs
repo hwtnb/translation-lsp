@@ -12,7 +12,7 @@ use serde_json::json;
 #[cfg(test)]
 use super::api_key::test_support::Terminal as SyntheticTerminal;
 use super::{
-    AccountChange, AuthUiState, Capabilities, Intent, Interaction, Kind, Output, OutputOptions,
+    AccountChange, AuthUiState, Capabilities, Intent, Interaction, Output, OutputOptions,
     ProviderCommand, Translated, TranslationProvider,
     admission::{Admission, Attempt},
     api_key::{KeyFile, KeyId, KeySpec, Origin, Terminal},
@@ -323,11 +323,7 @@ impl TranslationProvider for CompatibleProvider {
                 expected,
             )
             .await?;
-        Ok(Translated {
-            text: dictionary::entry(term, &reply, SERVICE)?,
-            context: expected,
-            kind: Kind::Entry,
-        })
+        dictionary::entry(term, &reply, SERVICE, expected)
     }
 
     async fn administer(&self, command: &str, ui: &impl Interaction) -> Result<String, Error> {

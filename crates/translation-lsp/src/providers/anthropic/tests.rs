@@ -13,6 +13,7 @@ use super::test_support::{self, Fixture, KEY, KeyDirectory, Reply, event, starte
 use super::*;
 use crate::config::AnthropicEffort;
 use crate::providers::{
+    Kind,
     api_key::ApiKey,
     error::{ErrorKind, Notification},
 };
@@ -158,7 +159,7 @@ async fn a_term_is_sent_with_its_line_and_its_entry_is_rendered() {
             .await
     };
     let entry = look_up().await.unwrap();
-    assert_eq!(entry.kind, Kind::Entry);
+    assert_eq!(entry.kind, Kind::Entry("retain — 訳retain".into()));
     assert_eq!(entry.text, "**retain** — 語\n\n1. 訳retain\n");
     let record = fixture.state.lock().unwrap().records.pop().unwrap();
     let body: Value = serde_json::from_str(&record.body).unwrap();

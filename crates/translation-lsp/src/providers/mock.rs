@@ -172,11 +172,7 @@ impl TranslationProvider for MockProvider {
                 "The mock provider only looks up retry_count in Japanese",
             ));
         }
-        Ok(Translated {
-            text: dictionary::entry(term, TERM_ENTRY, Service::OpenAi)?,
-            context,
-            kind: Kind::Entry,
-        })
+        dictionary::entry(term, TERM_ENTRY, Service::OpenAi, context)
     }
 }
 

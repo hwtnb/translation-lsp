@@ -1584,6 +1584,14 @@ fn a_selected_term_is_shown_as_a_dictionary_entry() {
                 "*Example:* The retry\\_count value is preserved. — retry\\_count の値は保持される。\n"
             )
         );
+        // The CodeLens line is plain text, which shows no Markdown.
+        let found = lenses(&mut client, uri);
+        let titles: Vec<_> = found
+            .iter()
+            .filter(|lens| lens["range"] == range)
+            .map(|lens| lens["command"]["title"].as_str().unwrap())
+            .collect();
+        assert_eq!(titles, ["retry_count — 再試行の回数"], "{found:?}");
     }
     client.finish(true);
 }

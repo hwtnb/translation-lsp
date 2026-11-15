@@ -839,8 +839,9 @@ impl<P: TranslationProvider> Server<P> {
     /// failure, or one in progress, and each comment ends with Settings, which
     /// opens the menu. When `comment_lens` is off, only those comments get a
     /// line, and the menu takes the line above the first one, as in Markdown.
-    /// A translation shows its first line, which shows all of it; a failure,
-    /// Retry; and one in progress, Cancel.
+    /// A translation shows its first line, and a dictionary entry its term and
+    /// first meaning; either line shows all of it. A failure gets Retry; and
+    /// one in progress, Cancel.
     fn code_lenses(&mut self, params: CodeLensParams) -> RequestResult<Vec<CodeLens>> {
         let uri = params.text_document.uri;
         let limit = Duration::from_millis(self.settings.comment_parse_timeout_ms);
@@ -1158,8 +1159,6 @@ impl<P: TranslationProvider> Drop for Server<P> {
     }
 }
 
-/// The name of the file as the user sees it, not as the URI encodes it.
-/// The first line of a translation, cut to fit above a line of code.
 /// A CodeLens above `range` that runs `command`.
 fn lens(range: Range, title: String, command: &str, arguments: Option<Vec<Value>>) -> CodeLens {
     CodeLens {
@@ -1173,9 +1172,12 @@ fn lens(range: Range, title: String, command: &str, arguments: Option<Vec<Value>
     }
 }
 
-fn lens_title(translation: &str) -> String {
+/// The first line of the text that a CodeLens shows for a range, cut to fit
+/// above a line of code: the translation, or the term and first meaning of a
+/// dictionary entry. Cutting its result again gives the same line.
+fn lens_title(text: &str) -> String {
     const LENGTH: usize = 72;
-    let line = translation.lines().next().unwrap_or_default();
+    let line = text.lines().next().unwrap_or_default();
     if line.chars().nth(LENGTH).is_some() {
         format!("{}…", line.chars().take(LENGTH).collect::<String>())
     } else {
@@ -1183,6 +1185,7 @@ fn lens_title(translation: &str) -> String {
     }
 }
 
+/// The name of the file as the user sees it, not as the URI encodes it.
 fn file_name(uri: &Uri) -> String {
     let name = uri
         .path()

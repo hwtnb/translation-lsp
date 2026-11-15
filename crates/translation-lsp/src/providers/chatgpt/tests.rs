@@ -10,7 +10,7 @@ use super::{
     test_support::{self, Fixture},
 };
 use crate::providers::{
-    Intent, Output,
+    Intent, Kind, Output,
     error::{ErrorKind, Notification},
 };
 
@@ -396,7 +396,10 @@ async fn a_term_is_sent_with_its_line_and_its_entry_is_rendered() {
             .await
     };
     let entry = look_up().await.unwrap();
-    assert_eq!(entry.kind, Kind::Entry);
+    assert_eq!(
+        entry.kind,
+        Kind::Entry("retry_count — 訳retry_count".into())
+    );
     assert_eq!(entry.text, "**retry\\_count** — 語\n\n1. 訳retry\\_count\n");
     let body: Value =
         serde_json::from_str(&fixture.state.lock().unwrap().records.last().unwrap().body).unwrap();

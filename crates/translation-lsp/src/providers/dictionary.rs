@@ -2,7 +2,10 @@ use serde::Deserialize;
 
 use crate::config::language::display;
 
-use super::error::{Error, Service};
+use super::{
+    Kind, Translated,
+    error::{Error, Service},
+};
 
 const MAX_SENSES: usize = 5;
 const MAX_PARTS: usize = 8;
@@ -71,9 +74,15 @@ struct Example {
     translation: String,
 }
 
-/// The entry in a model's reply, as Markdown. Every text of the reply is
-/// escaped, so the reply cannot add links, images or other formatting.
-pub(crate) fn entry(term: &str, reply: &str, service: Service) -> Result<String, Error> {
+/// The entry in a model's reply, as Markdown, with the line that a CodeLens
+/// shows for it. Every text of the reply is escaped in the Markdown, so the
+/// reply cannot add links, images or other formatting.
+pub(crate) fn entry<C>(
+    term: &str,
+    reply: &str,
+    service: Service,
+    context: C,
+) -> Result<Translated<C>, Error> {
     let malformed = || Error::protocol(service, "reply is not a dictionary entry; retry");
     // A model may still wrap the object in a code fence or a sentence.
     let object = match (reply.find('{'), reply.rfind('}')) {
@@ -81,17 +90,37 @@ pub(crate) fn entry(term: &str, reply: &str, service: Service) -> Result<String,
         _ => return Err(malformed()),
     };
     let entry: Entry = serde_json::from_str(object).map_err(|_| malformed())?;
-    render(term, &entry).ok_or_else(malformed)
+    let senses = senses(&entry);
+    let first = senses.first().ok_or_else(malformed)?;
+    Ok(Translated {
+        text: render(term, &entry, &senses),
+        context,
+        kind: Kind::Entry(format!("{} — {}", one_line(term), one_line(&first.meaning))),
+    })
 }
 
-fn render(term: &str, entry: &Entry) -> Option<String> {
-    let senses: Vec<_> = entry
+/// The senses of `entry` that have a meaning, as many as an entry shows.
+fn senses(entry: &Entry) -> Vec<&Sense> {
+    entry
         .senses
         .iter()
-        .filter(|sense| !sense.meaning.trim().is_empty())
+        .filter(|sense| !one_line(&sense.meaning).is_empty())
         .take(MAX_SENSES)
-        .collect();
-    let first = senses.first()?;
+        .collect()
+}
+
+/// `text` as written on one line, with every run of whitespace and control
+/// characters as one space.
+fn one_line(text: &str) -> String {
+    text.split(|character: char| character.is_whitespace() || character.is_control())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The Markdown of `entry`, whose `senses` are not empty.
+fn render(term: &str, entry: &Entry, senses: &[&Sense]) -> String {
+    let first = senses[0];
     // One part of speech for every sense is named once, after the term.
     let shared = (!first.part_of_speech.trim().is_empty()
         && senses
@@ -139,7 +168,7 @@ fn render(term: &str, entry: &Entry) -> Option<String> {
         }
         markdown.push('\n');
     }
-    Some(markdown)
+    markdown
 }
 
 /// `text` on one line as Markdown that shows it as written.
@@ -208,7 +237,15 @@ mod tests {
     use super::*;
 
     fn rendered(term: &str, reply: &str) -> String {
-        entry(term, reply, Service::Anthropic).unwrap()
+        entry(term, reply, Service::Anthropic, ()).unwrap().text
+    }
+
+    /// The line that a CodeLens shows for the entry in `reply`.
+    fn lens_line(term: &str, reply: &str) -> String {
+        match entry(term, reply, Service::Anthropic, ()).unwrap().kind {
+            Kind::Entry(line) => line,
+            kind => panic!("{kind:?}"),
+        }
     }
 
     #[test]
@@ -240,16 +277,49 @@ mod tests {
     }
 
     #[test]
+    fn the_code_lens_line_is_the_term_and_its_first_meaning_as_written() {
+        let reply = r#"{"senses": [
+            {"part_of_speech": "動詞", "meaning": "保持する、持ち続ける"},
+            {"part_of_speech": "動詞", "meaning": "（人を）雇っておく"}
+        ]}"#;
+        assert_eq!(lens_line("retain", reply), "retain — 保持する、持ち続ける");
+        let reply = r#"{"senses": [{"part_of_speech": "識別子", "meaning": "完了したものを保持する"}],
+            "parts": [{"part": "retain", "meaning": "保持する"}, {"part": "completed", "meaning": "完了した"}],
+            "combined": "完了したものを保持する"}"#;
+        assert_eq!(
+            lens_line("retain_completed", reply),
+            "retain_completed — 完了したものを保持する"
+        );
+        // A sense without a meaning is not the first one, even when its
+        // meaning has control characters.
+        let reply = r#"{"senses": [{"meaning": " "}, {"part_of_speech": "名詞", "meaning": "記録"}, {"part_of_speech": "動詞", "meaning": "記録する"}]}"#;
+        assert_eq!(lens_line("record", reply), "record — 記録");
+        let reply = r#"{"senses": [{"meaning": "\u0000"}, {"meaning": "記録"}]}"#;
+        assert_eq!(lens_line("record", reply), "record — 記録");
+        assert_eq!(rendered("record", reply), "**record**\n\n1. 記録\n");
+        // Markdown stays as written, and line breaks and control characters
+        // cannot end the line.
+        let reply = serde_json::json!({
+            "senses": [{"meaning": " **一**\r\n\u{2028}二\t\u{0}\u{1b}[31m三\u{85} "}]
+        })
+        .to_string();
+        assert_eq!(lens_line("a_b", &reply), "a_b — **一** 二 [31m三");
+    }
+
+    #[test]
     fn a_reply_that_is_not_an_entry_fails() {
         for reply in [
             "保持する",
             "{}",
             r#"{"senses": []}"#,
             r#"{"senses": [{"meaning": "  "}]}"#,
+            r#"{"senses": [{"meaning": "\u0000\u001b"}]}"#,
             r#"{"senses": "保持する"}"#,
             "} {",
         ] {
-            let error = entry("retain", reply, Service::Anthropic).unwrap_err();
+            let Err(error) = entry("retain", reply, Service::Anthropic, ()) else {
+                panic!("{reply}");
+            };
             assert_eq!(
                 error.to_string(),
                 "Anthropic reply is not a dictionary entry; retry",

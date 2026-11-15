@@ -79,7 +79,7 @@ With `"code_lens": "on"` in Zed's settings, the server shows short commands on a
 | Where | Line |
 | --- | --- |
 | A code comment with no translation | `Translate \| Settings` |
-| A translated range | The first line of the translation, up to 72 characters, then `Settings` in code |
+| A translated range | The first line of the translation, or the term and first meaning of a dictionary entry (such as `retain — 保持する`), up to 72 characters, then `Settings` in code |
 | A failed range | `Translation failed \| Retry`, then `Settings` in code |
 | A range being translated | `Translating… \| Cancel`, then `Settings` in code |
 | Above the first line of Markdown and Plain Text | `Translation LSP: Translate in tab \| Auto-translate: On \| <account menu> \| Zed settings` |

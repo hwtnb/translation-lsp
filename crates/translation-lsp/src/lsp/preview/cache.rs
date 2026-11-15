@@ -210,7 +210,7 @@ impl<C: Clone + PartialEq> Cache<C> {
             .filter(|entry| &entry.uri == uri)
             .filter_map(|entry| match &entry.stored {
                 Stored::Translation(Output::Range, preview) => {
-                    Some((preview.range, Lens::Translated(&preview.translation)))
+                    Some((preview.range, Lens::Translated(preview.lens_text())))
                 }
                 Stored::Failure { range, .. } => Some((*range, Lens::Failed)),
                 Stored::Translation(Output::Document, _) | Stored::SameLanguage { .. } => None,

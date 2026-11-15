@@ -11,8 +11,13 @@ use tokio::{
 
 use super::*;
 use crate::{
-    lsp::preview::markdown::{Urls, render},
-    providers::{AccountChange, Intent, Kind, Source, mock::MockContext},
+    lsp::preview::{
+        Form,
+        markdown::{Urls, render},
+    },
+    providers::{
+        AccountChange, Intent, Kind, Source, dictionary, error::Service, mock::MockContext,
+    },
 };
 
 #[tokio::test(flavor = "current_thread")]
@@ -134,6 +139,99 @@ async fn worker_keeps_non_send_futures_and_one_independent_admin_slot() {
             .count(),
         1
     );
+}
+
+#[test]
+fn a_code_lens_cuts_the_term_and_first_meaning_of_an_entry_as_it_cuts_a_translation() {
+    let meaning = "意".repeat(80);
+    let reply = json!({"senses": [{"part_of_speech": "名詞", "meaning": meaning}]}).to_string();
+    let Ok(entry) = dictionary::entry("term", &reply, Service::Anthropic, ()) else {
+        panic!("{reply}");
+    };
+    let Kind::Entry(line) = entry.kind else {
+        panic!("{:?}", entry.kind);
+    };
+    let mut preview = Preview::new((), Range::default(), entry.text, false, None);
+    preview.form = Form::Entry(line);
+    assert_eq!(
+        lens_title(preview.lens_text()),
+        format!("term — {}…", "意".repeat(65))
+    );
+
+    // A translation shows its own first line, whatever it is.
+    preview.translation = format!("**{}**\n次の行", "訳".repeat(80));
+    for form in [Form::Text(Urls::default()), Form::Markdown(Urls::default())] {
+        preview.form = form;
+        assert_eq!(
+            lens_title(preview.lens_text()),
+            format!("**{}…", "訳".repeat(70))
+        );
+    }
+    assert_eq!(lens_title("短い訳\n次の行"), "短い訳");
+}
+
+#[test]
+fn the_cache_keeps_only_as_much_of_an_entry_line_as_its_code_lens_shows() {
+    let (connection, _client) = Connection::memory();
+    let (finished, _completions) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
+    let mut server = Server::new(
+        MockOptions {
+            delay: Duration::from_secs(30),
+            ..Default::default()
+        },
+        finished,
+    )
+    .unwrap();
+    let uri: Uri = "file:///entry.rs".parse().unwrap();
+    server.documents.insert(
+        uri.clone(),
+        Document::new(
+            1,
+            1,
+            "rust".into(),
+            include_str!("../../../../../samples/comment.rs").into(),
+        ),
+    );
+    let id = RequestId::from(1);
+    let hover = parse(json!({
+        "textDocument": { "uri": uri },
+        "position": { "line": 1, "character": 10 }
+    }))
+    .unwrap();
+    assert!(server.hover(id.clone(), hover).unwrap().is_none());
+    let ticket = server.scheduler.pending()[&id].ticket;
+    let meaning = "意".repeat(10_000);
+    let reply = json!({"senses": [{"part_of_speech": "名詞", "meaning": meaning}]}).to_string();
+    let Ok(entry) = dictionary::entry("term", &reply, Service::Anthropic, MockContext) else {
+        panic!("{reply}");
+    };
+    server
+        .finish(
+            &connection,
+            Finished::Translation(Completion {
+                ticket,
+                result: Ok(entry),
+            }),
+        )
+        .unwrap();
+    let shown = format!("term — {}…", "意".repeat(65));
+    let Some(Preview {
+        form: Form::Entry(line),
+        ..
+    }) = server.cache.latest(&uri)
+    else {
+        panic!("No entry in the cache");
+    };
+    assert_eq!(line, &shown);
+    let lenses = server
+        .code_lenses(parse(json!({"textDocument": {"uri": uri}})).unwrap())
+        .unwrap();
+    let titles: Vec<_> = lenses
+        .iter()
+        .filter_map(|lens| lens.command.as_ref())
+        .map(|command| command.title.as_str())
+        .collect();
+    assert!(titles.contains(&shown.as_str()), "{titles:?}");
 }
 
 #[test]

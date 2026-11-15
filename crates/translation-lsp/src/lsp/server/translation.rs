@@ -286,9 +286,13 @@ impl<P: TranslationProvider> Server<P> {
                     "Translation authorization changed during translation",
                 ));
             }
-            if translation.kind == Kind::SameLanguage {
-                return Ok(Completed::SameLanguage(translation.context));
-            }
+            let line = match translation.kind {
+                Kind::SameLanguage => return Ok(Completed::SameLanguage(translation.context)),
+                // The cache keeps only as much of the line as a CodeLens
+                // shows, which `lens_title` leaves as it is.
+                Kind::Entry(line) => Some(lens_title(&line)),
+                Kind::Translation => None,
+            };
             self.settings
                 .translation_limits
                 .output_kib
@@ -301,8 +305,8 @@ impl<P: TranslationProvider> Server<P> {
                 work.is_comment,
                 P::capabilities().hover_note,
             );
-            preview.form = if translation.kind == Kind::Entry {
-                Form::Entry
+            preview.form = if let Some(line) = line {
+                Form::Entry(line)
             } else if self.documents[&work.target.uri].language == Some(Language::Markdown) {
                 Form::Markdown(work.urls.clone())
             } else {

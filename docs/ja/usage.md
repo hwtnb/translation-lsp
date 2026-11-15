@@ -79,7 +79,7 @@ Zedの設定で `"code_lens": "on"` にすると、本文の上の行に短い�
 | 場所 | 表示する行 |
 | --- | --- |
 | 訳文のないコードのコメント | `Translate \| Settings` |
-| 翻訳済みの範囲 | 訳文の1行目（72文字まで）と、コードでは `Settings` |
+| 翻訳済みの範囲 | 72文字までの、訳文の1行目か、辞書の項目の語と最初の意味（`retain — 保持する` など）と、コードでは `Settings` |
 | 翻訳に失敗した範囲 | `Translation failed \| Retry` と、コードでは `Settings` |
 | 翻訳中の範囲 | `Translating… \| Cancel` と、コードでは `Settings` |
 | Markdownとプレーンテキストの1行目の上 | `Translation LSP: Translate in tab \| Auto-translate: On \| <アカウントメニュー> \| Zed settings` |

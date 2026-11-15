@@ -17,7 +17,7 @@ use crate::config::{OpenAiModel, limits::SizeLimit};
 use crate::config::{ReasoningEffort, limits::TranslationLimits};
 
 use super::{
-    AccountChange, AuthUiState, Capabilities, Intent, Interaction, Kind, Output, OutputOptions,
+    AccountChange, AuthUiState, Capabilities, Intent, Interaction, Output, OutputOptions,
     ProviderCommand, Translated, TranslationProvider,
     admission::{Admission, Attempt},
     dictionary,
@@ -318,11 +318,7 @@ impl TranslationProvider for ChatGptProvider {
         let (reply, context) = self
             .request(instructions, message, &[line, term], &key, intent, output)
             .await?;
-        Ok(Translated {
-            text: dictionary::entry(term, &reply, Service::OpenAi)?,
-            context,
-            kind: Kind::Entry,
-        })
+        dictionary::entry(term, &reply, Service::OpenAi, context)
     }
 
     async fn administer(&self, command: &str, ui: &impl Interaction) -> Result<String, Error> {

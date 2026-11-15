@@ -2,6 +2,7 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::providers::{
+    Kind,
     anthropic::test_support::KeyDirectory,
     credential_directory,
     error::ErrorKind,

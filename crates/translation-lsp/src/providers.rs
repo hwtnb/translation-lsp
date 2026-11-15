@@ -160,12 +160,13 @@ pub(crate) struct Translated<C> {
 }
 
 /// What a provider gave for a request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
     /// A translation.
     Translation,
-    /// A dictionary entry in Markdown.
-    Entry,
+    /// A dictionary entry in Markdown, with the line that a CodeLens shows
+    /// for it: the term and its first meaning, as written on one line.
+    Entry(String),
     /// Nothing, because the model or the service found the whole text already
     /// in the target language. Only automatic requests give it.
     SameLanguage,
