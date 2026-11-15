@@ -1,0 +1,6 @@
+The `retry_count` value is preserved.
+Retry only after a temporary failure. 🚀
+
+A client sends a failed request again only when the failure is temporary, such as a busy server or a connection that closed before any response arrived. It does not send a request again when the server rejected the request itself.
+
+Before each new attempt, the client waits twice as long as before, starting at one second and never waiting longer than one minute. When the server asks for a longer wait, the client waits as long as the server asks.

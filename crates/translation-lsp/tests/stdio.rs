@@ -1486,13 +1486,20 @@ fn comment_and_markdown_selection_preview_leave_source_unchanged() {
             PARAGRAPH,
             PARAGRAPH_JA,
         ),
+        (
+            "file:///document.txt",
+            "plaintext",
+            sample!("document.txt"),
+            PARAGRAPH,
+            PARAGRAPH_JA,
+        ),
     ] {
         client.open(uri, language, document, 1);
         let range = range_for(document, selected);
         let action = client.action(uri, range.clone());
         // Allow enough time for an incorrectly started mock job to finish.
         thread::sleep(Duration::from_millis(100));
-        if language == "markdown" {
+        if language != "rust" {
             assert!(client.hover(uri, range["start"].clone()).is_null());
         }
         let started = Instant::now();
@@ -1519,11 +1526,14 @@ fn comment_and_markdown_selection_preview_leave_source_unchanged() {
             translated,
             &range,
         );
-        assert!(
-            client
-                .hover(uri, json!({"line": 0, "character": 0}))
-                .is_null()
-        );
+        // The paragraph starts the Plain Text sample, so the blank line after
+        // it stands outside the range there.
+        let outside = if range["start"]["line"] == 0 {
+            json!({"line": range["end"]["line"].as_u64().unwrap() + 1, "character": 0})
+        } else {
+            json!({"line": 0, "character": 0})
+        };
+        assert!(client.hover(uri, outside).is_null());
         assert_eq!(client.action(uri, range.clone()), action);
         let cached = client.execute(action);
         assert!(client.receive(cached, TIMEOUT).unwrap().is_null());
@@ -1553,24 +1563,28 @@ fn a_notice_names_the_file_as_it_is_written_and_not_as_its_uri_encodes_it() {
 #[test]
 fn a_selected_term_is_shown_as_a_dictionary_entry() {
     let mut client = Client::new(&[]);
-    let uri = "file:///paragraph.md";
-    client.open(uri, "markdown", MARKDOWN_DOCUMENT, 1);
-    let range = range_for(MARKDOWN_DOCUMENT, "retry_count");
-    let action = client.action(uri, range.clone());
-    let execution = client.execute(action);
-    assert!(client.receive(execution, TIMEOUT).unwrap().is_null());
-    client.notice();
-    let hover = client.hover(uri, range["start"].clone());
-    assert_eq!(hover["range"], range);
-    assert_eq!(
-        hover["contents"]["value"],
-        concat!(
-            "> **Translation LSP**\n>\n> Mock translation (fixed sample)\n\n---\n\n",
-            "**retry\\_count** — 識別子\n\n1. 再試行の回数\n\n",
-            "retry (再試行) + count (回数) → 再試行した回数\n\n",
-            "*Example:* The retry\\_count value is preserved. — retry\\_count の値は保持される。\n"
-        )
-    );
+    for (uri, language, document) in [
+        ("file:///paragraph.md", "markdown", MARKDOWN_DOCUMENT),
+        ("file:///document.txt", "plaintext", sample!("document.txt")),
+    ] {
+        client.open(uri, language, document, 1);
+        let range = range_for(document, "retry_count");
+        let action = client.action(uri, range.clone());
+        let execution = client.execute(action);
+        assert!(client.receive(execution, TIMEOUT).unwrap().is_null());
+        client.notice();
+        let hover = client.hover(uri, range["start"].clone());
+        assert_eq!(hover["range"], range);
+        assert_eq!(
+            hover["contents"]["value"],
+            concat!(
+                "> **Translation LSP**\n>\n> Mock translation (fixed sample)\n\n---\n\n",
+                "**retry\\_count** — 識別子\n\n1. 再試行の回数\n\n",
+                "retry (再試行) + count (回数) → 再試行した回数\n\n",
+                "*Example:* The retry\\_count value is preserved. — retry\\_count の値は保持される。\n"
+            )
+        );
+    }
     client.finish(true);
 }
 
@@ -3253,7 +3267,15 @@ fn python_docstring_and_comment_hover_use_canonical_bodies() {
 fn json_yaml_and_toml_samples_translate_their_comment_groups() {
     let mut client = Client::new(&[]);
     for (uri, language, source) in [
-        ("file:///comment.json", "json", sample!("comment.jsonc")),
+        ("file:///comment.js", "javascript", sample!("comment.js")),
+        ("file:///comment.jsx", "javascript", sample!("comment.jsx")),
+        ("file:///comment.ts", "typescript", sample!("comment.ts")),
+        (
+            "file:///comment.tsx",
+            "typescriptreact",
+            sample!("comment.tsx"),
+        ),
+        ("file:///comment.json", "json", sample!("comment.json")),
         ("file:///comment.jsonc", "jsonc", sample!("comment.jsonc")),
         ("file:///comment.yaml", "yaml", sample!("comment.yaml")),
         ("file:///comment.toml", "toml", sample!("comment.toml")),
@@ -3454,6 +3476,66 @@ fn scss_clojure_haskell_and_ocaml_samples_translate_their_comments() {
             ocaml,
             &["(** The delay"],
             &[],
+        ),
+    ] {
+        client.open(uri, language, source, 1);
+        let range = range_for(source, comment);
+        for point in ["start", "end"] {
+            assert_preview(
+                &client.hover(uri, range[point].clone()),
+                comment,
+                COMMENT_JA,
+                &range,
+            );
+        }
+        // The mock refuses every other text, so a refusal shows that Hover
+        // took the text for a comment.
+        for text in others {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            let hover = client.request_hover(uri, at);
+            assert_error(client.receive(hover, TIMEOUT), -32803);
+        }
+        for text in literals {
+            let at = position(&source[..source.find(text).unwrap() + 3]);
+            assert!(client.hover(uri, at).is_null(), "{language} {text}");
+        }
+        client.close(uri);
+    }
+    client.finish(true);
+}
+
+#[test]
+fn javascript_and_typescript_samples_translate_their_comments() {
+    let mut client = Client::new(&[]);
+    let comment = "// Retry only if the remote service\n// reports a temporary failure.";
+    for (uri, language, source, others, literals) in [
+        (
+            "file:///comment.js",
+            "javascript",
+            sample!("comment.js"),
+            &["Returns the wait", "// Never", "/* The largest"][..],
+            &["// not a comment\"", "/[/*]+/g", "// not a comment either"][..],
+        ),
+        (
+            "file:///comment.jsx",
+            "javascript",
+            sample!("comment.jsx"),
+            &["/* Shown"],
+            &["//example.com"],
+        ),
+        (
+            "file:///comment.ts",
+            "typescript",
+            sample!("comment.ts"),
+            &["Returns the wait", "// Never"],
+            &[],
+        ),
+        (
+            "file:///comment.tsx",
+            "typescriptreact",
+            sample!("comment.tsx"),
+            &["/* Shown"],
+            &["//example.com"],
         ),
     ] {
         client.open(uri, language, source, 1);
