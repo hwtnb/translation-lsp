@@ -6,7 +6,7 @@ This page lists the languages whose comments are translated on Hover, the rules 
 
 ## Supported languages
 
-Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
+Automatic comment Hover supports Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings and the strings given to Elixir's `@moduledoc`, `@doc`, and `@typedoc`. Markdown requires a prose selection before background translation; paragraph Hover alone does not start it.
 
 ## Comment extraction
 
@@ -181,6 +181,12 @@ Dart supports `//` and `/* ... */`, which nest, including the documentation comm
 
 Where Dart reports an error, the server does not follow how Dart reads on. A string left unclosed inside `${ ... }` hides the rest of its line, or everything after it when it has three quotes; Dart takes that quote for the end of the outer string instead, so it finds the comments that follow. Around other unmatched quotes inside `${ ... }`, and at an `r` before a quote right after an unfinished number such as `0x` or `1e`, the server can miss a comment or take text inside a string as one.
 
+### Elixir
+
+Elixir supports `#` comments. Text inside strings, charlists such as `'...'`, heredocs `"""..."""` and `'''...'''`, sigils such as `~r/#\d+/` and `~S(...)`, character literals such as `?#` and `?"`, and quoted atoms and keys such as `:"a#"` and `"a#": 1` is not treated as a comment. A comment inside `#{ ... }` of a string, a charlist, a heredoc, a quoted atom or key, or a sigil with a lowercase name is a comment. A `#!` line at the start of the file is skipped. An unclosed string, charlist, heredoc, quoted atom, or sigil hides everything after it.
+
+The string, heredoc, or sigil `~S` or `~s` given to `@moduledoc`, `@doc`, or `@typedoc` is translated as a docstring, also in parentheses, as in `@doc("...")`. Its text is sent as written, escapes and `#{ ... }` included; a comment inside its `#{ ... }` is not translated on its own. When an operator follows, as in `@doc "a" <> "b"`, the first string is the doc. `@doc false`, `@shortdoc`, a charlist, another sigil, and a string on the line after `@doc` are not docs. An unclosed doc is not translated. A quoted key right after one of the attributes, as in `@doc "a": 1`, is not a doc, but a comment inside its `#{ ... }` is left out.
+
 ### JSON, YAML, and TOML
 
 JSON and JSONC support `//` and `/* ... */`; YAML and TOML support `#`. Only comments are automatic targets. To translate a key or a string value, select it and use `Translate selection to …`.
@@ -286,7 +292,7 @@ For XML, Lua, Zig, Protocol Buffers, GraphQL, and makefiles, install Zed's [XML 
 
 For SCSS, Clojure, Haskell, and OCaml files, install Zed's [SCSS extension](https://github.com/bajrangCoder/zed-scss), [Clojure extension](https://github.com/zed-extensions/clojure), [Haskell extension](https://github.com/zed-extensions/haskell), and [OCaml extension](https://github.com/zed-extensions/ocaml). The OCaml extension provides both OCaml and OCaml interfaces. The settings keys are `SCSS`, `Clojure`, `Haskell`, `OCaml`, and `OCaml Interface`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
-For Scala and Dart files, install Zed's [Scala extension](https://github.com/scalameta/metals-zed) and [Dart extension](https://github.com/zed-extensions/dart). The settings keys are `Scala` and `Dart`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
+For Scala, Dart, and Elixir files, install Zed's [Scala extension](https://github.com/scalameta/metals-zed), [Dart extension](https://github.com/zed-extensions/dart), and [Elixir extension](https://github.com/zed-extensions/elixir). The settings keys are `Scala`, `Dart`, and `Elixir`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 
 JSON, JSONC, and YAML are built into Zed. For TOML files, install Zed's [TOML extension](https://github.com/zed-extensions/toml). The settings keys are `JSON`, `JSONC`, `YAML`, and `TOML`. If you list the language servers of one of these languages explicitly, add `"translation-lsp"` alongside your existing servers.
 

@@ -1783,6 +1783,15 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "r'''",
         "'${",
         "'''${",
+        "\"\"\"\n",
+        "'''\n",
+        "~s(",
+        "~S\"\"\"\n",
+        "?\"",
+        "@doc \"",
+        "@doc \"\"\"\n",
+        "@doc(",
+        ":\"",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1818,6 +1827,7 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "ocaml",
         "scala",
         "dart",
+        "elixir",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2050,6 +2060,13 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "r\"\"\"",
         "'${",
         "a_+",
+        "\"\"\"\n",
+        "'''\n",
+        "~s(",
+        "~S\"\"\"\n",
+        "?\"",
+        "@doc \"",
+        "@doc \"\"\"\n",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2093,6 +2110,7 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "ocaml",
         "scala",
         "dart",
+        "elixir",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -2945,6 +2963,7 @@ fn bodies_of_more_lines_leave_out_their_margin() {
         ("vue", "<!-- a\n * b -->", "<!--"),
         ("lua", "--[[ a\n * b ]]", "--[["),
         ("ruby", "=begin\na\n * b\n=end", "=begin"),
+        ("elixir", "@doc \"\"\"\n  a\n  * b\n  \"\"\"", "\"\"\""),
     ] {
         assert_eq!(body_at(language, text, marker).1, "a\n* b", "{language}");
     }
@@ -3606,6 +3625,105 @@ fn dart_comments_nest_and_include_those_in_interpolations() {
             "/// One\n/// two\n// Three\nvoid f() {}\n/** Four */"
         ),
         ["One\ntwo", "Three", "Four "]
+    );
+}
+
+fn elixir(text: &str) -> Vec<String> {
+    sources("elixir", "untitled:comment", text)
+}
+
+#[test]
+fn elixir_comments_exclude_strings_sigils_and_characters() {
+    let text = concat!(
+        "#!/usr/bin/env elixir # not\n",
+        "a#c\n",
+        "s = \"# not \\\" #{1 # in\n} # not\" <> 'a # not' # after strings\n",
+        "h = \"\"\"\n  # not\n  a \"\"\" # not\n \t\"\"\" # after heredoc\n",
+        "e = \"\"\"\na\\\n\"\"\" # after escaped line break\n",
+        "t = \"\"\"a\"\"\" # after quotes\n",
+        "x = ~s(a (b) # after sigil\n",
+        "y = ~S(\\) # not) <> ~S(a #{ # not) <> ~r/a/iu# after modifiers\n",
+        "z = a =~s(# after operator\n",
+        "c = [?#, ?\", ?', ?\\\\, ?\\s, ?é, foo?] # after characters\n",
+        "k = %{:\"a # not\" => 1, \"b#\": 2} # after atoms\n",
+        "def f(a \\\\ \"x # not\") do # after default\n",
+        "x = 0x1Ffoo?# after hex\n",
+        "Foo. # after dot\n  \"q # not\"() # after quoted call\n",
+        // A name goes on after a combining mark, `·`, and the `@` of an atom.
+        "x = cafe\u{301}?# after combining mark\n",
+        "x = a\u{b7}?# after middle dot\n",
+        "n = :foo@?# after atom\n",
+        "d = \"#{\"#{\"#{1 # deep\n}\"}\"}\"\n",
+        "n = \"\\#{ # not }\"\n",
+        "u = \"unclosed # not\n# not",
+    );
+    assert_eq!(
+        elixir(text),
+        [
+            "#c",
+            "# in",
+            "# after strings",
+            "# after heredoc",
+            "# after escaped line break",
+            "# after quotes",
+            "# after sigil",
+            "# after modifiers",
+            "# after operator",
+            "# after characters",
+            "# after atoms",
+            "# after default",
+            "# after hex",
+            "# after dot",
+            "# after quoted call",
+            "# after combining mark",
+            "# after middle dot",
+            "# after atom",
+            "# deep",
+        ]
+    );
+    // A heredoc closes at the start of a line after LF, also in CRLF text.
+    assert_eq!(elixir("h = \"\"\"\r\n# not\r\n  \"\"\" # c\r\n"), ["# c"]);
+}
+
+#[test]
+fn elixir_docs_are_the_strings_and_sigils_given_to_doc_attributes() {
+    let text = concat!(
+        "@moduledoc \"\"\"\n  Module.\n    Indented.\n  \"\"\"\n",
+        "@doc \"One line.\" # after doc\n",
+        "@doc(\n  # before\n  ~S\"\"\"\n  With \\d.\n  \"\"\")\n",
+        "@typedoc ~s[With #{1 # not taken\n} interpolation.]\n",
+        "@doc \"a\" <> \"b\"\n",
+        "@doc false\n@doc since: \"1.0\"\n@doc 'x'\n@doc ~c\"x\"\n@shortdoc \"x\"\n@doc\n\"x\"\n",
+        "@doc? \"x\"\nx = \"#{@doc \"x\"}\"\n",
+        // After a dot, `@` names a function, and after `:` an atom, also with
+        // the name of an atom before it; a string before `: ` is a key.
+        "x.@doc \"x\"\nx.\n@doc \"x\"\n:@doc \"x\"\n:foo@doc \"x\"\n@doc \"x\": 1\n",
+        ":.@doc \"After an atom.\"\n",
+        ":::@doc \"After colons.\"\n::::@doc \"x\"\n",
+        "@doc \"\"\"\nunclosed\n",
+    );
+    assert_eq!(
+        bodies("elixir", text),
+        [
+            "Module.\n  Indented.",
+            "One line.",
+            "after doc",
+            "before",
+            "With \\d.",
+            "With #{1 # not taken\n} interpolation.",
+            "a",
+            "After an atom.",
+            "After colons.",
+        ]
+    );
+    // The range of a doc leaves out the modifiers of its sigil.
+    assert_eq!(
+        elixir("@ doc \\\n ~S(a)i # c\n@typedoc\t~s<b>"),
+        ["~S(a)", "# c", "~s<b>"]
+    );
+    assert_eq!(
+        bodies("elixir", "@doc \"\"\"\r\n  a\r\n  \"\"\"\r\n# c"),
+        ["a", "c"]
     );
 }
 

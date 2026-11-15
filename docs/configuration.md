@@ -115,11 +115,11 @@ A value that is an ISO 639 language code, alone or with subtags such as `zh-Hans
 
 | Setting inside `features` | What it turns on or off | Language IDs |
 | --- | --- | --- |
-| `comment_hover` | Starting a translation by Hover over a comment. | `rust`, `javascript`, `typescript`, `typescriptreact`, `csharp`, `c`, `cpp`, `python`, `go`, `java`, `kotlin`, `swift`, `ruby`, `php`, `html`, `vue`, `svelte`, `astro`, `xml`, `css`, `scss`, `sql`, `lua`, `zig`, `proto`, `graphql`, `clojure`, `haskell`, `ocaml`, `ocaml.interface`, `scala`, `dart`, `json`, `jsonc`, `yaml`, `toml`, `shellscript`, `powershell`, `dockerfile`, `dockercompose`, `makefile` |
+| `comment_hover` | Starting a translation by Hover over a comment. | `rust`, `javascript`, `typescript`, `typescriptreact`, `csharp`, `c`, `cpp`, `python`, `go`, `java`, `kotlin`, `swift`, `ruby`, `php`, `html`, `vue`, `svelte`, `astro`, `xml`, `css`, `scss`, `sql`, `lua`, `zig`, `proto`, `graphql`, `clojure`, `haskell`, `ocaml`, `ocaml.interface`, `scala`, `dart`, `elixir`, `json`, `jsonc`, `yaml`, `toml`, `shellscript`, `powershell`, `dockerfile`, `dockercompose`, `makefile` |
 | `automatic_selection` | Starting a translation after a stable Markdown selection. | `markdown` |
 | `selection_action` | The `Translate selection to …` Code Action. | Every language ID in the table below |
 | `document_action` | The `Translate selection to … and open in tab` and `Translate document to … and open in tab` Code Actions. | `markdown`, `plaintext` |
-| `comment_lens` | The [CodeLens](usage.md#codelens) line on a comment with no translation, failure, or translation in progress. | `rust`, `javascript`, `typescript`, `typescriptreact`, `csharp`, `c`, `cpp`, `python`, `go`, `java`, `kotlin`, `swift`, `ruby`, `php`, `html`, `vue`, `svelte`, `astro`, `xml`, `css`, `scss`, `sql`, `lua`, `zig`, `proto`, `graphql`, `clojure`, `haskell`, `ocaml`, `ocaml.interface`, `scala`, `dart`, `json`, `jsonc`, `yaml`, `toml`, `shellscript`, `powershell`, `dockerfile`, `dockercompose`, `makefile` |
+| `comment_lens` | The [CodeLens](usage.md#codelens) line on a comment with no translation, failure, or translation in progress. | `rust`, `javascript`, `typescript`, `typescriptreact`, `csharp`, `c`, `cpp`, `python`, `go`, `java`, `kotlin`, `swift`, `ruby`, `php`, `html`, `vue`, `svelte`, `astro`, `xml`, `css`, `scss`, `sql`, `lua`, `zig`, `proto`, `graphql`, `clojure`, `haskell`, `ocaml`, `ocaml.interface`, `scala`, `dart`, `elixir`, `json`, `jsonc`, `yaml`, `toml`, `shellscript`, `powershell`, `dockerfile`, `dockercompose`, `makefile` |
 
 `features`, each setting inside it, `languages`, each language inside `languages`, and each setting of a language can be omitted. For a feature in a language, the value under `languages.<language ID>` applies. Without it, the value written directly inside `features` applies. Without that either, the feature is on.
 
@@ -176,6 +176,7 @@ The keys of `languages` are the following language IDs, in lowercase:
 | OCaml Interface | `ocaml.interface` |
 | Scala | `scala` |
 | Dart | `dart` |
+| Elixir | `elixir` |
 | JSON | `json` |
 | JSONC | `jsonc` |
 | YAML | `yaml` |

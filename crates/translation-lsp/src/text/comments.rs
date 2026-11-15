@@ -25,6 +25,7 @@ mod css;
 mod dart;
 mod data;
 mod dockerfile;
+mod elixir;
 mod go;
 mod graphql;
 mod haskell;
@@ -193,6 +194,7 @@ impl Comments {
             Language::OCaml | Language::OCamlInterface => Some(ocaml::parse(text)),
             Language::Scala => Some(scala::parse(text)),
             Language::Dart => Some(dart::parse(text)),
+            Language::Elixir => Some(elixir::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),

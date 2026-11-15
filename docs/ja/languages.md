@@ -6,7 +6,7 @@
 
 ## 対応する言語
 
-ホバーによる自動翻訳はRust、JavaScript／JSX、TypeScript／TSX、C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、JSON、JSONC、YAML、TOML、シェルスクリプト、PowerShell、Dockerfile、Docker Compose、メイクファイルのコメントと、Pythonのドキュメンテーション文字列が対象です。Markdownは文章の選択後にバックグラウンド翻訳し、段落へのホバーだけでは開始しません。
+ホバーによる自動翻訳はRust、JavaScript／JSX、TypeScript／TSX、C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、JSON、JSONC、YAML、TOML、シェルスクリプト、PowerShell、Dockerfile、Docker Compose、メイクファイルのコメントと、Pythonのドキュメンテーション文字列、Elixirの `@moduledoc`、`@doc`、`@typedoc` の文字列が対象です。Markdownは文章の選択後にバックグラウンド翻訳し、段落へのホバーだけでは開始しません。
 
 ## コメントの抽出
 
@@ -181,6 +181,12 @@ Dartは `//` と、入れ子にできる `/* ... */` に対応します。ドキ
 
 Dartがエラーを報告する場所では、サーバーはDartの読み進め方を追いません。`${ ... }` の中で閉じていない文字列は、その行の残りを隠します。3つの引用符の文字列なら、それより後をすべて隠します。Dartはその引用符を外側の文字列の終わりとして読むため、その後のコメントを見つけます。`${ ... }` の中のそのほかの対応しない引用符の周りと、`0x` や `1e` のような書きかけの数の直後で引用符の前にある `r` では、サーバーはコメントを見落とすか、文字列の中の文字列をコメントとして扱うことがあります。
 
+### Elixir
+
+Elixirは `#` のコメントに対応します。文字列、`'...'` のような文字のリスト、ヒアドキュメントの `"""..."""` と `'''...'''`、`~r/#\d+/` や `~S(...)` のようなシジル、`?#` や `?"` のような文字リテラル、`:"a#"` や `"a#": 1` のような引用符つきのアトムとキーの中の文字列は、コメントとして扱いません。文字列、文字のリスト、ヒアドキュメント、引用符つきのアトムとキー、名前が小文字のシジルの `#{ ... }` の中のコメントはコメントです。ファイルの先頭の `#!` の行は除外します。閉じていない文字列、文字のリスト、ヒアドキュメント、引用符つきのアトム、シジルは、それより後をすべて隠します。
+
+`@moduledoc`、`@doc`、`@typedoc` に渡した文字列、ヒアドキュメント、シジルの `~S` と `~s` は、ドキュメンテーション文字列として翻訳します。`@doc("...")` のように括弧の中にあっても同じです。その文字列は、エスケープと `#{ ... }` を含めて書かれたとおりに送り、`#{ ... }` の中のコメントは別に翻訳しません。`@doc "a" <> "b"` のように演算子が続く場合は、最初の文字列をドキュメントとします。`@doc false`、`@shortdoc`、文字のリスト、そのほかのシジル、`@doc` の次の行の文字列は、ドキュメントではありません。閉じていないドキュメントは翻訳しません。これらの属性のすぐ後にある引用符つきのキー（`@doc "a": 1` など）はドキュメントではありませんが、その `#{ ... }` の中のコメントは見落とします。
+
 ### JSON、YAML、TOML
 
 JSONとJSONCは `//` と `/* ... */`、YAMLとTOMLは `#` に対応します。自動翻訳の対象はコメントだけです。キーや文字列の値を訳すときは、範囲を選択して `Translate selection to …` を使います。
@@ -286,7 +292,7 @@ XML、Lua、Zig、Protocol Buffers、GraphQL、メイクファイルでは、Zed
 
 SCSS、Clojure、Haskell、OCamlでは、Zedの[SCSS拡張](https://github.com/bajrangCoder/zed-scss)、[Clojure拡張](https://github.com/zed-extensions/clojure)、[Haskell拡張](https://github.com/zed-extensions/haskell)、[OCaml拡張](https://github.com/zed-extensions/ocaml)を導入してください。OCaml拡張は、OCamlとOCamlのインターフェースの両方を提供します。設定上の言語名は `SCSS`、`Clojure`、`Haskell`、`OCaml`、`OCaml Interface` です。これらの言語サーバーを明示設定している場合は、既存のサーバーに `"translation-lsp"` を追加します。
 
-ScalaとDartでは、Zedの[Scala拡張](https://github.com/scalameta/metals-zed)と[Dart拡張](https://github.com/zed-extensions/dart)を導入してください。設定上の言語名は `Scala` と `Dart` です。これらの言語サーバーを明示設定している場合は、既存のサーバーに `"translation-lsp"` を追加します。
+Scala、Dart、Elixirでは、Zedの[Scala拡張](https://github.com/scalameta/metals-zed)、[Dart拡張](https://github.com/zed-extensions/dart)、[Elixir拡張](https://github.com/zed-extensions/elixir)を導入してください。設定上の言語名は `Scala`、`Dart`、`Elixir` です。これらの言語サーバーを明示設定している場合は、既存のサーバーに `"translation-lsp"` を追加します。
 
 JSON、JSONC、YAMLはZedに組み込まれています。TOMLファイルでは、Zedの[TOML拡張](https://github.com/zed-extensions/toml)を導入してください。設定上の言語名は `JSON`、`JSONC`、`YAML`、`TOML` です。これらの言語サーバーを明示設定している場合は、既存のサーバーに `"translation-lsp"` を追加します。
 

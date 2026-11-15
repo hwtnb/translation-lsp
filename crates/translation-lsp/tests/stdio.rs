@@ -2180,6 +2180,11 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "dart",
             "var s = r'// string' + '${\"/* string */\"}';",
         ),
+        (
+            "file:///general.ex",
+            "elixir",
+            "s = \"# string #{\"# string\"}\" <> ~S(# string) <> ?#",
+        ),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2199,7 +2204,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
     ] {
         let marker = match language {
             "ruby" | "yaml" | "toml" | "shellscript" | "powershell" | "dockerfile"
-            | "dockercompose" | "graphql" | "makefile" => "#",
+            | "dockercompose" | "graphql" | "makefile" | "elixir" => "#",
             "sql" | "lua" | "haskell" => "--",
             "clojure" => ";",
             _ => "//",
@@ -2253,6 +2258,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "clojure" => format!("(def t \"{comment}\")"),
             "scala" => format!("val t = \"\"\"{comment}\"\"\""),
             "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
+            "elixir" => format!("t = \"{comment}\""),
             // The body of `define` is a value.
             "makefile" => format!("define T\n{comment}\nendef"),
             "ruby" => format!("t = \"{comment}\""),
@@ -3286,9 +3292,11 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         ),
         ("file:///comment.scala", "scala", sample!("comment.scala")),
         ("file:///comment.dart", "dart", sample!("comment.dart")),
+        ("file:///comment.ex", "elixir", sample!("comment.ex")),
     ] {
-        // Zig, Make, and Haskell end lines at LF only.
-        let endings: &[&str] = if matches!(language, "zig" | "makefile" | "haskell") {
+        // Zig, Make, and Haskell end lines at LF only, and an Elixir heredoc
+        // opens only before LF or CRLF.
+        let endings: &[&str] = if matches!(language, "zig" | "makefile" | "haskell" | "elixir") {
             &["\n", "\r\n"]
         } else {
             &["\n", "\r\n", "\r"]
@@ -3530,6 +3538,50 @@ fn scala_and_dart_samples_translate_their_comments() {
 }
 
 #[test]
+fn elixir_sample_translates_its_comments_and_docs() {
+    let mut client = Client::new(&[]);
+    let uri = "file:///comment.ex";
+    let source = sample!("comment.ex");
+    let comment = "# Retry only if the remote service\n# reports a temporary failure.";
+    client.open(uri, "elixir", source, 1);
+    let range = range_for(source, comment);
+    for point in ["start", "end"] {
+        assert_preview(
+            &client.hover(uri, range[point].clone()),
+            comment,
+            COMMENT_JA,
+            &range,
+        );
+    }
+    // The mock refuses every other text, so a refusal shows that Hover took
+    // the text for a comment or a doc.
+    for text in [
+        "Sends requests",
+        "Returns the delay",
+        "Tells whether",
+        "A status code",
+        "# 503",
+        "# The delay of",
+    ] {
+        let at = position(&source[..source.find(text).unwrap() + 3]);
+        let hover = client.request_hover(uri, at);
+        assert_error(client.receive(hover, TIMEOUT), -32803);
+    }
+    for text in [
+        "\"1.0.0\"",
+        "# not a comment\"",
+        "# not a comment either",
+        "~r/#\\d",
+        "<<?#>>",
+    ] {
+        let at = position(&source[..source.find(text).unwrap() + 3]);
+        assert!(client.hover(uri, at).is_null(), "{text}");
+    }
+    client.close(uri);
+    client.finish(true);
+}
+
+#[test]
 fn shell_hover_ranges_count_utf16_units_after_japanese_and_emoji() {
     let mut client = Client::new(&[]);
     let uri = "file:///utf16.sh";
@@ -3729,8 +3781,8 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
             "features.languages keys must be one of rust, javascript, typescript, \
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
-             ocaml, ocaml.interface, scala, dart, json, jsonc, yaml, toml, shellscript, powershell, \
-             dockerfile, dockercompose, makefile, markdown, plaintext",
+             ocaml, ocaml.interface, scala, dart, elixir, json, jsonc, yaml, toml, shellscript, \
+             powershell, dockerfile, dockercompose, makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),
