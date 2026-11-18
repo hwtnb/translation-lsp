@@ -38,7 +38,7 @@ Translation LSPは、開発用拡張として導入します。Zedがチェッ�
 
 ### サーバーをソースからビルドする
 
-[rustup経由のRust](https://www.rust-lang.org/tools/install)（1.97以降）と、ネイティブ依存のビルドに使うC/C++の開発環境を導入します。
+[rustup経由のRust](https://www.rust-lang.org/tools/install)（1.98以降）と、ネイティブ依存のビルドに使うC/C++の開発環境を導入します。
 
 | OS | ビルドの前提 | ネイティブ実行ファイル |
 | --- | --- | --- |

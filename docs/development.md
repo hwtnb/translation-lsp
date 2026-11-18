@@ -6,7 +6,7 @@ This page describes the required Rust versions, the checks to run, the mock prov
 
 ## Checks
 
-The crates use Rust Edition 2024. The native language server and `xtask` require Rust 1.97 or later. The WASM extension declares no `rust-version`: Cargo selects dependency versions for the whole workspace that suit the lowest `rust-version` among its members, so declaring the older compiler of the Zed registry there would hold back the dependencies of the native server. CI builds the extension with the registry's compiler instead. Dependency updates take priority over retaining an older minimum Rust version; update the affected requirement when needed. The virtual workspace uses resolver 3. Keep `Cargo.lock` in version control and use `--locked` for checks and release builds:
+The crates use Rust Edition 2024. The native language server and `xtask` require Rust 1.98 or later. The WASM extension declares no `rust-version`: Cargo selects dependency versions for the whole workspace that suit the lowest `rust-version` among its members, so declaring the older compiler of the Zed registry there would hold back the dependencies of the native server. CI builds the extension with the registry's compiler instead. Dependency updates take priority over retaining an older minimum Rust version; update the affected requirement when needed. The virtual workspace uses resolver 3. Keep `Cargo.lock` in version control and use `--locked` for checks and release builds:
 
 ```sh
 cargo fmt --all --check

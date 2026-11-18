@@ -38,7 +38,7 @@ The servers are not signed with Authenticode and not notarized by Apple. If your
 
 ### Build the server from source
 
-Install [Rust through rustup](https://www.rust-lang.org/tools/install) (Rust 1.97 or later) and a C/C++ toolchain, which the native dependencies need:
+Install [Rust through rustup](https://www.rust-lang.org/tools/install) (Rust 1.98 or later) and a C/C++ toolchain, which the native dependencies need:
 
 | OS | Build prerequisites | Native executable |
 | --- | --- | --- |
