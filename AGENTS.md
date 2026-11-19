@@ -130,6 +130,13 @@ relative to the repository root.
   is synchronized and it, the stored translations, and the authentication
   context are as the lookup started from, where nothing took their range,
   and without dropping another result.
+  The CodeLens commands `Show` and `LensRetry` of an older version, which Zed
+  sends from a line it kept, act on their range where it is now if no edit
+  since touched it (`lsp/document/history.rs`), and in code only on a whole
+  comment; `LensTranslate` in code follows only the start of its range and
+  translates the whole comment that starts there now. `LensOpenTab`
+  translates the whole current document of the same open lifetime. Code
+  Action commands keep their version check.
   Hover waiters retain independent cancellation and deadlines, including queue
   waiting time. Accepted comment Hover work survives its response cancellation or
   expiry, shares the automatic admission limit with selection automation, and

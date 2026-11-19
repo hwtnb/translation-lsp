@@ -86,6 +86,7 @@ fn each_provider_declares_its_name_and_key_commands() {
         AUTOMATIC_ON_COMMAND,
         OPEN_SETTINGS_COMMAND,
         DOCUMENT_COMMAND,
+        LENS_DOCUMENT_COMMAND,
         CANCEL_COMMAND,
         CANCEL_ALL_COMMAND,
         DELETE_COMMAND,

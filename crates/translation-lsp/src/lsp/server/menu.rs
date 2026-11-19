@@ -89,7 +89,7 @@ impl<P: TranslationProvider> Server<P> {
             lens(
                 Range::default(),
                 "Translate in tab".into(),
-                DOCUMENT_COMMAND,
+                LENS_DOCUMENT_COMMAND,
                 Some(target),
             )
         });

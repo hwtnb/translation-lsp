@@ -12,8 +12,10 @@ use crate::{
     },
 };
 
+mod history;
 mod indexed_text;
 
+use history::{History, MAX_EDITS};
 use indexed_text::IndexedText;
 
 /// A comment group with words in it.
@@ -50,6 +52,9 @@ pub(crate) struct Document {
     comments: Reading,
     unreported: Option<Failure>,
     markdown_prose: Option<Vec<ByteRange<usize>>>,
+    /// The edits since an older version, so that a range of it can be found
+    /// in the current text. Emptied when the text is replaced or lost.
+    history: History,
 }
 
 impl Document {
@@ -62,6 +67,7 @@ impl Document {
             comments: Reading::Pending,
             unreported: None,
             markdown_prose: None,
+            history: History::default(),
         }
     }
 
@@ -76,20 +82,54 @@ impl Document {
         self.markdown_prose = None;
         if version <= self.version {
             self.text = None;
+            self.history.clear();
             return Err("Document versions must increase; reopen or send a newer full update");
         }
+        let previous = self.version;
         self.version = version;
         let mut text = self.text.take();
-        for change in changes {
+        // `None` once the whole text is replaced, or once the update has more
+        // edits than the history keeps: no older range is followed past that.
+        let mut edits = Some(Vec::new());
+        let applied: Result<(), &str> = changes.into_iter().try_for_each(|change| {
             if let Some(range) = change.range {
                 let current = text.as_mut().ok_or("A full document update is required")?;
-                current.replace(range, &change.text)?;
+                let at = current.replace(range, &change.text)?;
+                match &mut edits {
+                    Some(list) if list.len() < MAX_EDITS => {
+                        list.push(current.edit(range, at, change.text.len()));
+                    }
+                    Some(_) => edits = None,
+                    None => (),
+                }
             } else {
                 text = Some(IndexedText::new(change.text));
+                edits = None;
+            }
+            Ok(())
+        });
+        match (applied, edits) {
+            (Ok(()), Some(edits)) => self.history.record(previous, edits),
+            (applied, _) => {
+                self.history.clear();
+                applied?;
             }
         }
         self.text = text;
         Ok(())
+    }
+
+    /// Where `range` of `version` of the open lifetime `session` is in the
+    /// current text: the same range in the current version, and in an older
+    /// one if every update since is known and no edit touched the range.
+    pub fn current_range(&self, session: u64, version: i32, range: Range) -> Option<Range> {
+        if session != self.session || self.text.is_none() {
+            return None;
+        }
+        if version == self.version {
+            return Some(range);
+        }
+        self.history.map(version, range)
     }
 
     pub fn text(&self) -> Option<&str> {
@@ -176,6 +216,30 @@ impl Document {
                 Reading::Failed
             }
         };
+    }
+
+    /// The range of the comment group with words in it that starts at
+    /// `position`, if there is one. Only that group is read, not every
+    /// comment of the document.
+    pub fn comment_starting_at(
+        &mut self,
+        uri: &Uri,
+        position: Position,
+        limit: Duration,
+    ) -> Option<Range> {
+        self.read_comments(uri, limit);
+        let indexed = self.text.as_ref()?;
+        let Reading::Done(comments) = &self.comments else {
+            return None;
+        };
+        let text = indexed.as_str();
+        let offset = indexed.offset(position).ok()?;
+        let group = comments.at(text, offset)?;
+        let bytes = comments.range(group.clone());
+        if bytes.start != offset || comments.body(text, group).trim().is_empty() {
+            return None;
+        }
+        Some(Range::new(position, indexed.position(bytes.end).ok()?))
     }
 
     /// Whether the comments of this version have been read.
@@ -527,6 +591,36 @@ mod tests {
                 Source::Passage(format!("`id`{ending}keep 🚀"))
             );
         }
+    }
+
+    #[test]
+    fn a_comment_starting_at_a_position_is_a_whole_group_with_words() {
+        let uri: Uri = "untitled:sample".parse().unwrap();
+        let text = "// first\n// second\nfn f() {}\n//\n  /* 🚀 */";
+        let mut document = Document::new(1, 1, "rust".into(), text.into());
+        let group = Range::new(Position::new(0, 0), Position::new(1, 9));
+        assert_eq!(
+            document.comment_starting_at(&uri, group.start, LIMIT),
+            Some(group)
+        );
+        // Inside a group, its second line, a comment of only its marks, and
+        // code.
+        for position in [(0, 3), (1, 0), (3, 0), (2, 0)] {
+            let position = Position::new(position.0, position.1);
+            assert_eq!(
+                document.comment_starting_at(&uri, position, LIMIT),
+                None,
+                "{position:?}"
+            );
+        }
+        assert_eq!(
+            document.comment_starting_at(&uri, Position::new(4, 2), LIMIT),
+            Some(Range::new(Position::new(4, 2), Position::new(4, 10)))
+        );
+        assert_eq!(
+            document.comment_starting_at(&uri, Position::new(9, 0), LIMIT),
+            None
+        );
     }
 
     #[test]

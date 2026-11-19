@@ -2,6 +2,8 @@ use std::{iter, ops::Range as ByteRange};
 
 use lsp_types::{Position, Range};
 
+use super::history::Edit;
+
 pub(super) struct IndexedText {
     text: String,
     line_starts: Vec<usize>,
@@ -77,8 +79,11 @@ impl IndexedText {
         ))
     }
 
-    pub fn replace(&mut self, range: Range, replacement: &str) -> Result<(), &'static str> {
+    /// Replaces `range` with `replacement`, and gives the byte offset where
+    /// the replacement starts.
+    pub fn replace(&mut self, range: Range, replacement: &str) -> Result<usize, &'static str> {
         let bytes = self.range(range)?;
+        let at = bytes.start;
         let removed = bytes.len();
         // Include both splice boundaries. Do not cut a CRLF at the far edge.
         // Byte scanning is safe even if this extra byte belongs to UTF-8 prose.
@@ -101,7 +106,16 @@ impl IndexedText {
         }
         let starts = line_breaks(&self.text.as_bytes()[start..end], start);
         self.line_starts.splice(first..after, starts);
-        Ok(())
+        Ok(at)
+    }
+
+    /// The edit that [`Self::replace`] of `range` made, with `inserted` bytes
+    /// from offset `at`, which tells where the text after it moved.
+    pub fn edit(&self, range: Range, at: usize, inserted: usize) -> Edit {
+        let joined = at > 0
+            && self.text.as_bytes()[at - 1] == b'\r'
+            && self.text.as_bytes().get(at) == Some(&b'\n');
+        Edit::new(range, self.position(at + inserted).ok(), joined)
     }
 }
 

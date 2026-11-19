@@ -21,6 +21,9 @@ pub(super) enum ServerCommand {
     /// Shows the translation or failure of a range in a card.
     Show(TranslationTarget),
     OpenTab(TranslationTarget),
+    /// A tab translation from the CodeLens of the menu, which translates the
+    /// whole document as it is now.
+    LensOpenTab(TranslationTarget),
     Cancel(u64),
     CancelAll,
     DeleteTranslation(TranslationTarget),
@@ -62,6 +65,7 @@ impl ServerCommand {
             LENS_RETRY_COMMAND => Ok(Self::LensRetry(target(arguments)?)),
             SHOW_COMMAND => Ok(Self::Show(target(arguments)?)),
             DOCUMENT_COMMAND => Ok(Self::OpenTab(target(arguments)?)),
+            LENS_DOCUMENT_COMMAND => Ok(Self::LensOpenTab(target(arguments)?)),
             CANCEL_COMMAND => Ok(Self::Cancel(parse(one(
                 arguments,
                 "Expected one translation ticket",
@@ -127,6 +131,7 @@ impl ServerCommand {
             Self::LensRetry(target) => (LENS_RETRY_COMMAND, Some(vec![to_value(target)?])),
             Self::Show(target) => (SHOW_COMMAND, Some(vec![to_value(target)?])),
             Self::OpenTab(target) => (DOCUMENT_COMMAND, Some(vec![to_value(target)?])),
+            Self::LensOpenTab(target) => (LENS_DOCUMENT_COMMAND, Some(vec![to_value(target)?])),
             Self::Cancel(ticket) => (CANCEL_COMMAND, Some(vec![to_value(ticket)?])),
             Self::CancelAll => (CANCEL_ALL_COMMAND, Some(Vec::new())),
             Self::DeleteTranslation(target) => (DELETE_COMMAND, Some(vec![to_value(target)?])),
@@ -166,7 +171,8 @@ impl<P: TranslationProvider> Server<P> {
         | ServerCommand::LensRetry(target)
         | ServerCommand::Show(target)
         | ServerCommand::DeleteTranslation(target)
-        | ServerCommand::OpenTab(target) = &command
+        | ServerCommand::OpenTab(target)
+        | ServerCommand::LensOpenTab(target) = &command
             && target.target_language != self.settings.target_language
         {
             return Err(failure(
@@ -174,6 +180,21 @@ impl<P: TranslationProvider> Server<P> {
                 "The target language must match initialization_options",
             ));
         }
+        let command = match command {
+            ServerCommand::LensTranslate(target) => {
+                ServerCommand::LensTranslate(self.current_lens_target(target, true)?)
+            }
+            ServerCommand::LensRetry(target) => {
+                ServerCommand::LensRetry(self.current_lens_target(target, false)?)
+            }
+            ServerCommand::Show(target) => {
+                ServerCommand::Show(self.current_lens_target(target, false)?)
+            }
+            ServerCommand::LensOpenTab(target) => {
+                ServerCommand::LensOpenTab(self.current_tab_target(target))
+            }
+            command => command,
+        };
         match command {
             ServerCommand::CancelAll => {
                 self.cancel_translations(connection)?;
@@ -232,7 +253,7 @@ impl<P: TranslationProvider> Server<P> {
                     },
                 )
             }
-            ServerCommand::OpenTab(target) => {
+            ServerCommand::OpenTab(target) | ServerCommand::LensOpenTab(target) => {
                 if !self.ui.capabilities.show_document {
                     return Err(failure(
                         ErrorCode::RequestFailed,
@@ -293,6 +314,80 @@ impl<P: TranslationProvider> Server<P> {
                 self.cards.insert(card, Card::Translation(target));
                 Ok(Some(Value::Null))
             }
+        }
+    }
+
+    /// The target of a CodeLens command in the current text. Zed keeps a
+    /// CodeLens line that shows the same text when it asks for CodeLenses
+    /// again, with the command of the version it was made for, so a target of
+    /// an older version whose range no edit since touched is moved to where
+    /// that range is now. In code, the range must still be a whole comment:
+    /// a comment line added right before it can join the two.
+    ///
+    /// With `translate`, in code, only the start of the range is followed,
+    /// and the whole comment that starts there now is the target: the
+    /// `Translate` line of a comment stays as it was while the comment is
+    /// written or edited. Any other target is left as it is, for the checks
+    /// after this to refuse.
+    fn current_lens_target(
+        &mut self,
+        target: TranslationTarget,
+        translate: bool,
+    ) -> RequestResult<TranslationTarget> {
+        let Some(document) = self.documents.get_mut(&target.uri) else {
+            return Ok(target);
+        };
+        if document.version == target.version {
+            return Ok(target);
+        }
+        let code = !document.language.is_some_and(Language::is_prose);
+        let followed = if translate && code {
+            let start = target.range.start;
+            Range::new(start, start)
+        } else {
+            target.range
+        };
+        let Some(range) = document.current_range(target.session, target.version, followed) else {
+            return Ok(target);
+        };
+        let range = if code {
+            let limit = Duration::from_millis(self.settings.comment_parse_timeout_ms);
+            let comment = document.comment_starting_at(&target.uri, range.start, limit);
+            report_comment_failure(&self.ui, &target.uri, document)?;
+            match comment {
+                Some(comment) if translate || comment == range => comment,
+                _ => return Ok(target),
+            }
+        } else {
+            range
+        };
+        Ok(TranslationTarget {
+            version: document.version,
+            range,
+            ..target
+        })
+    }
+
+    /// The target of `Translate in tab` in the current text: the whole
+    /// document as it is now, whatever version the CodeLens line was made
+    /// for, if the document is in the same open lifetime and synchronized.
+    /// Any other target is left as it is, for the checks after this to
+    /// refuse.
+    fn current_tab_target(&self, target: TranslationTarget) -> TranslationTarget {
+        let Some(document) = self
+            .documents
+            .get(&target.uri)
+            .filter(|document| document.session == target.session)
+        else {
+            return target;
+        };
+        match document.full_range() {
+            Some(range) => TranslationTarget {
+                version: document.version,
+                range,
+                ..target
+            },
+            None => target,
         }
     }
 

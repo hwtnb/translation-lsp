@@ -105,6 +105,9 @@ const LENS_COMMAND: &str = "translation-lsp.lens";
 /// its range in an editor message.
 const SHOW_COMMAND: &str = "translation-lsp.show-translation";
 const DOCUMENT_COMMAND: &str = "translation-lsp.open-translation";
+/// [`DOCUMENT_COMMAND`] run from the CodeLens of the menu, which translates
+/// the whole document as it is now.
+const LENS_DOCUMENT_COMMAND: &str = "translation-lsp.open-translation-lens";
 const SETTINGS_COMMAND: &str = "translation-lsp.settings";
 /// The command of the CodeLens that opens the server menu.
 const MENU_COMMAND: &str = "translation-lsp.menu";
@@ -406,6 +409,7 @@ pub(crate) fn capabilities<P: TranslationProvider>() -> InitializeResult {
                     AUTOMATIC_ON_COMMAND.to_owned(),
                     OPEN_SETTINGS_COMMAND.to_owned(),
                     DOCUMENT_COMMAND.to_owned(),
+                    LENS_DOCUMENT_COMMAND.to_owned(),
                     CANCEL_COMMAND.to_owned(),
                     CANCEL_ALL_COMMAND.to_owned(),
                     DELETE_COMMAND.to_owned(),

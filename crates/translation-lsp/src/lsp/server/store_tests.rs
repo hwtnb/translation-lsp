@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod lenses;
+mod stale_commands;
 
 const WAIT: Duration = Duration::from_secs(5);
 /// A Rust file with the same comment twice.

@@ -304,6 +304,7 @@ impl Client {
                 "translation-lsp.turn-on-automatic-translation",
                 "translation-lsp.open-zed-settings",
                 "translation-lsp.open-translation",
+                "translation-lsp.open-translation-lens",
                 "translation-lsp.cancel-range",
                 "translation-lsp.cancel-all",
                 "translation-lsp.delete-translation",
@@ -962,11 +963,13 @@ fn a_translated_range_gets_a_code_lens_that_shows_the_whole_translation() {
         client.notifications
     );
 
+    // An edit of the comment leaves the line of the translation nothing to
+    // show.
     client.change(
         uri,
         2,
-        json!([{"range": {"start": {"line": 0, "character": 0},
-                          "end": {"line": 0, "character": 0}}, "text": "\n"}]),
+        json!([{"range": {"start": {"line": 1, "character": 7},
+                          "end": {"line": 1, "character": 7}}, "text": "x"}]),
     );
     assert_eq!(
         lens_titles(&lenses(&mut client, uri)),
@@ -1128,6 +1131,120 @@ fn a_comment_gets_a_code_lens_that_translates_it() {
     client.finish(true);
 }
 
+/// Zed keeps a CodeLens line that shows the same text after an edit, and
+/// sends its command with the version and range of the document it was made
+/// for, as a log of it shows: a document opened, Hover, two line breaks added
+/// at its start, and then commands of the first version. A command whose range
+/// no edit touched works where that range is now.
+#[test]
+fn code_lens_commands_of_an_older_version_work_where_their_range_is_now() {
+    let uri = "file:///stale-translate.rs";
+    let mut client = lens_client(&[], uri, false);
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let mut moved = range.clone();
+    for end in ["start", "end"] {
+        moved[end]["line"] = json!(range[end]["line"].as_u64().unwrap() + 2);
+    }
+    let add_lines = |client: &mut Client, uri: &str| {
+        for version in [2, 3] {
+            client.change(
+                uri,
+                version,
+                json!([{"range": {"start": {"line": 0, "character": 0},
+                                  "end": {"line": 0, "character": 0}}, "text": "\n"}]),
+            );
+        }
+    };
+
+    let translate = lenses(&mut client, uri)[0]["command"].clone();
+    assert_eq!(translate["command"], "translation-lsp.translate-lens");
+    add_lines(&mut client, uri);
+    assert!(
+        client
+            .call("workspace/executeCommand", translate)
+            .unwrap()
+            .is_null()
+    );
+    let found = finished_lenses(&mut client, uri);
+    assert_eq!(
+        lens_titles(&found),
+        [COMMENT_JA.lines().next().unwrap(), "Settings"]
+    );
+    assert!(found.iter().all(|lens| lens["range"] == moved));
+
+    let uri = "file:///stale-show.rs";
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    assert_preview(
+        &client.hover(uri, range["start"].clone()),
+        COMMENT,
+        COMMENT_JA,
+        &range,
+    );
+    let show = lenses(&mut client, uri)[0]["command"].clone();
+    assert_eq!(show["command"], "translation-lsp.show-translation");
+    add_lines(&mut client, uri);
+    // The CodeLenses of the new version show the stored translation, which
+    // gives the line the same text.
+    let found = lenses_until(&mut client, uri, "the stored translation", |titles| {
+        titles[0] == COMMENT_JA.lines().next().unwrap()
+    });
+    assert!(found.iter().all(|lens| lens["range"] == moved));
+    assert!(
+        client
+            .call("workspace/executeCommand", show)
+            .unwrap()
+            .is_null()
+    );
+    assert_eq!(
+        answer_card(&mut client, Some("Delete translation")),
+        (3, COMMENT_JA.to_owned())
+    );
+    let found = lenses(&mut client, uri);
+    assert_eq!(lens_titles(&found), ["Translate", "Settings"]);
+    assert!(found.iter().all(|lens| lens["range"] == moved));
+    client.finish(true);
+}
+
+/// Zed keeps the `Translate in tab` line after an edit too. Its command
+/// translates the whole document as it is now, while the Code Action of the
+/// same version is refused.
+#[test]
+fn translate_in_tab_from_before_an_edit_translates_the_document_as_it_is_now() {
+    let mut client = lens_client(&[], "file:///stale-tab.rs", true);
+    let uri = "file:///stale-tab.md";
+    client.open(uri, "markdown", PARAGRAPH, 1);
+    let tab = lenses(&mut client, uri)[0]["command"].clone();
+    assert_eq!(tab["command"], "translation-lsp.open-translation-lens");
+    let actions = client.actions(uri, range_for(PARAGRAPH, PARAGRAPH));
+    let action = actions
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|action| action["command"]["command"] == "translation-lsp.open-translation")
+        .unwrap()["command"]
+        .clone();
+    for version in [2, 3] {
+        client.change(
+            uri,
+            version,
+            json!([{"range": {"start": {"line": 0, "character": 0},
+                              "end": {"line": 0, "character": 0}}, "text": "\n"}]),
+        );
+    }
+    let refused = client.execute(action);
+    assert_error(
+        client.receive(refused, TIMEOUT),
+        ErrorCode::ContentModified as i32,
+    );
+    opened(&mut client, tab);
+    assert!(
+        client.notifications.is_empty(),
+        "{:?}",
+        client.notifications
+    );
+    client.finish(true);
+}
+
 #[test]
 fn a_comment_in_the_target_language_shows_nothing_until_translate() {
     let uri = "file:///same-language.rs";
@@ -1202,7 +1319,7 @@ fn markdown_gets_the_menu_as_code_lenses_above_its_first_line() {
     let top = json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}});
     assert!(found.iter().all(|lens| lens["range"] == top));
     let tab = &found[0]["command"];
-    assert_eq!(tab["command"], "translation-lsp.open-translation");
+    assert_eq!(tab["command"], "translation-lsp.open-translation-lens");
     assert_eq!(
         tab["arguments"][0]["range"],
         json!({"start": {"line": 0, "character": 0}, "end": position(MARKDOWN_DOCUMENT)})

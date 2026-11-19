@@ -523,6 +523,7 @@ fn provider_capabilities_drive_commands_and_account_actions() {
             AUTOMATIC_ON_COMMAND,
             OPEN_SETTINGS_COMMAND,
             DOCUMENT_COMMAND,
+            LENS_DOCUMENT_COMMAND,
             CANCEL_COMMAND,
             CANCEL_ALL_COMMAND,
             DELETE_COMMAND,
