@@ -165,7 +165,7 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 }
 ```
 
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`DeepL API key…` から `Save DeepL API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLでは、`target_language` を言語コードにする必要があります。また、選択した単語は辞書で引かずに翻訳します。文章の送り方と費用は[DeepL API](docs/ja/providers/deepl.md)で説明します。
+対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`DeepL API key…` から `Save DeepL API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLでは、`target_language` を言語コードにする必要があります。また、選択した単語は意味を調べずに翻訳します。文章の送り方と費用は[DeepL API](docs/ja/providers/deepl.md)で説明します。
 
 ### Google Cloud Translation
 
@@ -184,7 +184,7 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 }
 ```
 
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`Google Cloud API key…` から `Save Google Cloud API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLと同じく、`target_language` を言語コードにする必要があり、選択した単語は辞書で引かずに翻訳します。キーの作り方と費用は[Google Cloud Translation](docs/ja/providers/google-translate.md)で説明します。
+対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`Google Cloud API key…` から `Save Google Cloud API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLと同じく、`target_language` を言語コードにする必要があり、選択した単語は意味を調べずに翻訳します。キーの作り方と費用は[Google Cloud Translation](docs/ja/providers/google-translate.md)で説明します。
 
 ### ほかのよく使う設定
 
@@ -208,7 +208,7 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 | コメントのホバー | 対応するコードのコメントにマウスポインターを重ねるか、カーソルを置いてZedの `editor: hover` を実行します。 |
 | Markdownの選択 | [プロバイダーの設定](#プロバイダーの設定)のとおりプロバイダーが使える状態で、`features.automatic_selection` が `true` の場合、Markdownの文章を選択して安定させるとバックグラウンドで翻訳します。その範囲でホバーを開いて訳文を読みます。 |
 | `Translate selection to …` | すぐに実行したい場合やバックグラウンド翻訳が失敗した場合は、コードアクションの `Translate selection to …` を使います。このコードアクションは、完了すると通知 `Translation ready. Hover over the selected text to view it.` を表示します。 |
-| 単語を辞書で引く | 1行で3語以下の語句か識別子1つ（`retain`、`retain_completed` など）を選択します。ホバーには訳文の代わりに辞書の項目が表示されます。DeepL APIとGoogle Cloud Translationでは、辞書で引かずに翻訳します。 |
+| 単語の意味を調べる | 1行で3語以下の語句か識別子1つ（`retain`、`retain_completed` など）を選択します。ホバーには訳文の代わりに単語の説明が表示されます。説明はモデルが書きます。拡張機能に辞書のデータは含まれていません。DeepL APIとGoogle Cloud Translationでは、意味を調べずに翻訳します。 |
 | `… and open in tab` | Markdownまたはプレーンテキスト（Zedの言語名は `Plain Text`）では、`Translate selection to … and open in tab` で訳文を別タブに開けます。選択がない場合は `Translate document to … and open in tab` となり、文書全体を翻訳します。 |
 | CodeLens | Zedの設定で `"code_lens": "on"` にすると、コメントに `Translate \| Settings` を、翻訳済みの範囲に訳文の1行目を表示します。クリックすると訳文の全体を読めます。Markdownとプレーンテキストでは、1行目の上にメニューの行を表示します。 |
 | 取り消し | 1件を止めるには、その範囲にカーソルか選択範囲を置き、コードアクションの `Cancel translation of lines …` を実行します。`Cancel all translations` はアカウントメニューを残してすべての翻訳を取り消します。 |
@@ -220,7 +220,7 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 - コメントの上を通りすぎるだけでも、Zedがホバー要求を送って受け付けられた場合は、翻訳の利用量を消費します。
 - コメントに認証情報が書かれていれば、それも一緒に送信されます。
 - `features.automatic_selection` が `true` の場合、Markdownの文章は、コピーのために選択しただけでも送信されることがあります。
-- 単語を辞書で引くと、その語のある行も送信します。
+- 単語の意味を調べると、その語のある行も送信します。
 
 1回の要求に含める内容は[送信する内容](docs/ja/usage.md#送信する内容)で説明します。費用は各プロバイダーのページで説明します。
 
@@ -233,7 +233,7 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 - [OpenAI互換API](docs/ja/providers/openai-compatible.md): OpenAI互換プロバイダーの設定、いくつかのサービスのアドレス、APIキー。
 - [DeepL API](docs/ja/providers/deepl.md): DeepLプロバイダーの設定、文章の送り方、APIキー。
 - [Google Cloud Translation](docs/ja/providers/google-translate.md): Google Cloud Translationプロバイダーの設定とAPIキー。
-- [使い方](docs/ja/usage.md): ホバー、選択、単語を辞書で引く、タブに開く翻訳、状態表示、取り消しと再試行、送信する内容。
+- [使い方](docs/ja/usage.md): ホバー、選択、単語の意味を調べる、タブに開く翻訳、状態表示、取り消しと再試行、送信する内容。
 - [動作](docs/ja/behavior.md): 受付、処理が続く条件、自動選択、キャッシュ、期限、再試行、停止。
 - [対応言語](docs/ja/languages.md): 対応する言語、コメントの抽出、言語サーバーの設定。
 - [開発](docs/ja/development.md): 検証、モックのプロバイダーとサンプル、CI、依存関係の方針。

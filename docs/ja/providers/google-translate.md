@@ -4,7 +4,7 @@
 
 `google_translate` プロバイダーを選ぶと、APIキーを使い、Google Cloud Translationを通じて翻訳します。APIキーは、コードアクションの `Google Cloud API key…` から保存します。このプロバイダーは、APIキーを使えるBasic版のAPI（v2）を使います。Advanced版（v3）と、そのTranslation LLMのモデル、用語集、カスタムモデルは、別の認証情報が要るため対応していません。
 
-Google Cloud Translationは翻訳サービスで、言語モデルではないため、指示文を受け付けません。そのため、[送信する内容](#送信する内容)のとおり、送る文章はサーバーが整えます。また、選択した単語は、辞書の項目として引かずに翻訳します。Geminiで翻訳する場合は、[OpenAI互換](openai-compatible.md)のプロバイダーを使ってください。
+Google Cloud Translationは翻訳サービスで、言語モデルではないため、指示文を受け付けません。そのため、[送信する内容](#送信する内容)のとおり、送る文章はサーバーが整えます。また、選択した単語は、意味を調べずに翻訳します。Geminiで翻訳する場合は、[OpenAI互換](openai-compatible.md)のプロバイダーを使ってください。
 
 ## 最小の設定
 
