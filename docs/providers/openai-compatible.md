@@ -136,6 +136,8 @@ Each request is a streamed Chat Completions request with two messages: the trans
 
 The translation is the text of the reply's first choice. Reasoning that a service returns in a field of its own is not shown. Reasoning that a model writes into the text of the reply is shown as part of the translation.
 
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
+
 ## Errors and pauses
 
 A completed reply ends with the `finish_reason` `stop`. A reply that ends at the token limit (`length`), is stopped by a content filter (`content_filter`), ends for another reason, or ends without a reason is reported as an error instead of being shown incomplete. An error that the service sends after the reply has begun is reported as a stream failure; when its code is a number, as OpenRouter gives it, the code is read as the HTTP status.

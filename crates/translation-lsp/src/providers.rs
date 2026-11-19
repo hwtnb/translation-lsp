@@ -223,6 +223,22 @@ pub(crate) trait TranslationProvider: Clone + Send + 'static {
     ) -> impl Future<Output = Result<Translated<Self::Context>, Error>> {
         self.translate(intent, output, term, target_language, context)
     }
+    /// Translates `text`, one part of a longer document opened in a tab. A
+    /// provider that takes no prompt translates the part like a whole text.
+    fn translate_part(
+        &self,
+        text: &str,
+        target_language: &str,
+        context: Self::Context,
+    ) -> impl Future<Output = Result<Translated<Self::Context>, Error>> {
+        self.translate(
+            Intent::Explicit,
+            Output::Document,
+            text,
+            target_language,
+            context,
+        )
+    }
     fn administer(
         &self,
         _command: &str,

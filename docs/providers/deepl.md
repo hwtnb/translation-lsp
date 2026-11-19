@@ -91,6 +91,8 @@ Each request goes to `/v2/translate` with `tag_handling` set to `xml` and `ignor
 
 With `source_language` set to `auto`, DeepL reports the language it detected in each segment as `detected_source_language`. For comment Hover and automatic Markdown selection, the server shows nothing when every segment is in the target language: the language codes are compared without their region, so `EN` is `en-US` and `PT` is `pt-BR`. DeepL reports Chinese as `ZH`, which names neither script, so it matches only the target language `zh`, not `zh-Hans` or `zh-Hant`. Any other code that names a script, such as `sr-Latn`, is also compared in full. When `source_language` names a language, DeepL reports that language, and the server does not use it.
 
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent in parts, several at once, and each part is sent in segments as described here, in requests of its own.
+
 ## Errors and pauses
 
 A rejected key (HTTP 403), an exhausted quota (HTTP 456), and a language code that DeepL does not take stop automatic translation and report the HTTP status and DeepL's message. After saving another key, checking the usage of the account, or correcting the settings, run a selection or document translation explicitly; automatic translation resumes when that succeeds. A stop for a rejected key ends when you save another key from `DeepL API key…`: the stop belongs to the key it happened with.

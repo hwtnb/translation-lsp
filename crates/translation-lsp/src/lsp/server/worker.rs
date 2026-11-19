@@ -7,7 +7,10 @@ use crate::providers::{
     unset::{NO_SETTINGS_FILE, settings_file},
 };
 
-use super::*;
+use super::{
+    parts::{self, Split},
+    *,
+};
 
 const ADMIN_CONCURRENCY: usize = 1;
 
@@ -38,6 +41,8 @@ pub(super) enum Task<C> {
         source: Source,
         target_language: String,
         context: C,
+        /// How a translation for a tab is sent in parts, if it is.
+        split: Option<Split>,
     },
     Administration {
         command: String,
@@ -142,23 +147,37 @@ pub(super) async fn run_job<P: TranslationProvider>(
             source,
             target_language,
             context,
+            split,
         } => {
             let started = || finished.send(WorkerEvent::Started(ticket)).is_ok();
             let result = until_deadline(&mut deadline, started, async {
                 provider.check_admission(&context, generation)?;
-                match &source {
-                    Source::Passage(text) => {
-                        provider
-                            .translate(intent, output, text, &target_language, context.clone())
+                match source {
+                    Source::Passage(text) => match split {
+                        Some(split) if intent == Intent::Explicit && output == Output::Document => {
+                            parts::translate(
+                                provider,
+                                text,
+                                split,
+                                &target_language,
+                                context.clone(),
+                                generation,
+                            )
                             .await
-                    }
+                        }
+                        _ => {
+                            provider
+                                .translate(intent, output, &text, &target_language, context.clone())
+                                .await
+                        }
+                    },
                     Source::Term { term, line } => {
                         provider
                             .look_up(
                                 intent,
                                 output,
-                                term,
-                                line,
+                                &term,
+                                &line,
                                 &target_language,
                                 context.clone(),
                             )

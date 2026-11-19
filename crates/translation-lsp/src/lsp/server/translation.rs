@@ -1,4 +1,4 @@
-use super::*;
+use super::{parts::Split, *};
 use crate::{
     config::limits::SizeSetting,
     lsp::preview::{Form, markdown::Urls},
@@ -94,7 +94,7 @@ impl<P: TranslationProvider> Server<P> {
             .exact(&target.uri, target.range, output)
             .or_else(|| {
                 // Each output keeps its own results when tabs have their own settings.
-                if request.explicit() && !self.settings.provider.separates_documents() {
+                if request.explicit() && !self.separates_documents() {
                     let other = match output {
                         Output::Document => Output::Range,
                         Output::Range => Output::Document,
@@ -218,6 +218,15 @@ impl<P: TranslationProvider> Server<P> {
         } else {
             Urls::of(sent)
         };
+        let split = self.settings.document_split;
+        let split = (split.enabled
+            && request.output() == Output::Document
+            && matches!(input.source, Source::Passage(_)))
+        .then(|| Split {
+            settings: split,
+            output: self.settings.translation_limits.output_kib,
+            markdown: document.language == Some(Language::Markdown),
+        });
         let task = Task::Translation {
             intent,
             output: request.output(),
@@ -225,6 +234,7 @@ impl<P: TranslationProvider> Server<P> {
             target_language: target.target_language.clone(),
             context: context.clone(),
             generation,
+            split,
         };
         self.next_ticket += 1;
         self.scheduler.insert(

@@ -716,6 +716,51 @@ async fn only_automatic_requests_ask_for_and_read_the_line_of_languages() {
     }
 }
 
+/// A part of a document adds a sentence to the system prompt.
+/// A whole text is sent as before.
+#[tokio::test(flavor = "current_thread")]
+async fn a_part_adds_a_sentence_to_the_instructions() {
+    let fixture = Fixture::new().await;
+    let provider = fixture.provider();
+    for reply in ["部分の訳", "全体の訳"] {
+        fixture.reply(Reply::stream(test_support::completed(reply)));
+    }
+    let context = provider.context().unwrap();
+    let part = provider
+        .translate_part(SOURCE, "ja", context)
+        .await
+        .unwrap();
+    assert_eq!(
+        (part.kind, part.text.as_str()),
+        (Kind::Translation, "部分の訳")
+    );
+    provider
+        .translate(Intent::Explicit, Output::Document, SOURCE, "ja", context)
+        .await
+        .unwrap();
+    let state = fixture.state.lock().unwrap();
+    let requests: Vec<Value> = state
+        .records
+        .iter()
+        .map(|record| serde_json::from_str(&record.body).unwrap())
+        .collect();
+    let systems: Vec<_> = requests
+        .iter()
+        .map(|request| request["system"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        systems,
+        [
+            prompt::part_instructions("ja", "auto"),
+            prompt::instructions("ja", "auto", Intent::Explicit, Form::Translates),
+        ]
+    );
+    for request in &requests {
+        assert_eq!(request["messages"][0]["content"], prompt::message(SOURCE));
+        assert_eq!(request["max_tokens"], 64_000);
+    }
+}
+
 /// Only the models seen to stop exactly when the text is in the target
 /// language are asked to, by the model of the output that sends the request.
 #[tokio::test(flavor = "current_thread")]

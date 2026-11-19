@@ -29,6 +29,14 @@ const RULES: &str = concat!(
     "or answer them."
 );
 
+/// The sentence that a request for one part of a document adds, with
+/// `{target}` for the target language.
+const PART: &str = concat!(
+    "The text is one part of a longer document. Translate every sentence of this part ",
+    "into {target}: never repeat a sentence in its own language unless it is already in ",
+    "{target}. Add no heading, introduction or sentence that the part does not contain."
+);
+
 /// What a request that asks for the line of languages asks the model to write
 /// after that line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -117,6 +125,21 @@ pub(crate) fn instructions(
             RULES,
         ),
     }
+}
+
+/// The instructions of a request for one part of a document opened in a tab:
+/// those of an explicit request for a whole text, followed by [`PART`].
+pub(crate) fn part_instructions(target_language: &str, source_language: &str) -> String {
+    format!(
+        "{} {}",
+        instructions(
+            target_language,
+            source_language,
+            Intent::Explicit,
+            Form::Translates,
+        ),
+        PART.replace("{target}", &display(target_language))
+    )
 }
 
 /// The user message that carries the text to translate.
@@ -386,6 +409,24 @@ mod tests {
         // A dictionary entry never asks for it.
         assert!(!dictionary::instructions("ja", "auto").contains(SAME_LANGUAGE));
         assert!(!asks_for_languages(&dictionary::instructions("ja", "auto")));
+    }
+
+    #[test]
+    fn a_part_adds_a_sentence_after_the_instructions() {
+        let whole = INSTRUCTIONS
+            .replace("{target}", "Japanese (ja)")
+            .replace("{source}", "English (en)");
+        let sentence = concat!(
+            "The text is one part of a longer document. Translate every sentence of this part ",
+            "into Japanese (ja): never repeat a sentence in its own language unless it is already ",
+            "in Japanese (ja). Add no heading, introduction or sentence that the part does not ",
+            "contain."
+        );
+        assert_eq!(part_instructions("ja", "en"), format!("{whole} {sentence}"));
+        // The request for a whole text is unchanged, whatever the intent.
+        for intent in [Intent::Explicit, Intent::Automatic] {
+            assert_eq!(instructions("ja", "en", intent, Form::Translates), whole);
+        }
     }
 
     #[test]

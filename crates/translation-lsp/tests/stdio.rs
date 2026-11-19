@@ -51,6 +51,59 @@ const PARAGRAPH: &str =
 const COMMENT_JA: &str = "リモートサービスが一時的な障害を報告した場合に限り、再試行する。";
 const PARAGRAPH_JA: &str =
     "`retry_count` の値を維持する。\n一時的な障害が発生した場合に限り再試行する。🚀";
+const LONG_DOCUMENT: &str = sample!("long-document.md");
+/// The mock translation of `long-document.md`, sent in parts.
+const LONG_DOCUMENT_JA: &str = concat!(
+    "# 接続プール\n",
+    "\n",
+    "このサンプルは、`document_split.enabled` が `true` で `document_split.chunk_kib` が `1` のとき、部分に分けて送られる長さがある。各部分は別々に訳され、すべての部分が終わってからタブが開く。\n",
+    "\n",
+    "## 接続を開く\n",
+    "\n",
+    "プールは、要求が接続を必要とし、空いている接続がないときに接続を開く。`max_connections` が許す数より多くは開かないので、要求はほかの要求が終わるのを待つことがある。\n",
+    "\n",
+    "新しい接続は、サーバーの応答を最大 5 秒待つ。サーバーが時間内に応答しないと要求は失敗し、次の要求がもう一度接続を開こうとする。\n",
+    "\n",
+    "## 接続を閉じる\n",
+    "\n",
+    "この節は部分の大きさの 2 倍より長いので、段落、リスト、表、コードブロックの間で分けられ、それらの中では分けられない。\n",
+    "\n",
+    "プールは、`idle_timeout` が決める時間だれも使っていない接続を閉じる。次の要求が新しい接続を待たずに済むよう、使われていなくても `min_connections` が決める数の接続は残す。\n",
+    "\n",
+    "接続は次の場合にも閉じる。\n",
+    "\n",
+    "- サーバーが接続の自分の側を閉じた。\n",
+    "- 接続上の要求がネットワークのエラーで失敗した。\n",
+    "- 接続が `max_lifetime` の許す時間より長く開いている。\n",
+    "\n",
+    "プールは接続を閉じる前に、その接続上の要求が終わるのを待つ。プールが終了する途中でも、要求が応答の途中で接続を失うことはない。\n",
+    "\n",
+    "サーバーが閉じた接続は、空いているように見えても使い直さない。プールがそれに気づくのは次の要求を送ったときなので、その要求は新しい接続でもう 1 回だけ送り、新しい接続でも失敗したときだけ失敗にする。\n",
+    "\n",
+    "下の関数は、プールがもう必要としない空いた接続を閉じる。コードブロックの中の `#` で始まる行は見出しではなくコメントなので、文書はそこでは分けられない。\n",
+    "\n",
+    "```python\n",
+    "def close_idle(pool, now):\n",
+    "    # 最小の数の接続は開いたままにする。\n",
+    "    for connection in pool.idle()[pool.min_connections:]:\n",
+    "        if now - connection.last_used > pool.idle_timeout:\n",
+    "            connection.close()\n",
+    "```\n",
+    "\n",
+    "この表は、既定の設定で接続がどれだけ開いたままになるかを示す。\n",
+    "\n",
+    "| 設定 | 既定 | 効果 |\n",
+    "| --- | --- | --- |\n",
+    "| `idle_timeout` | 10 分 | だれも使わない接続を閉じる |\n",
+    "| `max_lifetime` | 30 分 | どれだけ忙しくても接続を閉じる |\n",
+    "| `min_connections` | 0 | この数の接続を開いたままにする |\n",
+    "\n",
+    "`max_lifetime` のために接続が閉じたとき、接続の数が `min_connections` を下回るなら、プールはすぐに新しい接続を開く。接続を待っている要求は、着いた順に新しい接続を取る。\n",
+    "\n",
+    "## 監視\n",
+    "\n",
+    "プールは、開いている接続、空いている接続、待っている要求の数を毎分報告する。待っている要求の数が増え続けるなら負荷に対して `max_connections` が小さすぎ、空いている接続の数が多いままなら `min_connections` が負荷に必要な数より大きい。\n",
+);
 const TIMEOUT: Duration = Duration::from_secs(8);
 const READY: &str = "Translation ready. Hover over the selected text to view it.";
 
@@ -2941,6 +2994,58 @@ fn document_preview_never_opens_canceled_stale_expired_or_failed_translation() {
             client.notifications.len(),
             usize::from(matches!(mode, "timeout" | "fail"))
         );
+        client.finish(true);
+    }
+}
+
+#[test]
+fn a_document_split_into_parts_opens_the_translations_joined_in_order() {
+    // The mock provider translates `long-document.md` only in parts, and
+    // with `chunk_kib` set to 1 it is divided into several.
+    for (args, split) in [
+        (&[][..], true),
+        (&[][..], false),
+        (&["--mock-fail"][..], true),
+    ] {
+        let options = if split {
+            json!({"document_split": {"enabled": true, "chunk_kib": 1, "parallel": 2}})
+        } else {
+            Value::Null
+        };
+        let mut client = Client::configured_documents(args, false, false, options, true);
+        let uri = "file:///long-document.md";
+        client.open(uri, "markdown", LONG_DOCUMENT, 1);
+        let action = document_action(
+            &mut client,
+            uri,
+            json!({"start":{"line":0,"character":0},"end":{"line":0,"character":0}}),
+        );
+        let request = client.execute(action);
+        assert!(client.receive(request, TIMEOUT).unwrap().is_null());
+        if split && args.is_empty() {
+            let open = client.document();
+            let path = Url::parse(open.params["uri"].as_str().unwrap())
+                .unwrap()
+                .to_file_path()
+                .unwrap();
+            assert_eq!(path.extension().unwrap(), "md");
+            assert_eq!(fs::read_to_string(&path).unwrap(), LONG_DOCUMENT_JA);
+            client.send(Response::new_ok(open.id, json!({"success": true})).into());
+            assert!(client.notifications.is_empty());
+        } else {
+            let failed = client.notice();
+            assert_eq!(failed["type"], 1);
+            let expected = if split {
+                "Simulated mock translation failure"
+            } else {
+                "Mock translation only supports the bundled sample text"
+            };
+            assert!(
+                failed["message"].as_str().unwrap().ends_with(expected),
+                "{failed}"
+            );
+            assert!(client.documents.is_empty());
+        }
         client.finish(true);
     }
 }

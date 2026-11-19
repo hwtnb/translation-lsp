@@ -1206,3 +1206,53 @@ async fn only_automatic_requests_ask_for_and_read_the_line_of_languages() {
         );
     }
 }
+
+/// A part of a document adds a sentence to the instructions.
+/// A whole text is sent as before.
+#[tokio::test(flavor = "current_thread")]
+async fn a_part_adds_a_sentence_to_the_instructions() {
+    let fixture = Fixture::new().await;
+    fixture.state.lock().unwrap().translation = Some("部分の訳".into());
+    let auth = fixture.auth();
+    fixture.connected(&auth, 3600).await;
+    let provider = ChatGptProvider::synthetic(
+        auth,
+        format!("{}/v1", fixture.base),
+        "synthetic-model".into(),
+    );
+    let source = "Private source sentence.";
+    let context = provider.context().unwrap();
+    let part = provider
+        .translate_part(source, "ja", context.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        (part.kind, part.text.as_str()),
+        (Kind::Translation, "部分の訳")
+    );
+    provider
+        .translate(Intent::Explicit, Output::Document, source, "ja", context)
+        .await
+        .unwrap();
+    let state = fixture.state.lock().unwrap();
+    let requests: Vec<Value> = state
+        .records
+        .iter()
+        .filter(|record| record.path == "/v1/responses")
+        .map(|record| serde_json::from_str(&record.body).unwrap())
+        .collect();
+    let instructions: Vec<_> = requests
+        .iter()
+        .map(|request| request["instructions"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        instructions,
+        [
+            prompt::part_instructions("ja", "auto"),
+            prompt::instructions("ja", "auto", Intent::Explicit, Form::Translates),
+        ]
+    );
+    for request in &requests {
+        assert_eq!(request["input"][0]["content"], prompt::message(source));
+    }
+}

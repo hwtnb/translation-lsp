@@ -37,6 +37,7 @@ async fn worker_deadline_and_cancellation_stop_overload_backoff() {
                 source: Source::Passage("Read this.".into()),
                 target_language: "ja".into(),
                 context: provider.context().unwrap(),
+                split: None,
             },
         };
         let running = run_job(job, &finished, &provider);

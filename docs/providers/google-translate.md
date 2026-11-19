@@ -82,6 +82,8 @@ Each request goes to `https://translation.googleapis.com/language/translate/v2` 
 
 With `source_language` set to `auto`, the API reports the language it detected in each segment as `detectedSourceLanguage`. For comment Hover and automatic Markdown selection, the server shows nothing when every segment is in the target language: the language codes are compared without their region, so `en` is `en-US`. Chinese codes are compared in full, because the API takes `zh-CN` or `zh` for Chinese (Simplified) and `zh-TW` for Chinese (Traditional): `zh` and `zh-CN` are the same language, and `zh-TW` is not. A code that names a script, such as `sr-Latn`, is also compared in full. When `source_language` names a language, the API reports none.
 
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent in parts, several at once, and each part is sent in segments as described here, in requests of its own.
+
 ## Errors and pauses
 
 A rejected key, a refusal for the project of the key (HTTP 403, such as when the Cloud Translation API or billing is not enabled, or the key may not call the API), an exhausted daily quota, and a language code that the API does not take (HTTP 400) stop automatic translation and report the HTTP status, the reason the API gives, and its message. After saving another key or correcting the project or the settings, run a selection or document translation explicitly; automatic translation resumes when that succeeds. A stop for a rejected key ends when you save another key from `Google Cloud API key…`: the stop belongs to the key it happened with.

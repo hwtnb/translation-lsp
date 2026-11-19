@@ -169,8 +169,8 @@ pub(super) enum Sharing {
     /// A range request asks for less output than a tab request, so a tab
     /// shares a range operation only until it is sent.
     UntilSent,
-    /// With `provider.document`, tab operations and range operations never
-    /// share work, even for the same target.
+    /// With `provider.document` or `document_split`, tab operations and range
+    /// operations never share work, even for the same target.
     Never,
 }
 
@@ -578,6 +578,7 @@ mod tests {
             source: Source::Passage("source".into()),
             target_language: "ja".into(),
             context: MockContext,
+            split: None,
         };
         s.insert(
             ticket,
@@ -804,6 +805,7 @@ mod shared_outputs_tests {
                 source: Source::Passage("source".into()),
                 target_language: "ja".into(),
                 context: MockContext,
+                split: None,
             };
             let request = if ticket == 1 {
                 TranslationRequest::Document
@@ -890,6 +892,7 @@ mod separate_outputs_tests {
             source: Source::Passage("source".into()),
             target_language: "ja".into(),
             context: KeyId::SYNTHETIC,
+            split: None,
         };
         scheduler
             .insert(

@@ -90,6 +90,8 @@ Check usage in ChatGPT settings. The `ChatGPT Usage` item under [Authentication]
 
 The text submitted for translation is described under [What is sent](../usage.md#what-is-sent).
 
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent).
+
 ## Errors and pauses
 
 Failures retain credentials unless token refresh confirms an unusable grant.

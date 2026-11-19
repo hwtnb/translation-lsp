@@ -3,6 +3,7 @@ pub(crate) mod features;
 pub(crate) mod hover;
 pub(crate) mod language;
 pub(crate) mod limits;
+pub(crate) mod split;
 mod validation;
 
 use error::ConfigError;
@@ -12,6 +13,7 @@ use hover::HoverSettings;
 use limits::TranslationLimits;
 use serde::Deserialize;
 use serde_json::Value;
+use split::DocumentSplit;
 
 #[derive(Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -27,6 +29,7 @@ pub(crate) struct Settings {
     pub comment_parse_timeout_ms: u64,
     pub features: Features,
     pub hover: HoverSettings,
+    pub document_split: DocumentSplit,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -265,6 +268,7 @@ impl Default for Settings {
             comment_parse_timeout_ms: 1_000,
             features: Features::default(),
             hover: HoverSettings::default(),
+            document_split: DocumentSplit::default(),
         }
     }
 }

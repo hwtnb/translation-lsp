@@ -31,6 +31,7 @@ pub(super) fn before_decoding(options: &Value) -> Result<(), ConfigError> {
 
 pub(super) fn after_decoding(settings: &Settings) -> Result<(), ConfigError> {
     settings.translation_limits.validate()?;
+    settings.document_split.validate()?;
     for (name, value, minimum, maximum) in [
         (
             "hover_timeout_ms",

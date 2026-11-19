@@ -934,3 +934,69 @@ fn hover_settings_default_to_a_header_and_markdown_and_reject_unknown_names() {
         assert!(matches!(error, ConfigError::Decode(_)), "{options}");
     }
 }
+
+#[test]
+fn document_split_defaults_to_off_and_names_its_rejected_settings() {
+    use split::DocumentSplit;
+    let split = |options| {
+        Settings::from_options(Some(options))
+            .unwrap()
+            .document_split
+    };
+    let default = DocumentSplit {
+        enabled: false,
+        parallel: 4,
+        chunk_kib: 8,
+    };
+    assert_eq!(Settings::default().document_split, default);
+    assert_eq!(split(json!({})), default);
+    assert_eq!(split(json!({"document_split": {}})), default);
+    assert_eq!(
+        split(json!({"document_split": {
+            "enabled": true, "parallel": 8, "chunk_kib": 16384
+        }})),
+        DocumentSplit {
+            enabled: true,
+            parallel: 8,
+            chunk_kib: 16384,
+        }
+    );
+    assert_eq!(
+        split(json!({"document_split": {"parallel": 1, "chunk_kib": 1}})).chunk_bytes(),
+        1024
+    );
+    // Ranges are checked even when splitting is off.
+    for (enabled, field, value) in [
+        (true, "parallel", 0),
+        (false, "parallel", 9),
+        (true, "chunk_kib", 0),
+        (false, "chunk_kib", 16385),
+    ] {
+        let error = Settings::from_options(Some(
+            json!({"document_split": {"enabled": enabled, (field): value}}),
+        ))
+        .err()
+        .unwrap();
+        assert!(
+            error
+                .to_string()
+                .starts_with(&format!("document_split.{field} must be between")),
+            "{error}"
+        );
+    }
+    for options in [
+        json!({"document_split": null}),
+        json!({"document_split": true}),
+        json!({"document_split": {"enabled": null}}),
+        json!({"document_split": {"parallel": null}}),
+        json!({"document_split": {"chunk_kib": -1}}),
+        json!({"document_split": {"chunk_kib": 1.5}}),
+        json!({"document_split": {"disk_cache": true}}),
+        json!({"document_split": {"Enabled": true}}),
+    ] {
+        let error = Settings::from_options(Some(options.clone()))
+            .err()
+            .unwrap_or_else(|| panic!("Accepted {options}"));
+        assert!(matches!(error, ConfigError::Decode(_)), "{options}");
+    }
+}

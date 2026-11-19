@@ -304,6 +304,33 @@ impl TranslationProvider for ChatGptProvider {
         )
     }
 
+    async fn translate_part(
+        &self,
+        text: &str,
+        target: &str,
+        key: AccountKey,
+    ) -> Result<Translated<AccountKey>, Error> {
+        let instructions = prompt::part_instructions(target, &self.source_language);
+        let (reply, context) = self
+            .request(
+                instructions,
+                prompt::message(text),
+                &[text],
+                &key,
+                Intent::Explicit,
+                Output::Document,
+            )
+            .await?;
+        prompt::translated(
+            reply,
+            Intent::Explicit,
+            &self.source_language,
+            target,
+            Service::OpenAi,
+            context,
+        )
+    }
+
     async fn look_up(
         &self,
         intent: Intent,

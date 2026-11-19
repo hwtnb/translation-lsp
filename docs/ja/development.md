@@ -28,6 +28,8 @@ JavaScript、JSX、TypeScript、TSXのコメントは [samples/comment.js](../..
 
 [samples/document.md](../../samples/document.md) には、見出し、リスト、表、コードブロック、行の中のコード、強調と、`https` のURL、文書の中の見出し、同じフォルダーのファイルへのリンクがあります。実際のプロバイダーで、タブで開いた翻訳がMarkdownを保つことと、コードだけやリンク先だけを選択しても自動の翻訳が始まらないことを試せます。モックのプロバイダーはこれを訳しません。Plain Textのサンプル [samples/document.txt](../../samples/document.txt) の最初の段落は `paragraph.md` の段落と同じで、モックのプロバイダーで選択の翻訳と辞書の項目を試せます。その後の2つの段落は、実際のプロバイダーでタブでの翻訳を試すためのものです。
 
+[samples/long-document.md](../../samples/long-document.md) は、部分に分けて送る翻訳のためのものです。`document_split` を `{"enabled": true, "chunk_kib": 1}` にすると、`Translate document to Japanese (ja) and open in tab` は4つの部分に分けて送ります。そのうち1つは節 `Closing connections` の途中から始まり、この節のコードブロックには `#` で始まる行があります。モックのプロバイダーは、このサンプルを部分に分けて送ったときだけ訳します。`document_split` がないときや、`chunk_kib` が大きくて分かれないときのように1つのまま送ると、同梱のサンプルしか扱えないという誤りを返します。
+
 モックのプロバイダーはこれらのサンプル、その改行の違い、語 `retry_count` だけに対応します。ほかの本文や日本語以外の訳先ではエラーを返します。ホバーの見出しには `Mock translation (fixed sample)` と表示します。
 
 stdioのテストは、実行ファイルを `--mock-delay-ms <ミリ秒>`、`--mock-fail`、`--mock-timeout-ms <ミリ秒>`、`--mock-same-language` 付きで起動し、モックの翻訳を遅らせる、失敗させる、期限を指定の値にする、または自動の翻訳で文章をすでに翻訳先の言語だとします。これらの引数はモックのプロバイダーにだけ効きます。

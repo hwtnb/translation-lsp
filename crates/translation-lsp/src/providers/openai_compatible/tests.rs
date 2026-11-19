@@ -361,3 +361,52 @@ async fn only_automatic_requests_ask_for_and_read_the_line_of_languages() {
         );
     }
 }
+
+/// A part of a document adds a sentence to the instructions.
+/// A whole text is sent as before.
+#[tokio::test(flavor = "current_thread")]
+async fn a_part_adds_a_sentence_to_the_instructions() {
+    let fixture = HttpFixture::new().await;
+    let keys = KeyDirectory::new();
+    let provider = CompatibleProvider::synthetic(&format!("{}/api/v1/", fixture.base), &keys.path);
+    for reply in ["部分の訳", "全体の訳"] {
+        fixture.reply(Reply::stream(completed(reply)));
+    }
+    let context = provider.context().unwrap();
+    let part = provider
+        .translate_part(SOURCE, "ja", context)
+        .await
+        .unwrap();
+    assert_eq!(
+        (part.kind, part.text.as_str()),
+        (Kind::Translation, "部分の訳")
+    );
+    provider
+        .translate(Intent::Explicit, Output::Document, SOURCE, "ja", context)
+        .await
+        .unwrap();
+    let records = fixture.records();
+    let instructions: Vec<_> = records
+        .iter()
+        .map(|record| {
+            record.body["messages"][0]["content"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(
+        instructions,
+        [
+            prompt::part_instructions("ja", "auto"),
+            prompt::instructions("ja", "auto", Intent::Explicit, Form::Translates),
+        ]
+    );
+    for record in &records {
+        assert_eq!(
+            record.body["messages"][1]["content"],
+            prompt::message(SOURCE)
+        );
+        assert!(record.body.get("max_tokens").is_none());
+    }
+}

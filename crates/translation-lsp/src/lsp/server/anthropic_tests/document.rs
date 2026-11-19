@@ -300,6 +300,74 @@ async fn completed_results_stay_with_the_output_that_requested_them() {
     }
 }
 
+/// With `document_split`, tabs keep apart from ranges as they do with
+/// `provider.document`, though both send the same options.
+#[tokio::test(flavor = "current_thread")]
+async fn split_tab_translations_share_no_work_or_results_with_ranges() {
+    let split = || {
+        Settings::from_options(Some(json!({
+            "provider": {"name": "anthropic_api", "effort": "medium"},
+            "document_split": {"enabled": true},
+        })))
+        .unwrap()
+    };
+    for commands in [[COMMAND, DOCUMENT_COMMAND], [DOCUMENT_COMMAND, COMMAND]] {
+        let fixture = Fixture::new().await;
+        let (mut server, connection, client, completions) = editor(&fixture, split());
+        let uri = open(&mut server, "plaintext", "Alpha sentence.");
+        let target = target(&server, &uri, line(0));
+        for (index, command) in commands.into_iter().enumerate() {
+            let text = if command == DOCUMENT_COMMAND {
+                TAB_TEXT
+            } else {
+                RANGE_TEXT
+            };
+            fixture.reply(Reply::stream(completed(text)));
+            translate(&mut server, &connection, command, &target);
+            server
+                .finish(&connection, next(&completions).await)
+                .unwrap();
+            assert_eq!(fixture.calls(), index + 1);
+        }
+        let messages: Vec<_> = client.receiver.try_iter().collect();
+        assert_eq!(opened(&messages), [TAB_TEXT]);
+        let shown = hover(&mut server, &uri);
+        assert!(
+            shown["contents"]["value"]
+                .as_str()
+                .unwrap()
+                .contains(RANGE_TEXT)
+        );
+        for command in commands {
+            execute(
+                &mut server,
+                &connection,
+                command,
+                to_value(&target).unwrap(),
+            );
+        }
+        assert_eq!(fixture.calls(), 2);
+    }
+    // Requests in flight for one target do not join each other either.
+    let fixture = Fixture::new().await;
+    let (mut server, connection, _client, _completions) = editor(
+        &fixture,
+        Settings::from_options(Some(json!({
+            "provider": {"name": "anthropic_api"},
+            "document_split": {"enabled": true},
+            "translation_limits": {"work": {"concurrent": 2, "documents": 1}},
+        })))
+        .unwrap(),
+    );
+    let uri = open(&mut server, "plaintext", "Alpha sentence.");
+    let mut held = Held::new(&mut server);
+    let shared = target(&server, &uri, line(0));
+    let range = translate(&mut server, &connection, COMMAND, &shared);
+    let tab = translate(&mut server, &connection, DOCUMENT_COMMAND, &shared);
+    assert_ne!(range, tab);
+    assert_eq!(held.dispatched(), [range, tab]);
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn a_tab_and_a_range_for_one_target_run_as_two_operations() {
     let fixture = Fixture::new().await;

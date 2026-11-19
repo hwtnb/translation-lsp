@@ -2,6 +2,7 @@ mod administration;
 mod commands;
 mod lifecycle;
 mod menu;
+mod parts;
 mod scheduler;
 mod selection;
 mod translation;
@@ -563,8 +564,14 @@ impl<P: TranslationProvider> Server<P> {
         self.problem = None;
     }
 
+    /// Whether tab translations run apart from range translations: with
+    /// `provider.document`, or when they are sent in parts.
+    fn separates_documents(&self) -> bool {
+        self.settings.provider.separates_documents() || self.settings.document_split.enabled
+    }
+
     fn sharing(&self) -> Sharing {
-        if self.settings.provider.separates_documents() {
+        if self.separates_documents() {
             Sharing::Never
         } else if P::capabilities().range_output_bounded {
             Sharing::UntilSent

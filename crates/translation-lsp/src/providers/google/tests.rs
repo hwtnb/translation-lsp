@@ -394,3 +394,28 @@ async fn text_in_the_target_language_shows_nothing_even_when_its_translation_los
         .unwrap();
     assert_eq!(translated.kind, Kind::SameLanguage);
 }
+
+/// A part of a document is sent like a whole text.
+#[tokio::test(flavor = "current_thread")]
+async fn a_part_is_sent_like_a_whole_text() {
+    let fixture = HttpFixture::new().await;
+    let keys = keys();
+    let provider = GoogleProvider::synthetic(format!("{}/v2", fixture.base), &keys.path);
+    let context = provider.context().unwrap();
+    fixture.reply(translated(&["訳"]));
+    fixture.reply(translated(&["訳"]));
+    let part = provider
+        .translate_part("Text", "ja", context)
+        .await
+        .unwrap();
+    let whole = provider
+        .translate(Intent::Explicit, Output::Document, "Text", "ja", context)
+        .await
+        .unwrap();
+    assert_eq!(part.text, whole.text);
+    let records = fixture.records();
+    let [part, whole] = &records[..] else {
+        panic!("Expected two requests")
+    };
+    assert_eq!(part.body, whole.body);
+}

@@ -109,6 +109,11 @@ relative to the repository root.
   names a script send the prompt unchanged, and explicit requests always
   translate: one that joined an automatic request already sent sends the text
   again as an explicit request, once.
+- With `document_split` enabled, a tab translation of a long text is sent in
+  parts (`text/split.rs`, `lsp/server/parts.rs`), up to `parallel` requests at
+  once inside its one execution slot, and opens only when every part has
+  succeeded; a failed part ends it, and no part is sent after cancellation,
+  expiry, or a stop. Such tab work never shares work or results with ranges.
 - Never publish partial, canceled, timed-out, or stale translations. Changes to
   documents or authentication context must invalidate affected cached results.
   Hover waiters retain independent cancellation and deadlines, including queue

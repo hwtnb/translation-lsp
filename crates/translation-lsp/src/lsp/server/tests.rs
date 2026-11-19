@@ -83,6 +83,7 @@ async fn worker_keeps_non_send_futures_and_one_independent_admin_slot() {
                 source: Source::Passage(format!("source {ticket}")),
                 target_language: "ja".into(),
                 context: MockContext,
+                split: None,
             }
         } else {
             Task::Administration {

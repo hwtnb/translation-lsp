@@ -351,6 +351,33 @@ impl TranslationProvider for OpenAiApiProvider {
         )
     }
 
+    async fn translate_part(
+        &self,
+        text: &str,
+        target_language: &str,
+        expected: KeyId,
+    ) -> Result<Translated<KeyId>, Error> {
+        let instructions = prompt::part_instructions(target_language, &self.source_language);
+        let reply = self
+            .send(
+                Intent::Explicit,
+                Output::Document,
+                instructions,
+                prompt::message(text),
+                &[text],
+                expected,
+            )
+            .await?;
+        prompt::translated(
+            reply,
+            Intent::Explicit,
+            &self.source_language,
+            target_language,
+            SERVICE,
+            expected,
+        )
+    }
+
     async fn look_up(
         &self,
         intent: Intent,

@@ -60,7 +60,7 @@ fn protected_link(link_type: LinkType) -> bool {
     )
 }
 
-fn parser(source: &str) -> Parser<'_> {
+pub(super) fn parser(source: &str) -> Parser<'_> {
     Parser::new_ext(
         source,
         Options::ENABLE_TABLES
@@ -71,7 +71,7 @@ fn parser(source: &str) -> Parser<'_> {
     )
 }
 
-fn parsing_source(source: &str) -> Cow<'_, str> {
+pub(super) fn parsing_source(source: &str) -> Cow<'_, str> {
     let bytes = source.as_bytes();
     let bare_cr = |index: usize| bytes[index] == b'\r' && bytes.get(index + 1) != Some(&b'\n');
     if !bytes.iter().enumerate().any(|(index, _)| bare_cr(index)) {

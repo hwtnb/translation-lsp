@@ -40,6 +40,11 @@ Add the following entry to `lsp` in your existing Zed settings. Choose a model a
           },
           "output_kib": 4096
         },
+        "document_split": {
+          "enabled": false,
+          "parallel": 4,
+          "chunk_kib": 8
+        },
         "provider": {
           "name": "chatgpt",
           "model": "gpt-6.1-sol",
@@ -202,6 +207,35 @@ Any other key of `languages`, such as `javascriptreact`, is a settings error. So
 
 Any other setting inside `hover`, or any other value, is a settings error.
 
+## Document split
+
+`document_split` sends a translation opened in a tab in parts, several at once, and opens the translation when every part is done. `document_split` and each setting inside it can be omitted. Without `enabled` set to `true`, a translation opened in a tab sends its text as one whole.
+
+```json
+"document_split": {
+  "enabled": true,
+  "parallel": 4,
+  "chunk_kib": 8
+}
+```
+
+| Setting inside `document_split` | Default | Allowed values | Effect |
+| --- | --- | --- | --- |
+| `enabled` | `false` | `true`, `false` | With `true`, `Translate document to … and open in tab` and `Translate selection to … and open in tab` send a text of more than one and a half times `chunk_kib` in parts. With `false`, the other settings do nothing, though their values are still checked. |
+| `parallel` | `4` | Integer `1`–`8`, inclusive | The requests that one translation in a tab sends at once. |
+| `chunk_kib` | `8` | Integer `1`–`16384`, inclusive | The size, in KiB, that a part aims at. |
+
+Any other setting inside `document_split`, or any other value, is a settings error.
+
+Markdown is divided only where a block that is inside no other block starts, and before a heading where it can be: sections, each from a heading to the next, join the part before them while that part stays within `chunk_kib`. Only a section of more than twice `chunk_kib` is divided between its own paragraphs, lists, tables, and code blocks, and it shares no part with another section, except a small last part as described below. A heading never ends a part: it stays with the block after it, and so do the headings right before it, even beyond `chunk_kib`. A list, quote, table, code block, or HTML block is never divided, however large. Plain Text is divided between paragraphs, at blank lines. A last part of less than a quarter of `chunk_kib` joins the part before it. A part without a letter or a digit, such as a thematic break alone, is not sent and stays as written.
+
+The translations of the parts are joined in the order of the document, with the line breaks between the parts as written. `document_timeout_ms` covers all the parts together, and `translation_limits.output_kib` applies to the joined translation: once the parts that completed exceed it, the translation fails and no more parts are sent. If any part fails, or its translation comes back blank, nothing opens, and the requests still in progress stop. With `document_split` enabled, a tab translation and a range translation are separate operations, as with `provider.document`; see [Admission and execution slots](behavior.md#admission-and-execution-slots). What each request holds is described under [What is sent](usage.md#what-is-sent).
+
+Limitations:
+
+- The parts are translated separately, so one term can be translated in different words in different parts.
+- If the model returns a part untranslated, the server does not detect it.
+
 ## Timing
 
 Translation timing options are optional:
@@ -258,11 +292,16 @@ The following are **maximum configurable values**, separate from the defaults ab
 | `cache.entries` | `4096` |
 | `cache.capacity_kib` | `262144` (256 MiB) |
 
+| Setting inside `document_split` | Maximum |
+| --- | --- |
+| `parallel` | `8` |
+| `chunk_kib` | `16384` (16 MiB) |
+
 Two combined limits also apply: `max(input_kib.hover, input_kib.document) × work.admitted` must not exceed `262144` KiB (256 MiB), and `output_kib × work.concurrent` must not exceed `65536` KiB (64 MiB). For example, 16 MiB document input with 64 accepted jobs is rejected; use at most 16 accepted jobs at that input limit. A 16 MiB output limit permits at most four simultaneous translations. These checks apply to configured worst cases, even when the queue is currently empty.
 
 These ceilings are a local resource policy, not measured hardware limits or provider guarantees. Source documents, parser state, allocator overhead, transport buffers, and temporary translation files are additional costs, so these figures are **not a process-memory guarantee**. A limit beyond these ceilings needs a change in the server; Zed settings cannot raise them. The reasons for the ceilings are described under [Size limit ceilings](development.md#size-limit-ceilings).
 
-Increasing a local limit does not increase the model's context or output capacity or extend the request deadline. Long documents are sent in one request, without automatic splitting. Failed, incomplete, and oversized results are not displayed or saved as completed translations.
+Increasing a local limit does not increase the model's context or output capacity or extend the request deadline. A translation opened in a tab sends its text as one whole unless [`document_split`](#document-split) is enabled. Failed, incomplete, and oversized results are not displayed or saved as completed translations.
 
 ## Settings errors and restart
 
