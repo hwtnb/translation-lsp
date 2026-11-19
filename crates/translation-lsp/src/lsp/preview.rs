@@ -4,6 +4,7 @@ use uuid::Uuid;
 use crate::{
     config::hover::{HoverFormat, HoverSettings},
     providers::dictionary::inline,
+    store::Key,
 };
 
 pub(super) mod cache;
@@ -24,6 +25,8 @@ pub(crate) struct Preview<C> {
     pub note: Option<&'static str>,
     /// The `hover` settings that the translation completed under.
     pub hover: HoverSettings,
+    /// The keys the translation is stored under.
+    pub keys: Vec<Key>,
 }
 
 /// What a translation is, which decides how Hover and its CodeLens show it.
@@ -56,6 +59,7 @@ impl<C> Preview<C> {
             is_comment,
             note,
             hover: HoverSettings::default(),
+            keys: Vec::new(),
         }
     }
 

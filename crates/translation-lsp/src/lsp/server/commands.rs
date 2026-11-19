@@ -1,9 +1,13 @@
 //! The commands that Code Actions carry and `workspace/executeCommand` runs.
 
+use std::collections::HashSet;
+
 use super::{
     menu::{DELETE, RETRY, card_message},
+    parts::sent_parts,
     *,
 };
+use crate::store::{Key, Sent};
 
 pub(super) enum ServerCommand {
     TranslateSelection(TranslationTarget),
@@ -184,8 +188,7 @@ impl<P: TranslationProvider> Server<P> {
                 Ok(Some(Value::Null))
             }
             ServerCommand::DeleteDocumentTranslations(uri) => {
-                self.delete_document_translations(&uri)
-                    .map_err(provider_failure)?;
+                self.delete_document_translations(&uri)?;
                 Ok(Some(Value::Null))
             }
             ServerCommand::DeleteAllTranslations => {
@@ -301,15 +304,61 @@ impl<P: TranslationProvider> Server<P> {
             return Ok(());
         }
 
-        self.cache.remove_range(&target.uri, target.range);
+        let keys = self.cache.remove_range(&target.uri, target.range);
+        self.store.remove(&keys);
         self.clear_deleted_problem(&target.uri, Some(target.range));
         self.ui.refresh_lenses()
     }
 
-    fn delete_document_translations(&mut self, uri: &Uri) -> Result<(), ProviderError> {
-        self.cache.remove_document(uri);
+    /// Deletes the results of the document, and the stored translations of
+    /// what its text sends now, which may have none in the cache, such as
+    /// after a restart.
+    fn delete_document_translations(&mut self, uri: &Uri) -> RequestResult<()> {
+        let mut keys = self.cache.remove_document(uri);
+        keys.extend(self.document_keys(uri)?);
+        self.store.remove(&keys);
         self.clear_deleted_problem(uri, None);
-        self.ui.refresh_lenses()
+        self.ui.refresh_lenses().map_err(provider_failure)
+    }
+
+    /// The keys of what the current text of the document sends with the
+    /// settings, each once: the whole text, for ranges and tabs, and its
+    /// parts if a tab sends it in parts, unless the text is too long to send;
+    /// and in code, each comment, translated or found in the target language.
+    fn document_keys(&mut self, uri: &Uri) -> RequestResult<Vec<Key>> {
+        let Some(document) = self.documents.get_mut(uri) else {
+            return Ok(Vec::new());
+        };
+        let target = self.settings.target_language.as_str();
+        let mut keys = Vec::new();
+        if let Some(text) = document.text()
+            && text.len() <= self.settings.translation_limits.input_kib.document.bytes()
+        {
+            for output in [Output::Range, Output::Document] {
+                keys.push(self.store.key(output, target, Sent::Passage(text)));
+            }
+            let split = self.settings.document_split;
+            if split.enabled && document.supports_document_preview() {
+                let markdown = document.language == Some(Language::Markdown);
+                for part in sent_parts(text, markdown, split) {
+                    keys.push(self.store.key(Output::Document, target, Sent::Part(part)));
+                }
+            }
+        }
+        if !document.language.is_some_and(Language::is_prose) {
+            let limit = Duration::from_millis(self.settings.comment_parse_timeout_ms);
+            for body in document.comment_bodies(uri, limit) {
+                keys.push(self.store.key(Output::Range, target, Sent::Passage(&body)));
+                keys.push(
+                    self.store
+                        .key(Output::Range, target, Sent::SameLanguage(&body)),
+                );
+            }
+            report_comment_failure(&self.ui, uri, document)?;
+        }
+        let mut seen = HashSet::new();
+        keys.retain(|key| seen.insert(*key));
+        Ok(keys)
     }
 
     fn clear_deleted_problem(&mut self, uri: &Uri, range: Option<Range>) {

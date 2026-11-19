@@ -23,6 +23,8 @@ use std::{fmt::Debug, future::Future, path::Path};
 
 use error::Error;
 
+use crate::store::Identity;
+
 pub(crate) trait Interaction {
     /// Opens a page outside the editor, such as in the browser.
     fn open(&self, uri: &str) -> impl Future<Output = Result<(), Error>>;
@@ -178,6 +180,12 @@ pub(crate) trait TranslationProvider: Clone + Send + 'static {
     type Context: Clone + Debug + PartialEq + Send + Sync + 'static;
 
     fn context(&self) -> Result<Self::Context, Error>;
+    /// What a request for `output` sends that changes what comes back, other
+    /// than its text and languages: the provider's name in the settings, and
+    /// settings such as the model and effort. Stored translations are found
+    /// by it, so it leaves out what changes only how fast the reply comes,
+    /// such as `speed`, and what a translation is made with, such as the key.
+    fn identity(&self, output: Output) -> Identity;
     fn admit(&self, _context: &Self::Context, _intent: Intent) -> Result<u64, Error> {
         Ok(0)
     }

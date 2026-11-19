@@ -328,6 +328,9 @@ async fn split_tab_translations_share_no_work_or_results_with_ranges() {
                 .finish(&connection, next(&completions).await)
                 .unwrap();
             assert_eq!(fixture.calls(), index + 1);
+            // A text of one part is stored as the range's is, so the stored
+            // translation would answer the other output without a request.
+            server.store.clear();
         }
         let messages: Vec<_> = client.receiver.try_iter().collect();
         assert_eq!(opened(&messages), [TAB_TEXT]);
@@ -708,10 +711,43 @@ async fn a_tab_asks_for_its_own_output_unless_the_range_was_already_sent() {
             server
                 .finish(&connection, next(&completions).await)
                 .unwrap();
+            // The stored translation of the range would answer the tab
+            // without a request.
+            server.store.clear();
         }
         assert!(server.scheduler.translations().is_empty());
         assert_eq!(max_tokens(&fixture), [RANGE, TAB], "sent {sent}");
         let messages: Vec<_> = client.receiver.try_iter().collect();
         assert_eq!(opened(&messages), [TAB_TEXT]);
     }
+}
+
+/// Without `provider.document`, ranges and tabs send the same model and
+/// options, so a tab uses what a range of the same text stored, though it
+/// would allow a longer reply.
+#[tokio::test(flavor = "current_thread")]
+async fn a_tab_uses_the_stored_translation_of_a_range_of_the_same_text() {
+    let fixture = Fixture::new().await;
+    let (mut server, connection, client, completions) =
+        editor(&fixture, settings(false, json!({})));
+    let uri = open(&mut server, "plaintext", "Alpha sentence.");
+    fixture.reply(Reply::stream(completed(RANGE_TEXT)));
+    let range = target(&server, &uri, line(0));
+    translate(&mut server, &connection, COMMAND, &range);
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    let other: Uri = "file:///other.txt".parse().unwrap();
+    server.documents.insert(
+        other.clone(),
+        Document::new(1, 2, "plaintext".into(), "Alpha sentence.".into()),
+    );
+    let tab = target(&server, &other, line(0));
+    translate(&mut server, &connection, DOCUMENT_COMMAND, &tab);
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    assert_eq!(sent(&fixture), [range_sent()]);
+    let messages: Vec<_> = client.receiver.try_iter().collect();
+    assert_eq!(opened(&messages), [RANGE_TEXT]);
 }

@@ -21,7 +21,7 @@ impl Client {
         let (connection, client) = Connection::memory();
         let directory = directory.to_owned();
         let server =
-            thread::spawn(move || serve(&connection, MockOptions::default(), Ok(directory)));
+            thread::spawn(move || serve(&connection, MockOptions::default(), Ok(directory), None));
         Self {
             connection: client,
             server,

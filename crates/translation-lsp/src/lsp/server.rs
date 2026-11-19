@@ -73,6 +73,7 @@ use crate::{
         openai_compatible::CompatibleProvider,
         unset::UnsetProvider,
     },
+    store::{Store, disk},
     text::comments::Failure,
 };
 
@@ -157,6 +158,8 @@ struct Server<P: TranslationProvider> {
     activity: Activity,
     preview_files: PreviewFiles,
     cache: Cache<P::Context>,
+    /// The translations kept by what was sent, which outlive the cache.
+    store: Store,
     problem: Option<ShownProblem<P::Context>>,
     administrations: HashMap<RequestId, Administration<P::Context>>,
     documents: HashMap<Uri, Document>,
@@ -180,7 +183,12 @@ struct Server<P: TranslationProvider> {
 pub fn run_stdio() -> ServerResult<()> {
     let options = MockOptions::from_args()?;
     let (connection, io_threads) = Connection::stdio();
-    let result = serve(&connection, options, credential_directory::locate());
+    let result = serve(
+        &connection,
+        options,
+        credential_directory::locate(),
+        disk::locate(),
+    );
     drop(connection);
     // Flush initialize errors too; the reader stops at the client's exit or EOF.
     let io_result = io_threads.join();
@@ -190,12 +198,14 @@ pub fn run_stdio() -> ServerResult<()> {
 }
 
 /// `key_directory` is where the providers that take API keys look for their key
-/// files. Tests pass a directory of their own, so that none reads the key of the
-/// user.
+/// files, and `cache_directory` is where `disk_cache` keeps translations. Tests
+/// pass directories of their own, so that none reads the key or the
+/// translations of the user.
 fn serve(
     connection: &Connection,
     options: MockOptions,
     key_directory: Result<PathBuf, CredentialError>,
+    cache_directory: Option<PathBuf>,
 ) -> ServerResult<()> {
     let (id, params) = connection.initialize_start()?;
     let params: InitializeParams = serde_json::from_value(params)?;
@@ -226,12 +236,18 @@ fn serve(
     match settings.provider.clone() {
         ProviderSettings::Unset => {
             prompt_setup(ui.clone())?;
-            serve_initialized(connection, settings, ui, UnsetProvider)
+            serve_initialized(connection, settings, ui, UnsetProvider, cache_directory)
         }
         ProviderSettings::Mock {} => {
             let mut settings = settings;
             options.apply_timeouts(&mut settings);
-            serve_initialized(connection, settings, ui, MockProvider::new(options))
+            serve_initialized(
+                connection,
+                settings,
+                ui,
+                MockProvider::new(options),
+                cache_directory,
+            )
         }
         ProviderSettings::Chatgpt {
             model,
@@ -251,7 +267,7 @@ fn serve(
                 settings.source_language.clone(),
                 settings.translation_limits.output_kib,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::Anthropic {
             model,
@@ -274,7 +290,7 @@ fn serve(
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::OpenAiApi {
             model,
@@ -295,7 +311,7 @@ fn serve(
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::OpenAiCompatible {
             base_url,
@@ -310,7 +326,7 @@ fn serve(
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::DeepL {} => {
             let provider = DeepLProvider::new(
@@ -318,7 +334,7 @@ fn serve(
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::GoogleTranslate {} => {
             let provider = GoogleProvider::new(
@@ -326,7 +342,7 @@ fn serve(
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;
-            serve_initialized(connection, settings, ui, provider)
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
     }
 }
@@ -412,14 +428,17 @@ pub(crate) fn capabilities<P: TranslationProvider>() -> InitializeResult {
     }
 }
 
+/// `cache_directory` is where `disk_cache` keeps translations, if there is
+/// one.
 pub(crate) fn serve_initialized<P: TranslationProvider>(
     connection: &Connection,
     settings: Settings,
     ui: Ui,
     provider: P,
+    cache_directory: Option<PathBuf>,
 ) -> ServerResult<()> {
     let (finished_sender, finished) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
-    let mut server = Server::configured(finished_sender, provider, settings, ui)?;
+    let mut server = Server::start(finished_sender, provider, settings, ui, cache_directory)?;
     let result = (|| {
         server.publish_activity();
         loop {
@@ -518,12 +537,32 @@ impl<P: TranslationProvider> Server<P> {
         )
     }
 
+    /// A server that keeps translations in memory only.
+    #[cfg(test)]
     fn configured(
         finished: Sender<WorkerEvent<P::Context>>,
         provider: P,
         settings: Settings,
         ui: Ui,
     ) -> ServerResult<Self> {
+        Self::start(finished, provider, settings, ui, None)
+    }
+
+    /// `cache_directory` is where `disk_cache` keeps translations, if there
+    /// is one.
+    fn start(
+        finished: Sender<WorkerEvent<P::Context>>,
+        provider: P,
+        settings: Settings,
+        ui: Ui,
+        cache_directory: Option<PathBuf>,
+    ) -> ServerResult<Self> {
+        let store = Store::new(
+            &settings,
+            provider.identity(Output::Range),
+            provider.identity(Output::Document),
+            cache_directory,
+        );
         let (sender, jobs) = queue::channel(settings.translation_limits.work.concurrent);
         let (admin_sender, admin_jobs) = queue::channel(1);
         let runtime = runtime::Builder::new_current_thread()
@@ -546,6 +585,7 @@ impl<P: TranslationProvider> Server<P> {
         Ok(Self {
             provider,
             cache: Cache::new(settings.translation_limits),
+            store,
             settings,
             ui,
             activity,
@@ -652,6 +692,12 @@ impl<P: TranslationProvider> Server<P> {
     fn clear_previews(&mut self) {
         self.clear_problem();
         self.cache.clear();
+    }
+
+    /// Whether stored translations may be left to delete when the cache has
+    /// none: memory keeps some, or `disk_cache` keeps them on disk.
+    fn has_stored(&self) -> bool {
+        !self.store.is_empty() || self.store.disk_enabled()
     }
 
     fn check_cache(&mut self) -> RequestResult<P::Context> {
@@ -764,8 +810,8 @@ impl<P: TranslationProvider> Server<P> {
             .documents
             .get(uri)
             .is_some_and(Document::supports_document_preview);
-        let cache_is_current =
-            (empty || (prose && !self.cache.is_empty())) && self.check_cache().is_ok();
+        let deletable = !self.cache.is_empty() || self.has_stored();
+        let cache_is_current = (empty || (prose && deletable)) && self.check_cache().is_ok();
         let retry_range = if empty && cache_is_current {
             self.cache.failed_range(uri, cursor)
         } else {
@@ -868,13 +914,13 @@ impl<P: TranslationProvider> Server<P> {
                     ),
                 )?);
             }
-            if self.cache.has_document(uri) {
+            if self.cache.has_document(uri) || self.has_stored() {
                 translations.push(
                     ServerCommand::DeleteDocumentTranslations(uri.clone())
                         .action(menu::DELETE_DOCUMENT.into())?,
                 );
             }
-            if !self.cache.is_empty() {
+            if !self.cache.is_empty() || self.has_stored() {
                 translations
                     .push(ServerCommand::DeleteAllTranslations.action(menu::DELETE_ALL.into())?);
             }
@@ -1335,5 +1381,7 @@ mod chatgpt_options_tests;
 mod chatgpt_tests;
 #[cfg(test)]
 mod deletion_tests;
+#[cfg(test)]
+mod store_tests;
 #[cfg(test)]
 mod tests;

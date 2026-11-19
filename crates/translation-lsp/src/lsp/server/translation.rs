@@ -1,8 +1,9 @@
-use super::{parts::Split, *};
+use super::{parts::Split, worker::StoreUse, *};
 use crate::{
     config::limits::SizeSetting,
     lsp::preview::{Form, markdown::Urls},
     providers::{Intent, Kind, Source, error::Notification as ErrorNotification},
+    store::Key,
 };
 
 impl<P: TranslationProvider> Server<P> {
@@ -235,6 +236,10 @@ impl<P: TranslationProvider> Server<P> {
             context: context.clone(),
             generation,
             split,
+            store: Some(StoreUse {
+                store: self.store.clone(),
+                read: request.reuses_completed(),
+            }),
         };
         self.next_ticket += 1;
         self.scheduler.insert(
@@ -262,7 +267,9 @@ impl<P: TranslationProvider> Server<P> {
         self.scheduler.terminated(completion.ticket());
         self.expire(connection)?;
         match completion {
-            Finished::Translation(completion) => self.finish_translation(connection, completion),
+            Finished::Translation(completion, keys) => {
+                self.finish_translation(connection, completion, keys)
+            }
             Finished::Administration(completion) => {
                 self.finish_administration(connection, completion)
             }
@@ -273,6 +280,7 @@ impl<P: TranslationProvider> Server<P> {
         &mut self,
         connection: &Connection,
         completion: Completion<Translated<P::Context>>,
+        keys: Vec<Key>,
     ) -> ServerResult<()> {
         let Some(work) = self.scheduler.remove(completion.ticket) else {
             return Ok(());
@@ -297,7 +305,9 @@ impl<P: TranslationProvider> Server<P> {
                 ));
             }
             let line = match translation.kind {
-                Kind::SameLanguage => return Ok(Completed::SameLanguage(translation.context)),
+                Kind::SameLanguage => {
+                    return Ok(Completed::SameLanguage(translation.context, keys));
+                }
                 // The cache keeps only as much of the line as a CodeLens
                 // shows, which `lens_title` leaves as it is.
                 Kind::Entry(line) => Some(lens_title(&line)),
@@ -323,11 +333,12 @@ impl<P: TranslationProvider> Server<P> {
                 Form::Text(work.urls.clone())
             };
             preview.hover = self.settings.hover;
+            preview.keys = keys;
             Ok(Completed::Preview(preview))
         })();
         match result {
-            Ok(Completed::SameLanguage(context)) => {
-                self.complete_same_language(connection, completion.ticket, &work, context)?;
+            Ok(Completed::SameLanguage(context, keys)) => {
+                self.complete_same_language(connection, completion.ticket, &work, context, keys)?;
             }
             Ok(Completed::Preview(preview)) => {
                 self.complete(connection, completion.ticket, &work, Ok(preview), silent)?;
@@ -351,6 +362,7 @@ impl<P: TranslationProvider> Server<P> {
         ticket: u64,
         work: &Translation<P::Context>,
         context: P::Context,
+        keys: Vec<Key>,
     ) -> ServerResult<()> {
         if work.owners.range_output() || self.scheduler.has_waiters(ticket) {
             self.cache.insert(
@@ -359,6 +371,7 @@ impl<P: TranslationProvider> Server<P> {
                 Stored::SameLanguage {
                     context,
                     range: work.target.range,
+                    keys,
                 },
             );
         }
@@ -464,8 +477,9 @@ impl<P: TranslationProvider> Server<P> {
 /// What a completed translation gives the requests that own it.
 enum Completed<C> {
     Preview(Preview<C>),
-    /// The text is already in the target language, as found with the context.
-    SameLanguage(C),
+    /// The text is already in the target language, as found with the context,
+    /// with the key the result is stored under.
+    SameLanguage(C, Vec<Key>),
 }
 
 fn location(target: &TranslationTarget) -> String {

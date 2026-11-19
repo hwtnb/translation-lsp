@@ -18,6 +18,7 @@ use crate::{
     providers::{
         AccountChange, Intent, Kind, Source, dictionary, error::Service, mock::MockContext,
     },
+    store::Identity,
 };
 
 #[tokio::test(flavor = "current_thread")]
@@ -30,6 +31,10 @@ async fn worker_keeps_non_send_futures_and_one_independent_admin_slot() {
     }
     impl TranslationProvider for GatedProvider {
         type Context = MockContext;
+
+        fn identity(&self, _output: Output) -> Identity {
+            Identity::new("test")
+        }
 
         fn context(&self) -> Result<MockContext, ProviderError> {
             Ok(MockContext)
@@ -84,6 +89,7 @@ async fn worker_keeps_non_send_futures_and_one_independent_admin_slot() {
                 target_language: "ja".into(),
                 context: MockContext,
                 split: None,
+                store: None,
             }
         } else {
             Task::Administration {
@@ -209,10 +215,13 @@ fn the_cache_keeps_only_as_much_of_an_entry_line_as_its_code_lens_shows() {
     server
         .finish(
             &connection,
-            Finished::Translation(Completion {
-                ticket,
-                result: Ok(entry),
-            }),
+            Finished::Translation(
+                Completion {
+                    ticket,
+                    result: Ok(entry),
+                },
+                Vec::new(),
+            ),
         )
         .unwrap();
     let shown = format!("term — {}…", "意".repeat(65));
@@ -241,6 +250,10 @@ fn generic_worker_receives_comment_bodies_and_adjacent_blocks_take_precedence() 
     struct RecordingProvider(Sender<(String, String)>);
     impl TranslationProvider for RecordingProvider {
         type Context = MockContext;
+
+        fn identity(&self, _output: Output) -> Identity {
+            Identity::new("test")
+        }
 
         fn context(&self) -> Result<MockContext, ProviderError> {
             Ok(MockContext)
@@ -389,14 +402,17 @@ fn stale_completion_ticket_cannot_answer_a_reused_hover_request_id() {
     server
         .finish(
             &connection,
-            Finished::Translation(Completion {
-                ticket: old_ticket,
-                result: Ok(Translated {
-                    text: "stale result".into(),
-                    context: MockContext,
-                    kind: Kind::Translation,
-                }),
-            }),
+            Finished::Translation(
+                Completion {
+                    ticket: old_ticket,
+                    result: Ok(Translated {
+                        text: "stale result".into(),
+                        context: MockContext,
+                        kind: Kind::Translation,
+                    }),
+                },
+                Vec::new(),
+            ),
         )
         .unwrap();
     assert!(client.receiver.try_recv().is_err());
@@ -405,14 +421,17 @@ fn stale_completion_ticket_cannot_answer_a_reused_hover_request_id() {
     server
         .finish(
             &connection,
-            Finished::Translation(Completion {
-                ticket: new_ticket,
-                result: Ok(Translated {
-                    text: "current result".into(),
-                    context: MockContext,
-                    kind: Kind::Translation,
-                }),
-            }),
+            Finished::Translation(
+                Completion {
+                    ticket: new_ticket,
+                    result: Ok(Translated {
+                        text: "current result".into(),
+                        context: MockContext,
+                        kind: Kind::Translation,
+                    }),
+                },
+                Vec::new(),
+            ),
         )
         .unwrap();
     let Message::Response(response) = client.receiver.try_recv().unwrap() else {
@@ -438,6 +457,10 @@ fn provider_capabilities_drive_commands_and_account_actions() {
     struct OtherProvider;
     impl TranslationProvider for OtherProvider {
         type Context = MockContext;
+
+        fn identity(&self, _output: Output) -> Identity {
+            Identity::new("test")
+        }
 
         fn context(&self) -> Result<MockContext, ProviderError> {
             Ok(MockContext)

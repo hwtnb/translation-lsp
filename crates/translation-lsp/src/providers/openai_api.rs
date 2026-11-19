@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 
 #[cfg(test)]
 use super::api_key::test_support::Terminal as SyntheticTerminal;
+
 use super::{
     AccountChange, AuthUiState, Capabilities, Intent, Interaction, Output, OutputOptions,
     ProviderCommand, Translated, TranslationProvider,
@@ -21,9 +22,12 @@ use super::{
     responses::{self, Reading, request_id},
     transport::{self, safe},
 };
-use crate::config::{OpenAiModel, limits::SizeLimit};
 #[cfg(test)]
 use crate::config::{ReasoningEffort, limits::TranslationLimits};
+use crate::{
+    config::{OpenAiModel, limits::SizeLimit},
+    store::Identity,
+};
 
 const API: &str = "https://api.openai.com/v1";
 const SERVICE: Service = Service::OpenAiApi;
@@ -276,9 +280,16 @@ impl OpenAiApiProvider {
 }
 
 impl TranslationProvider for OpenAiApiProvider {
-    /// The key in use: what was translated or refused with one key is not kept
-    /// for another.
+    /// The key in use: what was translated or refused with one key is not
+    /// used from the cache by position with another.
     type Context = KeyId;
+
+    fn identity(&self, output: Output) -> Identity {
+        let options = self.options.get(output);
+        Identity::new("openai_api")
+            .with("model", &options.model)
+            .with("effort", options.effort)
+    }
 
     fn context(&self) -> Result<KeyId, Error> {
         let (_, key) = self.key.read()?;

@@ -13,8 +13,11 @@ use super::api_key::test_support::Terminal as SyntheticTerminal;
 
 #[cfg(test)]
 use crate::config::{AnthropicEffort, limits::TranslationLimits};
-use crate::config::{
-    AnthropicModel, anthropic_stops_at_same_language, anthropic_thinking, limits::SizeLimit,
+use crate::{
+    config::{
+        AnthropicModel, anthropic_stops_at_same_language, anthropic_thinking, limits::SizeLimit,
+    },
+    store::Identity,
 };
 
 use super::{
@@ -237,9 +240,20 @@ impl AnthropicProvider {
 }
 
 impl TranslationProvider for AnthropicProvider {
-    /// The key in use: what was translated or refused with one key is not kept
-    /// for another.
+    /// The key in use: what was translated or refused with one key is not
+    /// used from the cache by position with another.
     type Context = KeyId;
+
+    fn identity(&self, output: Output) -> Identity {
+        let options = self.options.get(output);
+        Identity::new("anthropic_api")
+            .with("model", &options.model)
+            .with("effort", options.effort)
+            .with(
+                "thinking",
+                anthropic_thinking(&options.model, options.effort, options.thinking),
+            )
+    }
 
     fn context(&self) -> Result<KeyId, Error> {
         let (_, key) = self.key.read()?;

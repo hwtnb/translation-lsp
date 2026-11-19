@@ -464,16 +464,17 @@ async fn cached_translation_survives_store_lock_but_not_reauthorization() {
     writer.save().unwrap();
     drop(writer);
     fixture.state.lock().unwrap().translation = Some("New authorization translation".into());
+    let stored = server.cache.latest(&uri).unwrap().translation.clone();
     assert!(server.hover(4.into(), hover()).unwrap().is_none());
     assert!(server.cache.latest(&uri).is_none());
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
-    assert_eq!(
-        server.cache.latest(&uri).as_ref().unwrap().translation,
-        "New authorization translation"
-    );
-    assert_eq!(response_calls(&fixture), 2);
+    // The stored translation answers the new authorization without a request.
+    let latest = server.cache.latest(&uri).unwrap();
+    assert_eq!(latest.translation, stored);
+    assert_eq!(latest.context, server.provider.context().unwrap());
+    assert_eq!(response_calls(&fixture), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]

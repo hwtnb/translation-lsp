@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 #[cfg(test)]
 use super::api_key::test_support::Terminal as SyntheticTerminal;
+
 use super::{
     AccountChange, AuthUiState, Capabilities, Intent, Interaction, Kind, Output, ProviderCommand,
     Translated, TranslationProvider,
@@ -21,7 +22,10 @@ use super::{
 };
 #[cfg(test)]
 use crate::config::limits::TranslationLimits;
-use crate::config::{language, limits::SizeLimit};
+use crate::{
+    config::{language, limits::SizeLimit},
+    store::Identity,
+};
 
 const PRO: &str = "https://api.deepl.com";
 /// Where a key of DeepL API Free, which ends in `:fx`, is sent.
@@ -288,9 +292,15 @@ impl DeepLProvider {
 }
 
 impl TranslationProvider for DeepLProvider {
-    /// The key in use: what was translated or refused with one key is not kept
-    /// for another.
+    /// The key in use: what was translated or refused with one key is not
+    /// used from the cache by position with another.
     type Context = KeyId;
+
+    fn identity(&self, _output: Output) -> Identity {
+        Identity::new("deepl")
+            .with("tag_handling", "xml")
+            .with("ignore_tags", ["x"])
+    }
 
     fn context(&self) -> Result<KeyId, Error> {
         let (_, key) = self.key.read()?;

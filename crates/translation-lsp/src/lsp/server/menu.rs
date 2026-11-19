@@ -63,14 +63,17 @@ impl<P: TranslationProvider> Server<P> {
                     .show_document
                     .then_some(("Open Zed settings file", ServerCommand::OpenSettings)),
             )
-            .chain(uri.filter(|uri| self.cache.has_document(uri)).map(|uri| {
-                (
-                    DELETE_DOCUMENT,
-                    ServerCommand::DeleteDocumentTranslations(uri.clone()),
-                )
-            }))
             .chain(
-                (!self.cache.is_empty())
+                uri.filter(|uri| self.cache.has_document(uri) || self.has_stored())
+                    .map(|uri| {
+                        (
+                            DELETE_DOCUMENT,
+                            ServerCommand::DeleteDocumentTranslations(uri.clone()),
+                        )
+                    }),
+            )
+            .chain(
+                (!self.cache.is_empty() || self.has_stored())
                     .then_some((DELETE_ALL, ServerCommand::DeleteAllTranslations)),
             )
             .map(|(title, command)| command.command(title.into()))
@@ -136,6 +139,7 @@ impl<P: TranslationProvider> Server<P> {
         match (card, title) {
             (Card::ConfirmDeleteAll, Some(CONFIRM_DELETE)) => {
                 self.clear_previews();
+                self.store.clear();
                 self.ui.refresh_lenses()?;
             }
             (Card::Translation(target), Some(DELETE)) => self.delete_translation(&target)?,

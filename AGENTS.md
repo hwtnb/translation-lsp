@@ -11,6 +11,8 @@ relative to the repository root.
   `src/lsp/` owns requests, scheduling, previews, and activity;
   `src/providers/` owns translation providers and authentication;
   `src/text/` owns comment extraction and Markdown input eligibility;
+  `src/store.rs` owns the translations kept by what was sent, in memory and
+  with `disk_cache` on disk;
   `src/language.rs` names the languages that `extension.toml` registers. Run with
   `anthropic-key` or `deepl-key`, or with `api-key` and the address of a service,
   the same executable asks for an API key in a terminal and saves it instead of
@@ -113,9 +115,15 @@ relative to the repository root.
   parts (`text/split.rs`, `lsp/server/parts.rs`), up to `parallel` requests at
   once inside its one execution slot, and opens only when every part has
   succeeded; a failed part ends it, and no part is sent after cancellation,
-  expiry, or a stop. Such tab work never shares work or results with ranges.
-- Never publish partial, canceled, timed-out, or stale translations. Changes to
-  documents or authentication context must invalidate affected cached results.
+  expiry, or a stop. Such tab work never shares work or results by position
+  with ranges.
+- Never publish partial, canceled, timed-out, or stale translations, and never
+  store partial, canceled, or timed-out ones. Changes to documents or
+  authentication context must invalidate affected results of the cache by
+  position (`lsp/preview/cache.rs`). Translations kept by what was sent
+  (`store.rs`) stay across both: the key of each holds the text, the
+  provider's identity, and the languages, never the document, the position,
+  or the account. A retry sends and replaces the stored result.
   Hover waiters retain independent cancellation and deadlines, including queue
   waiting time. Accepted comment Hover work survives its response cancellation or
   expiry, shares the automatic admission limit with selection automation, and
@@ -131,9 +139,14 @@ relative to the repository root.
 - Keep blocking network work off the LSP request loop. Preserve bounded
   concurrency and credential-store locking and revision checks.
 - Keep stdout exclusively for LSP messages. Do not log credentials or document
-  contents. Hover translations stay in memory. Explicit document previews may
-  write completed translations to temporary files for standard editor viewing;
-  remove those files on server exit and preserve user-created Save As copies.
+  contents. Hover translations stay in memory unless `disk_cache` is enabled,
+  which also writes completed translations to files named by their key
+  (`store/disk.rs`). Never write the text sent or the lines around it; a
+  dictionary entry holds its word and example sentence, and a translation
+  holds what was left untranslated, such as code and identifiers. Explicit
+  document previews may write completed translations to temporary files for
+  standard editor viewing; remove those files on server exit and preserve
+  user-created Save As copies.
   Deleting cached results leaves open translation tabs and accepted work in place.
 - HTTP/OIDC tests use local fixtures and synthetic credentials. Generate test
   signing keys in memory rather than committing real or fixed private keys.

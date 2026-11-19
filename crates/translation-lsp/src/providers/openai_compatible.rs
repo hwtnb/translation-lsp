@@ -11,6 +11,7 @@ use serde_json::json;
 
 #[cfg(test)]
 use super::api_key::test_support::Terminal as SyntheticTerminal;
+
 use super::{
     AccountChange, AuthUiState, Capabilities, Intent, Interaction, Output, OutputOptions,
     ProviderCommand, Translated, TranslationProvider,
@@ -23,7 +24,10 @@ use super::{
 };
 #[cfg(test)]
 use crate::config::limits::TranslationLimits;
-use crate::config::{CompatibleModel, limits::SizeLimit};
+use crate::{
+    config::{CompatibleModel, limits::SizeLimit},
+    store::Identity,
+};
 
 const SERVICE: Service = Service::Compatible;
 
@@ -152,6 +156,13 @@ impl CompatibleProvider {
         self
     }
 
+    /// `provider.base_url` without the slash it may end with.
+    fn base_url(&self) -> &str {
+        self.endpoint
+            .strip_suffix("/chat/completions")
+            .unwrap_or(&self.endpoint)
+    }
+
     /// Sends `message` after the `instructions` and returns the reply. `texts`
     /// are the document's texts in the message, the first sizing the reply;
     /// errors never show them.
@@ -227,8 +238,16 @@ impl CompatibleProvider {
 
 impl TranslationProvider for CompatibleProvider {
     /// The key in use, or none: what was translated or refused with one key
-    /// is not kept for another, or for none.
+    /// is not used from the cache by position with another, or with none.
     type Context = Option<KeyId>;
+
+    fn identity(&self, output: Output) -> Identity {
+        let options = self.options.get(output);
+        Identity::new("openai_compatible")
+            .with("base_url", self.base_url())
+            .with("model", &options.model)
+            .with_some("effort", options.effort.as_ref())
+    }
 
     fn context(&self) -> Result<Option<KeyId>, Error> {
         Ok(self.key.read_optional()?.map(|(_, key)| key))

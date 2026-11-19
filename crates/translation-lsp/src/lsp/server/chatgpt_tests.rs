@@ -277,6 +277,9 @@ async fn configured_auto_toggle_keeps_non_ja_manual_and_comment_translation() {
                 .ends_with("\n\nTranslated sentence.")
         );
         assert_eq!(server.documents[&uri].text(), Some("First sentence."));
+        // The stored translation of the same text would answer the comment
+        // without a request.
+        server.store.clear();
         let comment_uri: Uri = "file:///configured-en.rs".parse().unwrap();
         server.documents.insert(
             comment_uri.clone(),

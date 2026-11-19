@@ -2,6 +2,7 @@ mod config;
 mod language;
 mod lsp;
 mod providers;
+mod store;
 mod text;
 
 pub use lsp::server::run_stdio;

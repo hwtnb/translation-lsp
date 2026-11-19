@@ -12,9 +12,12 @@ use std::time::Instant;
 use serde_json::Value;
 use serde_json::json;
 
-use crate::config::{OpenAiModel, limits::SizeLimit};
 #[cfg(test)]
 use crate::config::{ReasoningEffort, limits::TranslationLimits};
+use crate::{
+    config::{OpenAiModel, limits::SizeLimit},
+    store::Identity,
+};
 
 use super::{
     AccountChange, AuthUiState, Capabilities, Intent, Interaction, Output, OutputOptions,
@@ -242,6 +245,13 @@ impl ChatGptProvider {
 impl TranslationProvider for ChatGptProvider {
     /// The selected account and its authorization.
     type Context = AccountKey;
+
+    fn identity(&self, output: Output) -> Identity {
+        let options = self.options.get(output);
+        Identity::new("chatgpt")
+            .with("model", &options.model)
+            .with("effort", options.effort)
+    }
 
     fn check_admission(&self, key: &AccountKey, generation: u64) -> Result<(), Error> {
         self.admission.check(key, generation)

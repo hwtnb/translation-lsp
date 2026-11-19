@@ -213,6 +213,22 @@ impl Document {
             .collect()
     }
 
+    /// The bodies of the comment groups with words in them, as a translation
+    /// of each sends them.
+    pub fn comment_bodies(&mut self, uri: &Uri, limit: Duration) -> Vec<String> {
+        self.read_comments(uri, limit);
+        let (Some(indexed), Reading::Done(comments)) = (self.text.as_ref(), &self.comments) else {
+            return Vec::new();
+        };
+        let text = indexed.as_str();
+        comments
+            .groups(text)
+            .into_iter()
+            .map(|group| comments.body(text, group))
+            .filter(|body| !body.trim().is_empty())
+            .collect()
+    }
+
     pub fn translation_input(
         &mut self,
         uri: &Uri,

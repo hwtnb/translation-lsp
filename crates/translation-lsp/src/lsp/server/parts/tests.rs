@@ -11,12 +11,13 @@ use tokio::{
 
 use super::*;
 use crate::{
-    config::limits::TranslationLimits,
+    config::{Settings, limits::TranslationLimits},
     lsp::server::{
         WORKER_EVENT_CHANNEL_CAPACITY,
         worker::{Job, Task, WorkerEvent, run_job},
     },
     providers::{Source, mock::MockContext},
+    store::{Identity, Store},
 };
 
 /// What the provider of these tests was asked and did.
@@ -76,6 +77,10 @@ impl Recorder {
 
 impl TranslationProvider for Recorder {
     type Context = MockContext;
+
+    fn identity(&self, _output: Output) -> Identity {
+        Identity::new("recorder")
+    }
 
     fn context(&self) -> Result<MockContext, Error> {
         Ok(MockContext)
@@ -172,7 +177,9 @@ async fn run(
     text: &str,
     split: Split,
 ) -> Result<Translated<MockContext>, Error> {
-    translate(provider, text.into(), split, "ja", MockContext, 0).await
+    translate(provider, text.into(), split, "ja", MockContext, 0, None)
+        .await
+        .map(|(translated, _)| translated)
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -269,6 +276,7 @@ async fn cancellation_and_the_deadline_send_no_more_parts() {
                 target_language: "ja".into(),
                 context: MockContext,
                 split: Some(split(2)),
+                store: None,
             },
         };
         let running = run_job(job, &finished, &provider);
@@ -326,6 +334,7 @@ async fn a_text_is_sent_whole_without_split_or_when_it_is_small() {
             target_language: "ja".into(),
             context: MockContext,
             split: None,
+            store: None,
         },
     };
     run_job(job, &finished, &provider).await;
@@ -368,6 +377,7 @@ async fn a_stop_while_the_text_is_divided_sends_nothing() {
                 target_language: "ja".into(),
                 context: MockContext,
                 split: Some(split(4)),
+                store: None,
             },
         };
         run_job(job, &finished, &provider).await;
@@ -397,6 +407,41 @@ async fn a_joined_translation_over_the_output_limit_sends_no_more_parts() {
         "{message}"
     );
     assert_eq!(provider.record().sent.len(), 2);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn stored_parts_over_the_output_limit_fail_without_a_request() {
+    let section = format!("# Same\n\n{}", "word ".repeat(115).trim_end());
+    let text = format!("{section}\n\n").repeat(6);
+    let store = Store::new(
+        &Settings::default(),
+        Identity::new("recorder"),
+        Identity::new("recorder"),
+        None,
+    );
+    store.put(
+        store.key(Output::Document, "ja", Sent::Part(&section)),
+        Content::Translation("x".repeat(600)),
+    );
+    let mut limited = split(1);
+    limited.output = SizeLimit::try_from(1).unwrap();
+    let provider = Recorder::default();
+    let uses = store.uses();
+    let used = StoreUse { store, read: true };
+    let error = translate(&provider, text, limited, "ja", MockContext, 0, Some(&used))
+        .await
+        .err()
+        .unwrap();
+    // The second part found exceeds the limit, and the rest are not read.
+    assert_eq!(used.store.uses() - uses, 2);
+    assert!(
+        error
+            .to_string()
+            .ends_with("exceeds 1 KiB; adjust translation_limits.output_kib"),
+        "{error}"
+    );
+    let record = provider.record();
+    assert_eq!((record.whole, record.sent.len()), (0, 0));
 }
 
 #[tokio::test(flavor = "current_thread")]

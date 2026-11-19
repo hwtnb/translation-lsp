@@ -153,7 +153,9 @@ async fn text_in_the_target_language_shows_nothing_until_an_explicit_request_or_
         .unwrap();
     assert!(shown.unwrap().to_string().contains("訳Alpha sentence."));
     assert_eq!(response_calls(&fixture), 2);
-    // An edit discards the result, so the text is sent again.
+    // An edit discards the result, so the text is sent again, unless the
+    // explicit request's stored translation answers it.
+    server.store.clear();
     server.notification(&connection, lsp_server::Notification::new(DidChangeTextDocument::METHOD.into(), json!({"textDocument":{"uri":uri,"version":2},"contentChanges":[{"text":"Alpha sentence.\n\nBravo sentence."}]}))).unwrap();
     let target = range_target(&server, &uri, 0);
     server
@@ -549,6 +551,9 @@ async fn a_card_retry_that_joins_after_sending_is_sent_again_despite_an_older_ta
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
+    // The tab's stored translation would answer the automatic selection
+    // without a request.
+    server.store.clear();
     let context = server.provider.context().unwrap();
     server.next_ticket += 1;
     server.cache.insert(

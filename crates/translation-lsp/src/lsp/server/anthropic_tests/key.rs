@@ -395,11 +395,9 @@ async fn translation_finished_after_the_key_was_replaced_is_not_published() {
     // Nothing is shown for it either.
     assert!(client.receiver.try_recv().is_err());
 
-    // The same comment is translated again, with the key now saved.
+    // The translation was stored, and answers the same comment for the key
+    // now saved without a request.
     assert!(server.hover(2.into(), hover(&uri, 0)).unwrap().is_none());
-    received(&fixture, 2).await;
-    assert_eq!(sent(&fixture), NEW_KEY);
-    gate.add_permits(1);
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
@@ -407,6 +405,7 @@ async fn translation_finished_after_the_key_was_replaced_is_not_published() {
         panic!("Expected the Hover response")
     };
     assert!(response.response_result.is_ok());
+    assert_eq!(fixture.calls(), 1);
     assert_eq!(
         server.cache.latest(&uri).unwrap().context,
         server.provider.context().unwrap()
@@ -494,23 +493,35 @@ async fn results_and_failures_kept_for_one_key_are_not_used_for_another() {
     assert!(server.cache.latest(&uri).is_none());
     assert!(server.cache.exact(&uri, line(0), Output::Range).is_none());
 
-    // The same range is sent again, with the new key.
-    let target = target(&server, &uri, line(0));
-    server
-        .queue(6.into(), target, PendingReply::Command { notice: true })
-        .unwrap();
-    server
-        .finish(&connection, next(&completions).await)
-        .unwrap();
-    assert_eq!(fixture.calls(), 3);
+    // The stored translation answers the same range for the new key without
+    // a request. The failure was not stored, so its range is sent with the
+    // new key.
+    for (id, index, calls) in [(6, 0, 2), (7, 2, 3)] {
+        let target = target(&server, &uri, line(index));
+        server
+            .queue(id.into(), target, PendingReply::Command { notice: true })
+            .unwrap();
+        server
+            .finish(&connection, next(&completions).await)
+            .unwrap();
+        assert_eq!(fixture.calls(), calls);
+        assert_eq!(
+            server
+                .cache
+                .exact(&uri, line(index), Output::Range)
+                .unwrap()
+                .context,
+            server.provider.context().unwrap()
+        );
+    }
     assert_eq!(sent(&fixture), NEW_KEY);
     assert_eq!(
         server
             .cache
             .exact(&uri, line(0), Output::Range)
             .unwrap()
-            .context,
-        server.provider.context().unwrap()
+            .translation,
+        "古いキーの訳"
     );
 }
 

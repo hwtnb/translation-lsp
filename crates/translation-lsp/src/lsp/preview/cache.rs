@@ -1,5 +1,5 @@
 use super::{Preview, fenced_text, plain_text};
-use crate::{config::limits::TranslationLimits, providers::Output};
+use crate::{config::limits::TranslationLimits, providers::Output, store::Key};
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind, Position, Range, Uri};
 
 /// What a cache entry holds.
@@ -14,8 +14,12 @@ pub(crate) enum Stored<C> {
     },
     /// An automatic range translation that found its text already in the
     /// target language. It shows nothing, and only automatic requests reuse
-    /// it.
-    SameLanguage { context: C, range: Range },
+    /// it. `keys` are those the result is stored under.
+    SameLanguage {
+        context: C,
+        range: Range,
+        keys: Vec<Key>,
+    },
 }
 
 impl<C: PartialEq> Stored<C> {
@@ -61,6 +65,15 @@ impl<C: PartialEq> Stored<C> {
         match self {
             Self::Translation(stored, preview) if *stored == output => Some(preview),
             _ => None,
+        }
+    }
+
+    /// The keys the result is stored under.
+    fn keys(&self) -> &[Key] {
+        match self {
+            Self::Translation(_, preview) => &preview.keys,
+            Self::SameLanguage { keys, .. } => keys,
+            Self::Failure { .. } => &[],
         }
     }
 
@@ -153,13 +166,29 @@ impl<C: Clone + PartialEq> Cache<C> {
         self.entries.iter().any(|e| &e.uri == uri)
     }
 
-    pub fn remove_document(&mut self, uri: &Uri) {
-        self.entries.retain(|e| &e.uri != uri);
+    /// Removes the results of `uri`, returning the keys they are stored
+    /// under.
+    pub fn remove_document(&mut self, uri: &Uri) -> Vec<Key> {
+        self.remove_where(|e| &e.uri == uri)
     }
 
-    pub fn remove_range(&mut self, uri: &Uri, range: Range) {
-        self.entries
-            .retain(|e| &e.uri != uri || e.stored.range() != range);
+    /// Removes the results of exactly `range`, returning the keys they are
+    /// stored under.
+    pub fn remove_range(&mut self, uri: &Uri, range: Range) -> Vec<Key> {
+        self.remove_where(|e| &e.uri == uri && e.stored.range() == range)
+    }
+
+    fn remove_where(&mut self, removed: impl Fn(&Entry<C>) -> bool) -> Vec<Key> {
+        let mut keys = Vec::new();
+        self.entries.retain(|e| {
+            if removed(e) {
+                keys.extend_from_slice(e.stored.keys());
+                false
+            } else {
+                true
+            }
+        });
+        keys
     }
 
     pub fn retain_context(&mut self, context: &C) {
@@ -493,6 +522,7 @@ mod tests {
         let same = |context: u8| Stored::SameLanguage {
             context,
             range: range(0, 10),
+            keys: Vec::new(),
         };
         cache.insert(uri.clone(), 1, same(1));
         assert!(cache.same_language(&uri, range(0, 10)));
@@ -527,6 +557,7 @@ mod tests {
         let same = |range| Stored::SameLanguage {
             context: MockContext,
             range,
+            keys: Vec::new(),
         };
         // An older translation of a part comes in after a newer result that
         // shows nothing; one that was there stays.
@@ -564,6 +595,7 @@ mod tests {
             let same = Stored::SameLanguage {
                 context: MockContext,
                 range: range(0, 20),
+                keys: Vec::new(),
             };
             let failed = Stored::failure(MockContext, range(0, 5), "Old request failed");
             if reverse {

@@ -1,3 +1,4 @@
+pub(crate) mod disk_cache;
 pub(crate) mod error;
 pub(crate) mod features;
 pub(crate) mod hover;
@@ -6,6 +7,7 @@ pub(crate) mod limits;
 pub(crate) mod split;
 mod validation;
 
+use disk_cache::DiskCache;
 use error::ConfigError;
 
 use features::Features;
@@ -30,6 +32,7 @@ pub(crate) struct Settings {
     pub features: Features,
     pub hover: HoverSettings,
     pub document_split: DocumentSplit,
+    pub disk_cache: DiskCache,
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -269,6 +272,7 @@ impl Default for Settings {
             features: Features::default(),
             hover: HoverSettings::default(),
             document_split: DocumentSplit::default(),
+            disk_cache: DiskCache::default(),
         }
     }
 }

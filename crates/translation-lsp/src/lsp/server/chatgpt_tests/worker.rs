@@ -38,6 +38,7 @@ async fn worker_deadline_and_cancellation_stop_overload_backoff() {
                 target_language: "ja".into(),
                 context: provider.context().unwrap(),
                 split: None,
+                store: None,
             },
         };
         let running = run_job(job, &finished, &provider);

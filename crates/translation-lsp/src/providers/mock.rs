@@ -5,6 +5,7 @@ use tokio::time::sleep;
 use crate::{
     config::Settings,
     providers::{Intent, Output},
+    store::Identity,
 };
 
 use super::{
@@ -191,6 +192,10 @@ const LONG_DOCUMENT: [(&str, &str); 31] = [
 
 impl TranslationProvider for MockProvider {
     type Context = MockContext;
+
+    fn identity(&self, _output: Output) -> Identity {
+        Identity::new("mock")
+    }
 
     fn context(&self) -> Result<MockContext, Error> {
         Ok(MockContext)

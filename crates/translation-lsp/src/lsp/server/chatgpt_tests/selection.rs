@@ -378,6 +378,7 @@ async fn live_loop_starts_after_stability_and_settings_dismissal_preserves_backg
             Settings::from_options(Some(json!({"selection_debounce_ms":700}))).unwrap(),
             ui,
             provider,
+            None,
         )
         .unwrap();
     });

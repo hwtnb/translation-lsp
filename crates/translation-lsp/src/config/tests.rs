@@ -1000,3 +1000,59 @@ fn document_split_defaults_to_off_and_names_its_rejected_settings() {
         assert!(matches!(error, ConfigError::Decode(_)), "{options}");
     }
 }
+
+#[test]
+fn disk_cache_defaults_to_off_and_names_its_rejected_settings() {
+    use disk_cache::DiskCache;
+    use std::time::Duration;
+    let disk = |options| Settings::from_options(Some(options)).unwrap().disk_cache;
+    let default = DiskCache {
+        enabled: false,
+        days: 30,
+    };
+    assert_eq!(Settings::default().disk_cache, default);
+    assert_eq!(disk(json!({})), default);
+    assert_eq!(disk(json!({"disk_cache": {}})), default);
+    for days in [1, 365] {
+        assert_eq!(
+            disk(json!({"disk_cache": {"enabled": true, "days": days}})),
+            DiskCache {
+                enabled: true,
+                days,
+            }
+        );
+    }
+    assert_eq!(
+        disk(json!({"disk_cache": {"days": 2}})).unused_for(),
+        Duration::from_secs(2 * 24 * 60 * 60)
+    );
+    // The range is checked even when the cache is off.
+    for (enabled, days) in [(true, 0), (false, 366)] {
+        let error = Settings::from_options(Some(
+            json!({"disk_cache": {"enabled": enabled, "days": days}}),
+        ))
+        .err()
+        .unwrap();
+        assert!(
+            error
+                .to_string()
+                .starts_with("disk_cache.days must be between"),
+            "{error}"
+        );
+    }
+    for options in [
+        json!({"disk_cache": null}),
+        json!({"disk_cache": true}),
+        json!({"disk_cache": {"enabled": null}}),
+        json!({"disk_cache": {"days": null}}),
+        json!({"disk_cache": {"days": -1}}),
+        json!({"disk_cache": {"days": 1.5}}),
+        json!({"disk_cache": {"max_kib": 1024}}),
+        json!({"disk_cache": {"Enabled": true}}),
+    ] {
+        let error = Settings::from_options(Some(options.clone()))
+            .err()
+            .unwrap_or_else(|| panic!("Accepted {options}"));
+        assert!(matches!(error, ConfigError::Decode(_)), "{options}");
+    }
+}

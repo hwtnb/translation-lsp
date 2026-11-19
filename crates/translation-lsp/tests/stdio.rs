@@ -1,10 +1,14 @@
 use std::{
     collections::HashMap,
-    fs,
+    env, fs,
     io::{BufReader, Read},
+    path::PathBuf,
     process::{Child, ChildStdin, Command, Stdio},
     str,
-    sync::mpsc::{self, Receiver},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -13,6 +17,7 @@ use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response,
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use reqwest::Url;
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 // A checkout may give the sample files CRLF line endings. The tests find text
 // in them by LF, so each sample is read with LF whatever the checkout wrote.
@@ -109,6 +114,37 @@ const READY: &str = "Translation ready. Hover over the selected text to view it.
 
 type Reply = Result<Value, ResponseError>;
 
+/// A directory that a server takes as the user's home and cache, so that its
+/// stored translations are never the user's. It is removed when the last
+/// client that uses it ends. On Windows, where the cache is found apart from
+/// the environment, the server uses the cache of the user who runs the tests.
+struct Home(PathBuf);
+
+impl Home {
+    fn new() -> Arc<Self> {
+        let path = env::temp_dir().join(format!("translation-lsp-stdio-{}", Uuid::new_v4()));
+        fs::create_dir(&path).unwrap();
+        Arc::new(Self(path))
+    }
+
+    /// Where a server in this home keeps translations with `disk_cache`.
+    #[cfg(not(windows))]
+    fn translations(&self) -> PathBuf {
+        let cache = if cfg!(target_os = "macos") {
+            self.0.join("Library").join("Caches")
+        } else {
+            self.0.join("cache")
+        };
+        cache.join("translation-lsp").join("translations")
+    }
+}
+
+impl Drop for Home {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
 /// Framing is read and written by the same published SDK used by the server.
 /// Server requests are held until each test supplies the client's response.
 struct Client {
@@ -127,6 +163,7 @@ struct Client {
     lens_refreshes: Vec<Request>,
     progress: Vec<Value>,
     statuses: Vec<Value>,
+    _home: Arc<Home>,
 }
 
 impl Client {
@@ -139,9 +176,15 @@ impl Client {
     }
 
     fn spawn(args: &[&str], progress: bool, status: bool) -> Self {
+        Self::spawn_in(args, progress, status, Home::new())
+    }
+
+    fn spawn_in(args: &[&str], progress: bool, status: bool, home: Arc<Home>) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_translation-lsp"))
             .args(args)
             .env_remove("DYLD_FALLBACK_LIBRARY_PATH")
+            .env("HOME", &home.0)
+            .env("XDG_CACHE_HOME", home.0.join("cache"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -188,6 +231,7 @@ impl Client {
             lens_refreshes: Vec::new(),
             progress: Vec::new(),
             statuses: Vec::new(),
+            _home: home,
         }
     }
 
@@ -202,6 +246,17 @@ impl Client {
         options: Value,
         documents: bool,
     ) -> Self {
+        Self::configured_in(args, progress, status, options, documents, Home::new())
+    }
+
+    fn configured_in(
+        args: &[&str],
+        progress: bool,
+        status: bool,
+        options: Value,
+        documents: bool,
+        home: Arc<Home>,
+    ) -> Self {
         // Without a provider the server only shows how to choose one.
         let options = match options {
             Value::Null => json!({"provider": {"name": "mock"}}),
@@ -211,7 +266,7 @@ impl Client {
             }
             options => options,
         };
-        let mut client = Self::spawn(args, progress, status);
+        let mut client = Self::spawn_in(args, progress, status, home);
         let initialized = client
             .call(
                 "initialize",
@@ -709,6 +764,43 @@ fn answer_card(client: &mut Client, button: Option<&str>) -> (u64, String) {
     )
 }
 
+/// With `disk_cache`, a server started again answers Hover over a comment it
+/// translated before from disk, without a request: the second server fails
+/// every request it sends. Without it, the comment is sent again.
+#[cfg(not(windows))]
+#[test]
+fn disk_cache_answers_hover_after_a_restart_without_a_request() {
+    let uri = "file:///restart.rs";
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let hover = json!({"textDocument": {"uri": uri}, "position": range["start"]});
+    for enabled in [true, false] {
+        let home = Home::new();
+        let options = json!({"disk_cache": {"enabled": enabled}});
+        let mut client =
+            Client::configured_in(&[], false, false, options.clone(), false, home.clone());
+        client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+        let shown = client.call("textDocument/hover", hover.clone()).unwrap();
+        assert_preview(&shown, COMMENT, COMMENT_JA, &range);
+        client.finish(true);
+        drop(client);
+        assert_eq!(home.translations().exists(), enabled);
+
+        let mut client =
+            Client::configured_in(&["--mock-fail"], false, false, options, false, home);
+        client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+        let reply = client.call("textDocument/hover", hover.clone());
+        if enabled {
+            assert_preview(&reply.unwrap(), COMMENT, COMMENT_JA, &range);
+        } else {
+            assert_eq!(
+                reply.unwrap_err().message,
+                "Simulated mock translation failure"
+            );
+        }
+        client.finish(true);
+    }
+}
+
 #[test]
 fn deleting_a_cached_comment_refreshes_its_lens_and_next_hover_translates_again() {
     let uri = "file:///delete-lens.rs";
@@ -1013,8 +1105,8 @@ fn a_comment_in_the_target_language_shows_nothing_until_translate() {
         COMMENT_JA,
         &range,
     );
-    // An edit discards both, so Hover sends the comment again: its answer
-    // waits for the mock delay.
+    // An edit discards both from the cache by position, but the translation
+    // kept for the comment's text answers Hover without the mock delay.
     client.change(
         uri,
         2,
@@ -1023,8 +1115,13 @@ fn a_comment_in_the_target_language_shows_nothing_until_translate() {
     );
     let moved = range_for(&format!("\n{COMMENT_DOCUMENT}"), COMMENT);
     let started = Instant::now();
-    assert_eq!(client.hover(uri, moved["start"].clone()), Value::Null);
-    assert!(started.elapsed() >= Duration::from_millis(990));
+    assert_preview(
+        &client.hover(uri, moved["start"].clone()),
+        COMMENT,
+        COMMENT_JA,
+        &moved,
+    );
+    assert!(started.elapsed() < Duration::from_millis(990));
     assert!(
         client.notifications.is_empty(),
         "{:?}",
@@ -1599,7 +1696,6 @@ fn a_failed_ticket_reports_its_problem_while_another_ticket_remains_busy() {
 
 #[test]
 fn comment_and_markdown_selection_preview_leave_source_unchanged() {
-    let mut client = Client::new(&["--mock-delay-ms", "40"]);
     for (uri, language, document, selected, translated) in [
         (
             "file:///comment.rs",
@@ -1623,6 +1719,8 @@ fn comment_and_markdown_selection_preview_leave_source_unchanged() {
             PARAGRAPH_JA,
         ),
     ] {
+        // A server of its own, which keeps no translation of the same text.
+        let mut client = Client::new(&["--mock-delay-ms", "40"]);
         client.open(uri, language, document, 1);
         let range = range_for(document, selected);
         let action = client.action(uri, range.clone());
@@ -1670,8 +1768,8 @@ fn comment_and_markdown_selection_preview_leave_source_unchanged() {
         assert_eq!(notice["type"], 3);
         assert!(notice["message"].as_str().unwrap().ends_with(READY));
         client.notifications.clear();
+        client.finish(true);
     }
-    client.finish(true);
 }
 
 #[test]
@@ -2816,13 +2914,20 @@ fn queued_hover_deadline_includes_time_waiting_for_the_worker() {
     let second_uri = "file:///deadline-second.rs";
     let queued_uri = "file:///deadline-queued.rs";
     let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    // A comment of another text, whose translation the first two do not
+    // keep for it.
+    let comment = COMMENT.replace("failure.", "failure again.");
+    let queued_document = COMMENT_DOCUMENT.replace(COMMENT, &comment);
     client.open(first_uri, "rust", COMMENT_DOCUMENT, 1);
     client.open(second_uri, "rust", COMMENT_DOCUMENT, 1);
-    client.open(queued_uri, "rust", COMMENT_DOCUMENT, 1);
+    client.open(queued_uri, "rust", &queued_document, 1);
     let started = Instant::now();
     let first = client.request_hover(first_uri, range["start"].clone());
     let second = client.request_hover(second_uri, range["start"].clone());
-    let queued = client.request_hover(queued_uri, range["end"].clone());
+    let queued = client.request_hover(
+        queued_uri,
+        range_for(&queued_document, &comment)["end"].clone(),
+    );
     assert_preview(
         &client.receive(first, TIMEOUT).unwrap(),
         COMMENT,
@@ -3238,7 +3343,8 @@ fn document_execution_deadline_starts_after_queue_waiting() {
         blockers.push(client.execute(command));
     }
     let uri = "file:///queued.md";
-    client.open(uri, "markdown", PARAGRAPH, 1);
+    // A text of its own, whose translation the blockers do not keep for it.
+    client.open(uri, "markdown", "Another paragraph.", 1);
     let action = document_action(
         &mut client,
         uri,
@@ -3960,7 +4066,12 @@ fn comment_hover_response_cancellation_preserves_work_until_explicit_cancel_or_c
         (2, "translation-lsp.cancel-range"),
         (3, "translation-lsp.cancel-all"),
     ] {
-        client.change(uri, version, json!([{"text": COMMENT_DOCUMENT}]));
+        // A comment of another text, whose translation is not kept, so that
+        // Hover sends it again.
+        let comment = COMMENT.replace("failure.", &format!("failure {version}."));
+        let document = COMMENT_DOCUMENT.replace(COMMENT, &comment);
+        let range = range_for(&document, &comment);
+        client.change(uri, version, json!([{"text": document}]));
         let hover = client.request_hover(uri, range["start"].clone());
         client.notify("$/cancelRequest", json!({"id":hover}));
         assert_error(client.receive(hover, TIMEOUT), -32800);
@@ -4345,6 +4456,7 @@ fn selection_action_switch_hides_the_action_and_refuses_its_command() {
             [
                 "translation-lsp.translate-selection",
                 "translation-lsp.open-translation",
+                "translation-lsp.delete-document-translations",
                 "translation-lsp.delete-all-translations"
             ]
         );
@@ -4414,6 +4526,7 @@ fn document_action_switch_hides_both_tab_actions_and_refuses_their_command() {
             [
                 "Translate selection to Japanese (ja)",
                 "Translate selection to Japanese (ja) and open in tab",
+                "Delete translations of this document",
                 "Delete all cached translations"
             ]
         );
@@ -4422,6 +4535,7 @@ fn document_action_switch_hides_both_tab_actions_and_refuses_their_command() {
             titles(actions.clone()),
             [
                 "Translate document to Japanese (ja) and open in tab",
+                "Delete translations of this document",
                 "Delete all cached translations"
             ]
         );

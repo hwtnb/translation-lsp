@@ -44,6 +44,8 @@ impl TranslationRequest {
         }
     }
 
+    /// Whether a completed translation, in the cache or the store, answers
+    /// the request: all but a retry, which sends the text again.
     pub fn reuses_completed(&self) -> bool {
         !matches!(self, Self::Reply(_, PendingReply::Retry { .. }))
     }
@@ -404,9 +406,22 @@ impl<C> Scheduler<C> {
             work.limit = work.limit.max(request.timeout(settings));
         }
         work.owners.add(&request, work.is_comment);
-        if let Some(Task::Translation { intent, output, .. }) = work.task.as_mut() {
+        if let Some(Task::Translation {
+            intent,
+            output,
+            store,
+            ..
+        }) = work.task.as_mut()
+        {
             if request.explicit() {
                 *intent = Intent::Explicit;
+            }
+            // A retry that joins before sending sends instead of taking a
+            // stored translation.
+            if !request.reuses_completed()
+                && let Some(store) = store
+            {
+                store.read = false;
             }
             // A tab that joins before sending asks for its own output.
             if request.output() == Output::Document {
@@ -579,6 +594,7 @@ mod tests {
             target_language: "ja".into(),
             context: MockContext,
             split: None,
+            store: None,
         };
         s.insert(
             ticket,
@@ -806,6 +822,7 @@ mod shared_outputs_tests {
                 target_language: "ja".into(),
                 context: MockContext,
                 split: None,
+                store: None,
             };
             let request = if ticket == 1 {
                 TranslationRequest::Document
@@ -893,6 +910,7 @@ mod separate_outputs_tests {
             target_language: "ja".into(),
             context: KeyId::SYNTHETIC,
             split: None,
+            store: None,
         };
         scheduler
             .insert(

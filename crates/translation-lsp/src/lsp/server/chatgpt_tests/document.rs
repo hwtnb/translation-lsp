@@ -307,6 +307,9 @@ async fn automatic_selection_and_retry_do_not_reuse_tab_results() {
         server
             .finish(&connection, next(&completions).await)
             .unwrap();
+        // The stored translation would answer the automatic selection
+        // without a request.
+        server.store.clear();
         client.receiver.try_iter().for_each(drop);
         let request = if retry {
             TranslationRequest::Reply(1.into(), PendingReply::Retry { notice: true })

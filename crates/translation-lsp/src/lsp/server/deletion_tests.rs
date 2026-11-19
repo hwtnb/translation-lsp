@@ -78,7 +78,7 @@ impl<P: TranslationProvider> Editor<P> {
             match self.events.recv_timeout(WAIT).unwrap() {
                 WorkerEvent::Started(ticket) => self.server.scheduler.mark_running(ticket),
                 WorkerEvent::Finished(completion) => {
-                    let translation = matches!(completion, Finished::Translation(_));
+                    let translation = matches!(completion, Finished::Translation(..));
                     self.server.finish(&self.connection, completion).unwrap();
                     return translation;
                 }
@@ -225,6 +225,7 @@ fn deleting_an_exact_range_clears_each_kind_and_the_matching_problem() {
             Stored::SameLanguage {
                 context: MockContext,
                 range: a,
+                keys: Vec::new(),
             }
         } else {
             Stored::failure(MockContext, a, "synthetic failure")

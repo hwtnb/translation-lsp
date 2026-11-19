@@ -45,6 +45,10 @@ Add the following entry to `lsp` in your existing Zed settings. Choose a model a
           "parallel": 4,
           "chunk_kib": 8
         },
+        "disk_cache": {
+          "enabled": false,
+          "days": 30
+        },
         "provider": {
           "name": "chatgpt",
           "model": "gpt-6.1-sol",
@@ -236,6 +240,38 @@ Limitations:
 - The parts are translated separately, so one term can be translated in different words in different parts.
 - If the model returns a part untranslated, the server does not detect it.
 
+## Disk cache
+
+`disk_cache` keeps completed translations on disk as well as in memory, so that they are used again after the language server restarts. `disk_cache` and each setting inside it can be omitted.
+
+```json
+"disk_cache": {
+  "enabled": true,
+  "days": 30
+}
+```
+
+| Setting inside `disk_cache` | Default | Allowed values | Effect |
+| --- | --- | --- | --- |
+| `enabled` | `false` | `true`, `false` | With `true`, each completed translation is also written to disk, and a translation found there is shown without sending the text again, after a restart too. With `false`, translations are kept in memory only, and `days` does nothing, though its value is still checked. |
+| `days` | `30` | Integer `1`–`365`, inclusive | A translation on disk that has not been used for this many days is removed. |
+
+Any other setting inside `disk_cache`, or any other value, is a settings error.
+
+The translations are kept in the folder `translation-lsp/translations` inside the cache folder of the OS, apart from the folder of API keys:
+
+| OS | Folder |
+| --- | --- |
+| macOS | `~/Library/Caches/translation-lsp/translations` |
+| Linux | `$XDG_CACHE_HOME/translation-lsp/translations`, or `~/.cache/translation-lsp/translations` when `XDG_CACHE_HOME` is unset |
+| Windows | `%LOCALAPPDATA%\translation-lsp\translations` |
+
+Each file holds one translation, one part of a translation sent in parts, one dictionary entry with its CodeLens line, or the result that an automatic request found the text already in the target language. Its name is a SHA-256 hash of what was sent and the settings that change the translation, as described under [Cache](behavior.md#cache). The text that was sent and the lines around it are not written; a dictionary entry holds its word and example sentence, and a translation holds what was left untranslated, such as code and identifiers. The files are not encrypted. On macOS and Linux, the folder and each file are open to their owner alone. Failed, incomplete, canceled, and timed-out results are not written. When the folder cannot be used, translations are kept in memory only, and the server writes one line to its log for each kind of failure, without the text or the translation.
+
+The server cleans the folder after it starts and then every six hours, apart from translation requests. It removes the translations not used for longer than `days`, then the least recently used ones while the rest take more than 64 MiB; the 64 MiB limit is fixed. A translation is used when a request finds it, in memory or on disk. Files of other names in the folder stay.
+
+Turning `disk_cache` off leaves the files in place. To remove them, choose `Delete all cached translations`, which removes every translation in the folder, including those of other providers and models, even with `disk_cache` off, or remove the folder. With `disk_cache` on, the other deletion commands also remove the files of what they delete; while it is off, they leave the files. See [Deleting cached translations](usage.md#deleting-cached-translations).
+
 ## Timing
 
 Translation timing options are optional:
@@ -275,7 +311,7 @@ Work and cache limits are optional objects inside `translation_limits`:
 
 `admitted` counts running and queued translation operations, including canceled workers until they terminate. `concurrent` limits all executing translations, `documents` limits operations dispatched as tab translations, `automatic` limits jobs retained by comment Hover or automatic selection without a manual or tab request, and `hover_waiters` limits individual pending Hover responses. All counts must be positive integers. Require `documents <= concurrent <= admitted` and `automatic < admitted`. This reserves admission capacity for explicit requests, but does not reserve an idle worker. Increasing concurrency can increase simultaneous provider usage.
 
-`cache.entries` bounds the combined successful, failed, and tab cache entries across all documents. `cache.capacity_kib` bounds their stored text, not total process memory. The effective capacity is the greater of this value and `output_kib`, so one maximum-size result can fit. Metadata, source documents, in-flight input, and temporary tab files are outside this text budget. Defaults are a starting point for sequential reading, not measured provider or hardware limits. Omitted nested fields retain their defaults; restart the language server after changing them.
+`cache.entries` bounds the combined successful, failed, and tab cache entries across all documents. `cache.capacity_kib` bounds their stored text, not total process memory. The effective capacity is the greater of this value and `output_kib`, so one maximum-size result can fit. The translations kept in memory by what was sent, described under [Cache](behavior.md#cache), take the same two limits of their own. Metadata, source documents, in-flight input, and temporary tab files are outside this text budget. Defaults are a starting point for sequential reading, not measured provider or hardware limits. Omitted nested fields retain their defaults; restart the language server after changing them.
 
 ## Maximum values
 
@@ -296,6 +332,10 @@ The following are **maximum configurable values**, separate from the defaults ab
 | --- | --- |
 | `parallel` | `8` |
 | `chunk_kib` | `16384` (16 MiB) |
+
+| Setting inside `disk_cache` | Maximum |
+| --- | --- |
+| `days` | `365` |
 
 Two combined limits also apply: `max(input_kib.hover, input_kib.document) × work.admitted` must not exceed `262144` KiB (256 MiB), and `output_kib × work.concurrent` must not exceed `65536` KiB (64 MiB). For example, 16 MiB document input with 64 accepted jobs is rejected; use at most 16 accepted jobs at that input limit. A 16 MiB output limit permits at most four simultaneous translations. These checks apply to configured worst cases, even when the queue is currently empty.
 

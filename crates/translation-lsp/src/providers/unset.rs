@@ -3,8 +3,10 @@
 
 use std::{env, path::PathBuf};
 
+use crate::store::Identity;
+
 use super::{
-    AccountChange, AuthUiState, Capabilities, Interaction, ProviderCommand, Translated,
+    AccountChange, AuthUiState, Capabilities, Interaction, Output, ProviderCommand, Translated,
     TranslationProvider, error::Error,
 };
 
@@ -73,6 +75,10 @@ impl UnsetProvider {
 impl TranslationProvider for UnsetProvider {
     type Context = UnsetContext;
 
+    fn identity(&self, _output: Output) -> Identity {
+        Identity::new("unset")
+    }
+
     fn context(&self) -> Result<UnsetContext, Error> {
         Err(Error::configuration(NOT_SET_UP))
     }
@@ -100,7 +106,7 @@ impl TranslationProvider for UnsetProvider {
     async fn translate(
         &self,
         _intent: super::Intent,
-        _output: super::Output,
+        _output: Output,
         _text: &str,
         _target_language: &str,
         _context: UnsetContext,
