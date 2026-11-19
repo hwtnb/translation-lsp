@@ -51,6 +51,9 @@ Unknown fields are rejected: there is no setting for the API key or the API endp
 
 ### Tab translations with another model
 
+> [!NOTE]
+> `claude-haiku-5-5` can return a paragraph in its original language instead of translating it, and the server does not detect this. Tab translations can use another model, such as `claude-sonnet-5-5`:
+
 ```json
 "provider": {
   "name": "anthropic_api",
