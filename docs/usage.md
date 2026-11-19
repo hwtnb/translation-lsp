@@ -2,7 +2,7 @@
 
 [日本語](ja/usage.md)
 
-This page describes how to request, read, cancel, and retry translations, and what text is sent. The rules for accepting, keeping, and caching work are described under [Behavior](behavior.md).
+This page describes how to request, read, cancel, retry, and delete translations, and what text is sent. The rules for accepting, keeping, and caching work are described under [Behavior](behavior.md).
 
 ## Comment Hover
 
@@ -10,7 +10,7 @@ Hover over a supported code comment, or place the cursor in it and run Zed's `ed
 
 A block comment or a docstring of more than one line is also sent without its margin. In a comment that starts with `/*`, a first line of only `*` and `!`, such as the rest of `/**` or `/*!`, is removed. When every line after the first that is not blank starts with `*`, that `*` and one space or tab after it are removed. Then the indentation that the lines after the first share, the spaces and tabs at the start of the first line, blank lines at the start and end, and spaces and tabs at the end of the last line are removed. The lines keep their indentation relative to each other and the blank lines between them.
 
-A comment already written in the target language gets no Hover. The model or the translation service decides this, as described under [What is sent](#what-is-sent); the server does not guess the language itself. The server keeps that answer like a translation, so Hovering over the comment again sends nothing until the document changes. `Translate` in the CodeLens and the Code Actions always translate the comment.
+A comment already written in the target language gets no Hover. The model or the translation service decides this, as described under [What is sent](#what-is-sent); the server does not guess the language itself. The server keeps that answer like a translation, so repeated Hover requests reuse it until the document changes or the cached result is deleted. `Translate` in the CodeLens and the Code Actions always translate the comment.
 
 Zed controls Hover placement and width. The extension cannot guarantee placement above the text or that the popup leaves all source text visible.
 
@@ -88,11 +88,11 @@ With `"code_lens": "on"` in Zed's settings, the server shows short commands on a
 
 `Translate` translates the comment as `Translate selection to …` does, and appears with a provider ready and `selection_action` on. A comment that Hover found already in the target language keeps `Translate`. `Retry` translates a failed range again. After either, the line shows the translation, without the message `Translation ready. Hover over the selected text to view it.` that the Code Actions show; if a Code Action waits for the same range, the message still shows. Translated, failed, and running ranges come from comment Hover, selections, and `Translate`; tab translations get no line. Editing the document removes the lines of the ranges whose translations it invalidates.
 
-Click the first line of a translation to read all of it in a card, or `Translation failed` to read the reason. The card stays until you close it. Its `Retry translating this text` button translates the range again, and the CodeLens shows the new translation without a message that it is ready. Zed's copy button on the card copies the text as Markdown, with backslashes before symbols and `---` lines before and after it.
+Click the first line of a translation to read all of it in a card, or `Translation failed` to read the reason. The card stays until you close it. Its `Retry translating this text` button translates the range again, and the CodeLens shows the new translation without a message that it is ready. `Delete translation` removes the cached results for that range. Zed's copy button on the card copies the text as Markdown, with backslashes before symbols and `---` lines before and after it.
 
 `Translate in tab` translates the whole document as `Translate document to … and open in tab` does. It appears with a provider ready and `document_action` on, in a client that supports `window/showDocument`. The account menu item is the provider's account menu, such as `ChatGPT account…`. `Zed settings` opens Zed's settings file, also only in a client that supports `window/showDocument`.
 
-`Settings` opens a menu with the same items: `Turn off automatic translation` or `Turn on automatic translation`, the account menu, and `Open Zed settings file`. Turning automatic translation off stops comment Hover and automatic Markdown selection from starting translations until the language server restarts, and cancels the translations they started that nothing else asked for. Translations already finished still appear on Hover, and `Translate`, Code Actions, and tab translations keep working. `Auto-translate: On` above Markdown and Plain Text turns it off the same way, and then reads `Auto-translate: Off`.
+`Settings` opens a menu with `Turn off automatic translation` or `Turn on automatic translation`, the account menu, and `Open Zed settings file`. It also offers `Delete translations of this document` when this document has cached results, and `Delete all cached translations` when the cache has any results. Turning automatic translation off stops comment Hover and automatic Markdown selection from starting translations until the language server restarts, and cancels the translations they started that nothing else asked for. Translations already finished still appear on Hover, and `Translate`, Code Actions, and tab translations keep working. `Auto-translate: On` above Markdown and Plain Text turns it off the same way, and then reads `Auto-translate: Off`.
 
 In a file with many comments, each comment gets a line. With [`features.comment_lens`](configuration.md#features) set to `false`, comments without a translation, a failure, or one in progress get no line, and the menu moves above the first line, as in Markdown.
 
@@ -100,7 +100,7 @@ In a file with many comments, each comment gets a line. With [`features.comment_
 
 While translation is queued or running, Zed shows a spinner and text directly in the left status bar. `Queued: 1` means one queued translation. `Translating: 1, queued: 0` means one translation is running with none queued. Requests for the same range count as one translation. Its tab translation counts separately with `provider.document`, and with the Anthropic API, OpenAI API, and OpenAI-compatible providers when the range request was already sent. Other language-server activity can take priority in this shared area.
 
-The spinner disappears when work ends, including cancellation and timeout. Hover over the original text to check the result. On clients that support server status, translation failures and timeouts leave a warning that clears on retry, editing, or closing the document. Clients without these display capabilities retain Hover and explicit-operation notifications.
+The spinner disappears when work ends, including cancellation and timeout. Hover over the original text to check the result. On clients that support server status, translation failures and timeouts leave a warning that clears on retry, deletion of the cached result, editing, or closing the document. Clients without these display capabilities retain Hover and explicit-operation notifications.
 
 Manual completion and failure notifications identify the file name and lines. Automatic completion does not produce a popup. Check error notifications for failed manual translation or management operations.
 
@@ -118,6 +118,16 @@ To stop one accepted translation, place the cursor or a selection in its range a
 `Cancel all translations` stops all translation work without canceling an account menu. Old cancellation actions cannot cancel a later request for the same range. The server also accepts progress cancellation for all translations, if the client exposes that control. Zed's progress control and its refresh of the listed actions have not been verified in the editor; use Code Actions as the primary cancellation route.
 
 To retry a failed range without selecting its text again, place the cursor inside it and choose `Retry translation of lines …` from Code Actions. The action retries the recorded range as an explicit request, including after a usage-limit pause. Hover alone continues to show the failure.
+
+### Deleting cached translations
+
+Use the translation card to delete one range or the `Settings` menu in code to delete a document's results or all cached translations. In Markdown and Plain Text, Code Actions offer these three commands when the provider is ready and no account operation is in progress.
+
+- `Delete translation of lines N-M` when the selection is empty and the cursor is in a translated or failed range. When ranges overlap, the action chooses the newest translation Hover can display, then the newest failure if there is no translation.
+- `Delete translations of this document` when the current document has cached results.
+- `Delete all cached translations` when any document has cached results. Choose `Delete` in the confirmation card to clear the cache. You can keep translating and using menus while the confirmation is open.
+
+After deletion, the next comment Hover can translate the comment again. To translate a Markdown range again, reselect it or use a manual translation action. Open translation tabs stay open, and work already in progress can add its result to the cache when it finishes.
 
 ## What is sent
 

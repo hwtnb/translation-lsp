@@ -171,7 +171,10 @@ async fn text_in_the_target_language_shows_nothing_until_an_explicit_request_or_
 /// explicit requests in `join` are added; the server then sends the text again
 /// as an explicit request, once. Gives the messages until that ends, and what
 /// Hover then shows.
-async fn join_after_sending(join: Vec<TranslationRequest>) -> (Vec<Message>, Option<Value>) {
+async fn join_after_sending(
+    join: Vec<TranslationRequest>,
+    confirm_delete_all: bool,
+) -> (Vec<Message>, Option<Value>) {
     let (fixture, mut server, connection, client, completions, uri) =
         range_server(Settings::default()).await;
     let tail = Arc::new(StreamTailGate::default());
@@ -190,6 +193,28 @@ async fn join_after_sending(join: Vec<TranslationRequest>) -> (Vec<Message>, Opt
         server.queue_translation(target.clone(), request).unwrap();
     }
     assert_eq!(server.scheduler.translations().len(), 1);
+
+    let confirmation = if confirm_delete_all {
+        assert_eq!(
+            server
+                .execute_command(
+                    &connection,
+                    4.into(),
+                    parse(json!({"command": DELETE_ALL_COMMAND})).unwrap(),
+                )
+                .unwrap(),
+            Some(Value::Null)
+        );
+        let Message::Request(confirmation) = client.receiver.try_recv().unwrap() else {
+            panic!("Expected the delete confirmation");
+        };
+        assert_eq!(confirmation.method, "window/showMessageRequest");
+        assert_eq!(confirmation.params["actions"], json!([{"title": "Delete"}]));
+        Some(confirmation.id)
+    } else {
+        None
+    };
+
     tail.release.notify_one();
     server
         .finish(&connection, next(&completions).await)
@@ -212,15 +237,41 @@ async fn join_after_sending(join: Vec<TranslationRequest>) -> (Vec<Message>, Opt
         .queue(3.into(), target.clone(), hover(&target))
         .unwrap();
     assert_eq!(response_calls(&fixture), 2);
+
+    if let Some(id) = confirmation {
+        let Some((Purpose::Card, response)) = server.ui.response(Response::new_ok(id, Value::Null))
+        else {
+            panic!("Expected the delete confirmation to still be open");
+        };
+        server.card_response(response).unwrap();
+    }
+
     (messages, shown)
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn a_code_action_that_joins_after_sending_sends_the_text_again_explicitly() {
-    let (messages, shown) = join_after_sending(vec![TranslationRequest::Reply(
-        2.into(),
-        PendingReply::Command { notice: true },
-    )])
+    let (messages, shown) = join_after_sending(
+        vec![TranslationRequest::Reply(
+            2.into(),
+            PendingReply::Command { notice: true },
+        )],
+        false,
+    )
+    .await;
+    assert_eq!((ready(&messages), opened(&messages)), (1, 0));
+    assert!(shown.unwrap().to_string().contains("訳Alpha sentence."));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_delete_all_confirmation_does_not_block_the_explicit_resend() {
+    let (messages, shown) = join_after_sending(
+        vec![TranslationRequest::Reply(
+            2.into(),
+            PendingReply::Command { notice: true },
+        )],
+        true,
+    )
     .await;
     assert_eq!((ready(&messages), opened(&messages)), (1, 0));
     assert!(shown.unwrap().to_string().contains("訳Alpha sentence."));
@@ -228,15 +279,18 @@ async fn a_code_action_that_joins_after_sending_sends_the_text_again_explicitly(
 
 #[tokio::test(flavor = "current_thread")]
 async fn a_tab_that_joins_after_sending_opens_once() {
-    let (messages, shown) = join_after_sending(vec![TranslationRequest::Document]).await;
+    let (messages, shown) = join_after_sending(vec![TranslationRequest::Document], false).await;
     assert_eq!((ready(&messages), opened(&messages)), (0, 1));
     // The tab's translation is not for Hover, which still shows nothing.
     assert_eq!(shown, Some(Value::Null));
     // One request answers both.
-    let (messages, shown) = join_after_sending(vec![
-        TranslationRequest::Document,
-        TranslationRequest::Reply(2.into(), PendingReply::Command { notice: true }),
-    ])
+    let (messages, shown) = join_after_sending(
+        vec![
+            TranslationRequest::Document,
+            TranslationRequest::Reply(2.into(), PendingReply::Command { notice: true }),
+        ],
+        false,
+    )
     .await;
     assert_eq!((ready(&messages), opened(&messages)), (1, 1));
     assert!(shown.unwrap().to_string().contains("訳Alpha sentence."));

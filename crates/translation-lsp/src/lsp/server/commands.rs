@@ -1,7 +1,7 @@
 //! The commands that Code Actions carry and `workspace/executeCommand` runs.
 
 use super::{
-    menu::{RETRY, card_message},
+    menu::{DELETE, RETRY, card_message},
     *,
 };
 
@@ -19,10 +19,13 @@ pub(super) enum ServerCommand {
     OpenTab(TranslationTarget),
     Cancel(u64),
     CancelAll,
+    DeleteTranslation(TranslationTarget),
+    DeleteDocumentTranslations(Uri),
+    DeleteAllTranslations,
     /// The account menu, or an account command of the provider.
     Account(String),
     /// The server menu.
-    Menu,
+    Menu(Option<Uri>),
     /// Turns the automatic features back to the settings (`true`) or off.
     Automatic(bool),
     /// Opens Zed's settings file.
@@ -63,10 +66,23 @@ impl ServerCommand {
                 none(&arguments, "Cancel all takes no arguments")?;
                 Ok(Self::CancelAll)
             }
-            MENU_COMMAND | AUTOMATIC_OFF_COMMAND | AUTOMATIC_ON_COMMAND | OPEN_SETTINGS_COMMAND => {
+            DELETE_COMMAND => Ok(Self::DeleteTranslation(target(arguments)?)),
+            DELETE_DOCUMENT_COMMAND => Ok(Self::DeleteDocumentTranslations(parse(one(
+                arguments,
+                "Expected one document URI",
+            )?)?)),
+            DELETE_ALL_COMMAND => {
+                none(&arguments, "Delete all takes no arguments")?;
+                Ok(Self::DeleteAllTranslations)
+            }
+            MENU_COMMAND => Ok(Self::Menu(if arguments.is_empty() {
+                None
+            } else {
+                Some(parse(one(arguments, "Expected at most one document URI")?)?)
+            })),
+            AUTOMATIC_OFF_COMMAND | AUTOMATIC_ON_COMMAND | OPEN_SETTINGS_COMMAND => {
                 none(&arguments, "Menu commands take no arguments")?;
                 Ok(match command.as_str() {
-                    MENU_COMMAND => Self::Menu,
                     AUTOMATIC_OFF_COMMAND => Self::Automatic(false),
                     AUTOMATIC_ON_COMMAND => Self::Automatic(true),
                     _ => Self::OpenSettings,
@@ -91,6 +107,15 @@ impl ServerCommand {
 
     /// The Code Action that carries this command.
     pub fn action(&self, title: String) -> RequestResult<CodeAction> {
+        Ok(CodeAction {
+            title: title.clone(),
+            kind: Some(CodeActionKind::new(ACTION_KIND)),
+            command: Some(self.command(title)?),
+            ..Default::default()
+        })
+    }
+
+    pub fn command(&self, title: String) -> RequestResult<Command> {
         let (command, arguments) = match self {
             Self::TranslateSelection(target) => (COMMAND, Some(vec![to_value(target)?])),
             Self::Retry(target) => (RETRY_COMMAND, Some(vec![to_value(target)?])),
@@ -100,22 +125,23 @@ impl ServerCommand {
             Self::OpenTab(target) => (DOCUMENT_COMMAND, Some(vec![to_value(target)?])),
             Self::Cancel(ticket) => (CANCEL_COMMAND, Some(vec![to_value(ticket)?])),
             Self::CancelAll => (CANCEL_ALL_COMMAND, Some(Vec::new())),
+            Self::DeleteTranslation(target) => (DELETE_COMMAND, Some(vec![to_value(target)?])),
+            Self::DeleteDocumentTranslations(uri) => {
+                (DELETE_DOCUMENT_COMMAND, Some(vec![to_value(uri)?]))
+            }
+            Self::DeleteAllTranslations => (DELETE_ALL_COMMAND, None),
             Self::Account(command) => (command.as_str(), None),
-            Self::Menu => (MENU_COMMAND, None),
+            Self::Menu(uri) => (
+                MENU_COMMAND,
+                uri.as_ref()
+                    .map(|uri| to_value(uri).map(|uri| vec![uri]))
+                    .transpose()?,
+            ),
             Self::Automatic(true) => (AUTOMATIC_ON_COMMAND, None),
             Self::Automatic(false) => (AUTOMATIC_OFF_COMMAND, None),
             Self::OpenSettings => (OPEN_SETTINGS_COMMAND, None),
         };
-        Ok(CodeAction {
-            title: title.clone(),
-            kind: Some(CodeActionKind::new(ACTION_KIND)),
-            command: Some(Command {
-                title,
-                command: command.into(),
-                arguments,
-            }),
-            ..Default::default()
-        })
+        Ok(Command::new(title, command.into(), arguments))
     }
 }
 
@@ -135,6 +161,7 @@ impl<P: TranslationProvider> Server<P> {
         | ServerCommand::LensTranslate(target)
         | ServerCommand::LensRetry(target)
         | ServerCommand::Show(target)
+        | ServerCommand::DeleteTranslation(target)
         | ServerCommand::OpenTab(target) = &command
             && target.target_language != self.settings.target_language
         {
@@ -152,8 +179,37 @@ impl<P: TranslationProvider> Server<P> {
                 self.cancel_range(connection, ticket, ErrorCode::RequestCanceled)?;
                 Ok(Some(Value::Null))
             }
-            ServerCommand::Account(command) => self.start_administration(connection, id, command),
-            ServerCommand::Menu => self.start_administration(connection, id, MENU_COMMAND.into()),
+            ServerCommand::DeleteTranslation(target) => {
+                self.delete_translation(&target).map_err(provider_failure)?;
+                Ok(Some(Value::Null))
+            }
+            ServerCommand::DeleteDocumentTranslations(uri) => {
+                self.delete_document_translations(&uri)
+                    .map_err(provider_failure)?;
+                Ok(Some(Value::Null))
+            }
+            ServerCommand::DeleteAllTranslations => {
+                self.confirm_delete_all().map_err(provider_failure)?;
+                Ok(Some(Value::Null))
+            }
+            ServerCommand::Account(command) => {
+                let ui = self.ui.clone();
+                let task = if command == SETTINGS_COMMAND {
+                    Task::AccountMenu { ui }
+                } else {
+                    Task::Administration { command, ui }
+                };
+                self.start_administration(connection, id, task)
+            }
+            ServerCommand::Menu(uri) => self.start_administration(
+                connection,
+                id,
+                Task::Menu {
+                    ui: self.ui.clone(),
+                    message: self.menu_message().into(),
+                    choices: self.menu_choices(uri.as_ref())?,
+                },
+            ),
             ServerCommand::Automatic(on) => {
                 self.set_automatic(connection, on)?;
                 Ok(Some(Value::Null))
@@ -165,7 +221,13 @@ impl<P: TranslationProvider> Server<P> {
                         "The editor does not support opening files",
                     ));
                 }
-                self.start_administration(connection, id, OPEN_SETTINGS_COMMAND.into())
+                self.start_administration(
+                    connection,
+                    id,
+                    Task::OpenSettings {
+                        ui: self.ui.clone(),
+                    },
+                )
             }
             ServerCommand::OpenTab(target) => {
                 if !self.ui.capabilities.show_document {
@@ -223,11 +285,38 @@ impl<P: TranslationProvider> Server<P> {
                 };
                 let card = self
                     .ui
-                    .show_card(kind, &card_message(&message), &[RETRY])
+                    .show_card(kind, &card_message(&message), &[RETRY, DELETE])
                     .map_err(provider_failure)?;
-                self.cards.insert(card, target);
+                self.cards.insert(card, Card::Translation(target));
                 Ok(Some(Value::Null))
             }
+        }
+    }
+
+    pub(super) fn delete_translation(
+        &mut self,
+        target: &TranslationTarget,
+    ) -> Result<(), ProviderError> {
+        if !self.target_is_current(target) {
+            return Ok(());
+        }
+
+        self.cache.remove_range(&target.uri, target.range);
+        self.clear_deleted_problem(&target.uri, Some(target.range));
+        self.ui.refresh_lenses()
+    }
+
+    fn delete_document_translations(&mut self, uri: &Uri) -> Result<(), ProviderError> {
+        self.cache.remove_document(uri);
+        self.clear_deleted_problem(uri, None);
+        self.ui.refresh_lenses()
+    }
+
+    fn clear_deleted_problem(&mut self, uri: &Uri, range: Option<Range>) {
+        if self.problem.as_ref().is_some_and(|problem| {
+            &problem.target.uri == uri && range.is_none_or(|range| problem.target.range == range)
+        }) {
+            self.clear_problem();
         }
     }
 

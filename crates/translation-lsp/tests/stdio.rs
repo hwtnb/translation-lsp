@@ -250,7 +250,10 @@ impl Client {
                 "translation-lsp.open-zed-settings",
                 "translation-lsp.open-translation",
                 "translation-lsp.cancel-range",
-                "translation-lsp.cancel-all"
+                "translation-lsp.cancel-all",
+                "translation-lsp.delete-translation",
+                "translation-lsp.delete-document-translations",
+                "translation-lsp.delete-all-translations"
             ])
         );
         client.notify("initialized", json!({}));
@@ -682,13 +685,16 @@ fn lenses_until(
 }
 
 /// Answers the card that `client` shows next, which has a button that
-/// translates again, with `button`, or as closed. Gives the card's type and
+/// retries or deletes its translation, with `button`, or as closed. Gives the card's type and
 /// its message between the rules around it.
 fn answer_card(client: &mut Client, button: Option<&str>) -> (u64, String) {
     let card = client.prompt();
     assert_eq!(
         card.params["actions"],
-        json!([{"title": "Retry translating this text"}])
+        json!([
+            {"title": "Retry translating this text"},
+            {"title": "Delete translation"}
+        ])
     );
     let answer = button.map_or(Value::Null, |title| json!({"title": title}));
     client.send(Response::new_ok(card.id, answer).into());
@@ -701,6 +707,71 @@ fn answer_card(client: &mut Client, button: Option<&str>) -> (u64, String) {
             .unwrap()
             .to_owned(),
     )
+}
+
+#[test]
+fn deleting_a_cached_comment_refreshes_its_lens_and_next_hover_translates_again() {
+    let uri = "file:///delete-lens.rs";
+    let mut client = lens_client(&[], uri, false);
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let start = range["start"].clone();
+    assert_preview(
+        &client.hover(uri, start.clone()),
+        COMMENT,
+        COMMENT_JA,
+        &range,
+    );
+    let found = lenses(&mut client, uri);
+    let arguments = found[0]["command"]["arguments"].clone();
+    assert_eq!(
+        found[0]["command"]["command"],
+        "translation-lsp.show-translation"
+    );
+
+    let mut wrong_language = arguments.clone();
+    wrong_language[0]["targetLanguage"] = json!("fr");
+    assert_error(
+        client.call(
+            "workspace/executeCommand",
+            json!({"command": "translation-lsp.delete-translation", "arguments": wrong_language}),
+        ),
+        ErrorCode::InvalidParams as i32,
+    );
+    assert_eq!(client.notice()["type"], 1);
+    assert_preview(
+        &client.hover(uri, start.clone()),
+        COMMENT,
+        COMMENT_JA,
+        &range,
+    );
+
+    client.lens_refreshes.clear();
+    assert!(
+        client
+            .call(
+                "workspace/executeCommand",
+                json!({
+                    "command": "translation-lsp.delete-translation", "arguments": arguments
+                })
+            )
+            .unwrap()
+            .is_null()
+    );
+    assert_eq!(client.lens_refreshes.len(), 1);
+    assert_eq!(
+        lens_titles(&lenses(&mut client, uri)),
+        ["Translate", "Settings"]
+    );
+    assert!(client.notifications.is_empty());
+
+    client.lens_refreshes.clear();
+    assert_preview(&client.hover(uri, start), COMMENT, COMMENT_JA, &range);
+    assert!(!client.lens_refreshes.is_empty());
+    assert_eq!(
+        lens_titles(&lenses(&mut client, uri)),
+        [COMMENT_JA.lines().next().unwrap(), "Settings"]
+    );
+    client.finish(true);
 }
 
 #[test]
@@ -1056,11 +1127,11 @@ fn comment_lens_off_leaves_lines_only_on_translated_comments_and_the_menu_on_top
 
 /// Opens the server menu with `settings`, checks its message and titles, and
 /// picks `choice`. Gives the request of the command that opened the menu.
-fn choose_in_menu(
+fn choose_in_menu<const N: usize>(
     client: &mut Client,
     settings: &Value,
     message: &str,
-    titles: [&str; 2],
+    titles: [&str; N],
     choice: &str,
 ) -> RequestId {
     let id = client.execute(settings.clone());
@@ -1068,7 +1139,7 @@ fn choose_in_menu(
     assert_eq!(menu.params["message"], message);
     assert_eq!(
         menu.params["actions"],
-        json!(titles.map(|title| json!({"title": title})))
+        json!(titles.map(|title| json!({"title": title})).as_slice())
     );
     client.send(Response::new_ok(menu.id, json!({"title": choice})).into());
     id
@@ -1120,7 +1191,12 @@ fn the_settings_code_lens_turns_automatic_translation_off_and_on_and_opens_zed_s
         &mut client,
         &settings,
         ON,
-        ["Turn off automatic translation", "Open Zed settings file"],
+        [
+            "Turn off automatic translation",
+            "Open Zed settings file",
+            "Delete translations of this document",
+            "Delete all cached translations",
+        ],
         "Open Zed settings file",
     );
     let document = client.document();
@@ -4268,7 +4344,8 @@ fn selection_action_switch_hides_the_action_and_refuses_its_command() {
             commands(&actions),
             [
                 "translation-lsp.translate-selection",
-                "translation-lsp.open-translation"
+                "translation-lsp.open-translation",
+                "translation-lsp.delete-all-translations"
             ]
         );
         ready(&mut client, actions[0]["command"].clone());
@@ -4336,13 +4413,17 @@ fn document_action_switch_hides_both_tab_actions_and_refuses_their_command() {
             titles(client.actions(uri, range.clone())),
             [
                 "Translate selection to Japanese (ja)",
-                "Translate selection to Japanese (ja) and open in tab"
+                "Translate selection to Japanese (ja) and open in tab",
+                "Delete all cached translations"
             ]
         );
         let actions = client.actions(uri, cursor);
         assert_eq!(
             titles(actions.clone()),
-            ["Translate document to Japanese (ja) and open in tab"]
+            [
+                "Translate document to Japanese (ja) and open in tab",
+                "Delete all cached translations"
+            ]
         );
         opened(&mut client, actions[0]["command"].clone());
         client.finish(true);

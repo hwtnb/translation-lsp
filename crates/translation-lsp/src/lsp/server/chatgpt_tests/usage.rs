@@ -138,7 +138,7 @@ async fn unrelated_hover_is_null_when_translation_authorization_is_unavailable()
             server.administrations.insert(
                 99.into(),
                 Administration {
-                    command: SETTINGS_COMMAND.into(),
+                    change: AccountChange::Never,
                     ticket: 1,
                     stop,
                     deadline,

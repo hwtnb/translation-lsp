@@ -113,6 +113,9 @@ fn anthropic_without_a_key_file_starts_and_reports_the_missing_file() {
             DOCUMENT_COMMAND,
             CANCEL_COMMAND,
             CANCEL_ALL_COMMAND,
+            DELETE_COMMAND,
+            DELETE_DOCUMENT_COMMAND,
+            DELETE_ALL_COMMAND,
             "translation-lsp.save-anthropic-key",
             "translation-lsp.remove-anthropic-key",
             SETTINGS_COMMAND

@@ -9,6 +9,18 @@ const AUTOMATIC_ON: &str =
 const AUTOMATIC_OFF: &str = "Automatic translation: Off until the language server restarts";
 /// The button of a translation card that translates its range again.
 pub(super) const RETRY: &str = "Retry translating this text";
+/// The button of a translation card that removes its cached result.
+pub(super) const DELETE: &str = "Delete translation";
+pub(super) const DELETE_DOCUMENT: &str = "Delete translations of this document";
+pub(super) const DELETE_ALL: &str = "Delete all cached translations";
+const DELETE_ALL_QUESTION: &str = "Delete all cached translations? Comments and selections are translated again when you ask for them.";
+const CONFIRM_DELETE: &str = "Delete";
+
+pub(super) enum Card {
+    Translation(TranslationTarget),
+    ConfirmDeleteAll,
+}
+
 /// The Markdown of a translation card around `text`. Zed draws a rule in a
 /// card with no color, so the rules only set the text apart from the card's
 /// header and button with space.
@@ -26,26 +38,42 @@ impl<P: TranslationProvider> Server<P> {
     }
 
     /// The titles of the server menu, each with the command it runs.
-    pub(super) fn menu_choices(&self) -> Vec<(String, String)> {
+    pub(super) fn menu_choices(&self, uri: Option<&Uri>) -> RequestResult<Vec<Command>> {
         let automatic = if self.settings.features.automatic_paused() {
-            ("Turn on automatic translation", AUTOMATIC_ON_COMMAND)
+            (
+                "Turn on automatic translation",
+                ServerCommand::Automatic(true),
+            )
         } else {
-            ("Turn off automatic translation", AUTOMATIC_OFF_COMMAND)
+            (
+                "Turn off automatic translation",
+                ServerCommand::Automatic(false),
+            )
         };
         [automatic]
             .into_iter()
             .chain(
                 P::capabilities()
                     .account_menu
-                    .map(|title| (title, SETTINGS_COMMAND)),
+                    .map(|title| (title, ServerCommand::Account(SETTINGS_COMMAND.into()))),
             )
             .chain(
                 self.ui
                     .capabilities
                     .show_document
-                    .then_some(("Open Zed settings file", OPEN_SETTINGS_COMMAND)),
+                    .then_some(("Open Zed settings file", ServerCommand::OpenSettings)),
             )
-            .map(|(title, command)| (title.to_owned(), command.to_owned()))
+            .chain(uri.filter(|uri| self.cache.has_document(uri)).map(|uri| {
+                (
+                    DELETE_DOCUMENT,
+                    ServerCommand::DeleteDocumentTranslations(uri.clone()),
+                )
+            }))
+            .chain(
+                (!self.cache.is_empty())
+                    .then_some((DELETE_ALL, ServerCommand::DeleteAllTranslations)),
+            )
+            .map(|(title, command)| command.command(title.into()))
             .collect()
     }
 
@@ -86,18 +114,42 @@ impl<P: TranslationProvider> Server<P> {
         lenses
     }
 
-    /// Translates the range of a card again if the user pressed its Retry.
+    pub(super) fn confirm_delete_all(&mut self) -> Result<(), ProviderError> {
+        let id = self
+            .ui
+            .show_card(MessageType::INFO, DELETE_ALL_QUESTION, &[CONFIRM_DELETE])?;
+        self.cards.insert(id, Card::ConfirmDeleteAll);
+        Ok(())
+    }
+
+    /// Runs the action selected on a card that is still open.
     pub(super) fn card_response(&mut self, response: Response) -> ServerResult<()> {
-        let Some(target) = self.cards.remove(&response.id) else {
+        let Some(card) = self.cards.remove(&response.id) else {
             return Ok(());
         };
-        if !matches!(&response.response_result, Ok(value) if value["title"] == RETRY) {
-            return Ok(());
+
+        let title = response
+            .response_result
+            .as_ref()
+            .ok()
+            .and_then(|value| value["title"].as_str());
+        match (card, title) {
+            (Card::ConfirmDeleteAll, Some(CONFIRM_DELETE)) => {
+                self.clear_previews();
+                self.ui.refresh_lenses()?;
+            }
+            (Card::Translation(target), Some(DELETE)) => self.delete_translation(&target)?,
+            (Card::Translation(target), Some(RETRY)) => {
+                // A retry answers no request, so the card's request stands in for one.
+                if let Err(error) =
+                    self.queue(response.id, target, PendingReply::Retry { notice: false })
+                {
+                    self.ui.error(&error.message)?;
+                }
+            }
+            _ => (),
         }
-        // A retry answers no request, so the card's request stands in for one.
-        if let Err(error) = self.queue(response.id, target, PendingReply::Retry { notice: false }) {
-            self.ui.error(&error.message)?;
-        }
+
         Ok(())
     }
 

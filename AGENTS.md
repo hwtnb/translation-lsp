@@ -134,6 +134,7 @@ relative to the repository root.
   contents. Hover translations stay in memory. Explicit document previews may
   write completed translations to temporary files for standard editor viewing;
   remove those files on server exit and preserve user-created Save As copies.
+  Deleting cached results leaves open translation tabs and accepted work in place.
 - HTTP/OIDC tests use local fixtures and synthetic credentials. Generate test
   signing keys in memory rather than committing real or fixed private keys.
 

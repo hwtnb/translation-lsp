@@ -62,7 +62,7 @@ impl<P: TranslationProvider> Server<P> {
             return Ok(());
         };
         let operation = self.administrations.remove(&id).unwrap();
-        match Self::account_change(&operation.command) {
+        match operation.change {
             AccountChange::AtOnce => self.clear_previews(),
             // The user agreed, and the command changed what translations
             // are made with.
@@ -77,15 +77,15 @@ impl<P: TranslationProvider> Server<P> {
                 ErrorCode::RequestFailed,
                 "Account operation timed out",
             )),
-            Ok(Administered::AccountChoice(choice)) => {
+            Ok(Administered::Choice(choice)) => {
                 let result = match choice {
                     None => Ok(Some(Value::Null)),
-                    Some(command) => self.execute_command(
+                    Some(choice) => self.execute_command(
                         connection,
                         id.clone(),
                         ExecuteCommandParams {
-                            command,
-                            arguments: Vec::new(),
+                            command: choice.command,
+                            arguments: choice.arguments.unwrap_or_default(),
                             work_done_progress_params: Default::default(),
                         },
                     ),
@@ -114,14 +114,12 @@ impl<P: TranslationProvider> Server<P> {
         respond(connection, id, result)
     }
 
-    /// Starts the account menu, an account command of the provider, the
-    /// server menu, or the opening of Zed's settings file. Its request is
-    /// answered when the operation finishes.
+    /// Starts a job on the administration worker and answers its request when it finishes.
     pub(super) fn start_administration(
         &mut self,
         connection: &Connection,
         id: RequestId,
-        command: String,
+        task: Task<P::Context>,
     ) -> RequestResult<Option<Value>> {
         if !self.administrations.is_empty() {
             return Err(failure(
@@ -129,7 +127,10 @@ impl<P: TranslationProvider> Server<P> {
                 "An account operation is in progress",
             ));
         }
-        let change = Self::account_change(&command);
+        let change = match &task {
+            Task::Administration { command, .. } => Self::account_change(command),
+            _ => AccountChange::Never,
+        };
         if change == AccountChange::AtOnce {
             self.cancel_all_work(connection)
                 .map_err(|_| failure(ErrorCode::InternalError, "Could not cancel pending work"))?;
@@ -148,23 +149,7 @@ impl<P: TranslationProvider> Server<P> {
             .try_send(Job {
                 ticket,
                 deadline: receiver,
-                task: match command.as_str() {
-                    SETTINGS_COMMAND => Task::AccountMenu {
-                        ui: self.ui.clone(),
-                    },
-                    MENU_COMMAND => Task::Menu {
-                        ui: self.ui.clone(),
-                        message: self.menu_message().into(),
-                        choices: self.menu_choices(),
-                    },
-                    OPEN_SETTINGS_COMMAND => Task::OpenSettings {
-                        ui: self.ui.clone(),
-                    },
-                    _ => Task::Administration {
-                        command: command.clone(),
-                        ui: self.ui.clone(),
-                    },
-                },
+                task,
             })
             .map_err(|_| {
                 failure(
@@ -175,7 +160,7 @@ impl<P: TranslationProvider> Server<P> {
         self.administrations.insert(
             id,
             Administration {
-                command,
+                change,
                 ticket,
                 stop,
                 deadline,

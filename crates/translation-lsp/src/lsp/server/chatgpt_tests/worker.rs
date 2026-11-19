@@ -187,7 +187,7 @@ async fn explicit_preview_reports_admission_refresh_and_stream_failures() {
             if mode == "admission" || mode == "refresh" {
                 1
             } else {
-                3
+                5
             }
         );
         assert!(client.receiver.try_recv().is_err());

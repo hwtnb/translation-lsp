@@ -24,11 +24,11 @@ pub(super) enum Task<C> {
     AccountMenu {
         ui: Ui,
     },
-    /// A menu of server commands, each a title and the command it runs.
+    /// The server menu and the commands it offers.
     Menu {
         ui: Ui,
         message: String,
-        choices: Vec<(String, String)>,
+        choices: Vec<Command>,
     },
     /// Opens Zed's settings file in the editor.
     OpenSettings {
@@ -61,10 +61,10 @@ pub(super) struct Completion<T> {
     pub(super) result: Result<T, ProviderError>,
 }
 
-/// What an account operation gives.
+/// What an administration job gives.
 pub(super) enum Administered {
     /// The command chosen from the account menu or another menu, or none.
-    AccountChoice(Option<String>),
+    Choice(Option<Command>),
     /// An operation that has nothing to tell.
     Done,
     /// A message for the user.
@@ -196,11 +196,11 @@ pub(super) async fn run_job<P: TranslationProvider>(
                     .map(|command| command.title.to_owned())
                     .collect();
                 ui.choose("", &titles).await.map(|choice| {
-                    Administered::AccountChoice(choice.and_then(|title| {
+                    Administered::Choice(choice.and_then(|title| {
                         commands
                             .into_iter()
                             .find(|command| command.title == title)
-                            .map(|command| command.command.to_owned())
+                            .map(|command| Command::new(title, command.command.into(), None))
                     }))
                 })
             })
@@ -213,14 +213,14 @@ pub(super) async fn run_job<P: TranslationProvider>(
             choices,
         } => {
             let result = until_deadline(&mut deadline, || true, async {
-                let titles: Vec<_> = choices.iter().map(|(title, _)| title.clone()).collect();
+                let titles: Vec<_> = choices
+                    .iter()
+                    .map(|command| command.title.clone())
+                    .collect();
                 ui.choose(&message, &titles).await.map(|choice| {
-                    Administered::AccountChoice(choice.and_then(|title| {
-                        choices
-                            .into_iter()
-                            .find(|(choice, _)| *choice == title)
-                            .map(|(_, command)| command)
-                    }))
+                    Administered::Choice(
+                        choice.and_then(|title| choices.into_iter().find(|c| c.title == title)),
+                    )
                 })
             })
             .await;

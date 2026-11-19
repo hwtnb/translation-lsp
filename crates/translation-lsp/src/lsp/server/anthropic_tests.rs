@@ -97,6 +97,9 @@ async fn anthropic_declares_automatic_selection_and_the_key_menu() {
             DOCUMENT_COMMAND,
             CANCEL_COMMAND,
             CANCEL_ALL_COMMAND,
+            DELETE_COMMAND,
+            DELETE_DOCUMENT_COMMAND,
+            DELETE_ALL_COMMAND,
             "translation-lsp.save-anthropic-key",
             "translation-lsp.remove-anthropic-key",
             SETTINGS_COMMAND

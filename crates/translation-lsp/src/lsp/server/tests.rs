@@ -502,6 +502,9 @@ fn provider_capabilities_drive_commands_and_account_actions() {
             DOCUMENT_COMMAND,
             CANCEL_COMMAND,
             CANCEL_ALL_COMMAND,
+            DELETE_COMMAND,
+            DELETE_DOCUMENT_COMMAND,
+            DELETE_ALL_COMMAND,
             "synthetic.inspect",
             SETTINGS_COMMAND
         ]

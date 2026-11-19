@@ -12,6 +12,7 @@ use tokio::{runtime, sync::mpsc as queue};
 type JobSender<C> = queue::Sender<Job<C>>;
 type JobReceiver<C> = queue::Receiver<Job<C>>;
 use commands::ServerCommand;
+use menu::Card;
 use scheduler::{PendingReply, Scheduler, Sharing, Translation, TranslationRequest};
 use selection::Selection;
 #[cfg(test)]
@@ -117,6 +118,9 @@ const TRANSLATION_READY: &str = "Translation ready. Hover over the selected text
 const WORKER_EVENT_CHANNEL_CAPACITY: usize = 8;
 const CANCEL_COMMAND: &str = "translation-lsp.cancel-range";
 const CANCEL_ALL_COMMAND: &str = "translation-lsp.cancel-all";
+const DELETE_COMMAND: &str = "translation-lsp.delete-translation";
+const DELETE_DOCUMENT_COMMAND: &str = "translation-lsp.delete-document-translations";
+const DELETE_ALL_COMMAND: &str = "translation-lsp.delete-all-translations";
 
 #[derive(Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -129,7 +133,7 @@ struct TranslationTarget {
 }
 
 struct Administration<C> {
-    command: String,
+    change: AccountChange,
     ticket: u64,
     stop: watch::Sender<Option<Instant>>,
     deadline: Instant,
@@ -170,7 +174,7 @@ struct Server<P: TranslationProvider> {
     lens_tickets: Vec<u64>,
     /// The ranges of the cards that show translations, by the requests that
     /// tell which button the user pressed.
-    cards: HashMap<RequestId, TranslationTarget>,
+    cards: HashMap<RequestId, Card>,
 }
 
 pub fn run_stdio() -> ServerResult<()> {
@@ -384,6 +388,9 @@ pub(crate) fn capabilities<P: TranslationProvider>() -> InitializeResult {
                     DOCUMENT_COMMAND.to_owned(),
                     CANCEL_COMMAND.to_owned(),
                     CANCEL_ALL_COMMAND.to_owned(),
+                    DELETE_COMMAND.to_owned(),
+                    DELETE_DOCUMENT_COMMAND.to_owned(),
+                    DELETE_ALL_COMMAND.to_owned(),
                 ]
                 .into_iter()
                 .chain(
@@ -749,34 +756,44 @@ impl<P: TranslationProvider> Server<P> {
             actions.extend(menu);
             return Ok(actions);
         }
-        let retry_range = if params.range.start == params.range.end && self.check_cache().is_ok() {
-            self.cache
-                .failed_range(&params.text_document.uri, params.range.start)
+
+        let uri = &params.text_document.uri;
+        let cursor = params.range.start;
+        let empty = cursor == params.range.end;
+        let prose = self
+            .documents
+            .get(uri)
+            .is_some_and(Document::supports_document_preview);
+        let cache_is_current =
+            (empty || (prose && !self.cache.is_empty())) && self.check_cache().is_ok();
+        let retry_range = if empty && cache_is_current {
+            self.cache.failed_range(uri, cursor)
         } else {
             None
         };
-        let Some(document) = self.documents.get(&params.text_document.uri) else {
+        let Some(document) = self.documents.get(uri) else {
             return Ok(actions);
         };
+
         // Zed lists the actions of the server that answers first first, which
         // is this one. In code, the menu therefore appears only where a failed
         // translation may need it, to stay out of the way of other servers.
-        if document.supports_document_preview() || retry_range.is_some() {
+        if prose || retry_range.is_some() {
             actions.extend(menu);
         }
         let mut translations = Vec::new();
+        let target = |range| TranslationTarget {
+            uri: uri.clone(),
+            version: document.version,
+            session: document.session,
+            range,
+            target_language: self.settings.target_language.clone(),
+        };
         let mut add_action = |range: Range,
                               command: fn(TranslationTarget) -> ServerCommand,
                               title: String|
          -> RequestResult<()> {
-            let target = TranslationTarget {
-                uri: params.text_document.uri.clone(),
-                version: document.version,
-                session: document.session,
-                range,
-                target_language: self.settings.target_language.clone(),
-            };
-            translations.push(command(target).action(title)?);
+            translations.push(command(target(range)).action(title)?);
             Ok(())
         };
         if let Some(range) = retry_range
@@ -784,7 +801,7 @@ impl<P: TranslationProvider> Server<P> {
                 text.len() <= self.settings.translation_limits.input_kib.hover.bytes()
             })
             && !self.scheduler.translations().values().any(|work| {
-                work.target.uri == params.text_document.uri
+                &work.target.uri == uri
                     && work.target.range == range
                     && work.serves(Output::Range, self.sharing())
             })
@@ -814,10 +831,7 @@ impl<P: TranslationProvider> Server<P> {
                 ),
             )?;
         }
-        if enabled(Feature::DocumentAction)
-            && document.supports_document_preview()
-            && self.ui.capabilities.show_document
-        {
+        if enabled(Feature::DocumentAction) && prose && self.ui.capabilities.show_document {
             let (range, subject) = if params.range.start == params.range.end {
                 (document.full_range(), "document")
             } else {
@@ -837,6 +851,34 @@ impl<P: TranslationProvider> Server<P> {
             }
         }
         translations.extend(actions);
+
+        if prose && cache_is_current {
+            if empty
+                && let Some(text) = document.text()
+                && let Ok(offset) = document.offset(cursor)
+                && let Some(range) = self.cache.visible_range(uri, cursor, |preview| {
+                    hover_eligible(preview, cursor, &text[offset..])
+                })
+            {
+                translations.push(ServerCommand::DeleteTranslation(target(range)).action(
+                    format!(
+                        "Delete translation of lines {}-{}",
+                        range.start.line + 1,
+                        range.end.line + 1,
+                    ),
+                )?);
+            }
+            if self.cache.has_document(uri) {
+                translations.push(
+                    ServerCommand::DeleteDocumentTranslations(uri.clone())
+                        .action(menu::DELETE_DOCUMENT.into())?,
+                );
+            }
+            if !self.cache.is_empty() {
+                translations
+                    .push(ServerCommand::DeleteAllTranslations.action(menu::DELETE_ALL.into())?);
+            }
+        }
         Ok(translations)
     }
 
@@ -974,11 +1016,12 @@ impl<P: TranslationProvider> Server<P> {
                 ranges.push(range);
             }
         }
-        lenses.extend(
-            ranges
-                .into_iter()
-                .map(|range| lens(range, "Settings".into(), MENU_COMMAND, None)),
-        );
+        let menu = ServerCommand::Menu(Some(uri)).command("Settings".into())?;
+        lenses.extend(ranges.into_iter().map(|range| CodeLens {
+            range,
+            command: Some(menu.clone()),
+            data: None,
+        }));
         if !comment_lines {
             let mut menu = self.menu_lenses(None);
             menu.append(&mut lenses);
@@ -1021,14 +1064,8 @@ impl<P: TranslationProvider> Server<P> {
         let Ok(offset) = document.offset(position.position) else {
             return Ok(Some(Value::Null));
         };
-        let end_is_clear = text[offset..]
-            .chars()
-            .next()
-            .is_none_or(char::is_whitespace);
-        // A comment starts at its opening mark, so where the end of a comment
-        // is clear, no other comment starts.
         let eligible = |preview: &Preview<P::Context>| {
-            !preview.is_comment || preview.range.end != position.position || end_is_clear
+            hover_eligible(preview, position.position, &text[offset..])
         };
         if let Some(hover) =
             self.cache
@@ -1166,6 +1203,14 @@ impl<P: TranslationProvider> Drop for Server<P> {
     }
 }
 
+fn hover_eligible<C>(preview: &Preview<C>, position: Position, remaining: &str) -> bool {
+    // A comment starts at its opening mark, so where the end of a comment
+    // is clear, no other comment starts.
+    !preview.is_comment
+        || preview.range.end != position
+        || remaining.chars().next().is_none_or(char::is_whitespace)
+}
+
 /// A CodeLens above `range` that runs `command`.
 fn lens(range: Range, title: String, command: &str, arguments: Option<Vec<Value>>) -> CodeLens {
     CodeLens {
@@ -1288,5 +1333,7 @@ mod api_key_tests;
 mod chatgpt_options_tests;
 #[cfg(test)]
 mod chatgpt_tests;
+#[cfg(test)]
+mod deletion_tests;
 #[cfg(test)]
 mod tests;

@@ -144,25 +144,47 @@ impl<C: Clone + PartialEq> Cache<C> {
     pub fn clear(&mut self) {
         self.entries.clear();
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn has_document(&self, uri: &Uri) -> bool {
+        self.entries.iter().any(|e| &e.uri == uri)
+    }
+
     pub fn remove_document(&mut self, uri: &Uri) {
         self.entries.retain(|e| &e.uri != uri);
     }
+
+    pub fn remove_range(&mut self, uri: &Uri, range: Range) {
+        self.entries
+            .retain(|e| &e.uri != uri || e.stored.range() != range);
+    }
+
     pub fn retain_context(&mut self, context: &C) {
         self.entries.retain(|e| e.stored.context() == context);
     }
 
-    /// Marks the newest entry of `uri` that `select` accepts as used.
-    fn use_newest(&mut self, uri: &Uri, select: impl Fn(&Stored<C>) -> bool) -> Option<&Stored<C>> {
-        let index = self
-            .entries
+    fn newest(&self, uri: &Uri, select: impl Fn(&Stored<C>) -> bool) -> Option<usize> {
+        self.entries
             .iter()
             .enumerate()
             .filter(|(_, e)| &e.uri == uri && select(&e.stored))
             .max_by_key(|(_, e)| e.ticket)
-            .map(|(i, _)| i)?;
+            .map(|(i, _)| i)
+    }
+
+    fn use_entry(&mut self, index: usize) -> &Stored<C> {
         self.clock += 1;
         self.entries[index].used = self.clock;
-        Some(&self.entries[index].stored)
+        &self.entries[index].stored
+    }
+
+    /// Marks the newest entry of `uri` that `select` accepts as used.
+    fn use_newest(&mut self, uri: &Uri, select: impl Fn(&Stored<C>) -> bool) -> Option<&Stored<C>> {
+        let index = self.newest(uri, select)?;
+        Some(self.use_entry(index))
     }
 
     pub fn exact(&mut self, uri: &Uri, range: Range, output: Output) -> Option<Preview<C>> {
@@ -221,15 +243,40 @@ impl<C: Clone + PartialEq> Cache<C> {
     }
 
     pub fn failed_range(&self, uri: &Uri, position: Position) -> Option<Range> {
-        self.entries
-            .iter()
-            .filter(|entry| {
-                &entry.uri == uri
-                    && entry.stored.is_failure()
-                    && contains(entry.stored.range(), Range::new(position, position))
+        self.newest_failure_at(uri, position)
+            .map(|index| self.entries[index].stored.range())
+    }
+
+    fn newest_translation_at(
+        &self,
+        uri: &Uri,
+        position: Position,
+        eligible: impl Fn(&Preview<C>) -> bool,
+    ) -> Option<usize> {
+        self.newest(uri, |stored| {
+            stored.translation(Output::Range).is_some_and(|preview| {
+                contains(preview.range, Range::new(position, position)) && eligible(preview)
             })
-            .max_by_key(|entry| entry.ticket)
-            .map(|entry| entry.stored.range())
+        })
+    }
+
+    fn newest_failure_at(&self, uri: &Uri, position: Position) -> Option<usize> {
+        self.newest(uri, |stored| {
+            stored.is_failure() && contains(stored.range(), Range::new(position, position))
+        })
+    }
+
+    /// The range of the translation or failure that Hover would show from the cache.
+    pub fn visible_range(
+        &self,
+        uri: &Uri,
+        position: Position,
+        eligible: impl Fn(&Preview<C>) -> bool,
+    ) -> Option<Range> {
+        let index = self
+            .newest_translation_at(uri, position, eligible)
+            .or_else(|| self.newest_failure_at(uri, position))?;
+        Some(self.entries[index].stored.range())
     }
 
     /// The Hover of the newest range translation at `position` that `eligible`
@@ -240,25 +287,16 @@ impl<C: Clone + PartialEq> Cache<C> {
         position: Position,
         eligible: impl Fn(&Preview<C>) -> bool,
     ) -> Option<Hover> {
-        self.use_newest(uri, |stored| {
-            stored.translation(Output::Range).is_some_and(|preview| {
-                preview.range.start <= position
-                    && position <= preview.range.end
-                    && eligible(preview)
-            })
-        })
-        .and_then(|stored| stored.translation(Output::Range))
-        .and_then(|preview| preview.hover(position))
+        let index = self.newest_translation_at(uri, position, eligible)?;
+        self.use_entry(index)
+            .translation(Output::Range)?
+            .hover(position)
     }
 
     /// The Hover of the newest failure at `position`.
     pub fn failure_hover(&mut self, uri: &Uri, position: Position) -> Option<Hover> {
-        let Stored::Failure { range, message, .. } = self.use_newest(uri, |stored| {
-            stored.is_failure()
-                && stored.range().start <= position
-                && position <= stored.range().end
-        })?
-        else {
+        let index = self.newest_failure_at(uri, position)?;
+        let Stored::Failure { range, message, .. } = self.use_entry(index) else {
             return None;
         };
         Some(Hover {

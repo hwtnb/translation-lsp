@@ -88,6 +88,9 @@ fn each_provider_declares_its_name_and_key_commands() {
         DOCUMENT_COMMAND,
         CANCEL_COMMAND,
         CANCEL_ALL_COMMAND,
+        DELETE_COMMAND,
+        DELETE_DOCUMENT_COMMAND,
+        DELETE_ALL_COMMAND,
     ];
     for ((name, commands), expected_name, keys) in [
         (
