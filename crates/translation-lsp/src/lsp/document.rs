@@ -16,6 +16,17 @@ mod indexed_text;
 
 use indexed_text::IndexedText;
 
+/// A comment group with words in it.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Comment {
+    pub range: Range,
+    /// The length of its text in the document, in bytes, which the input
+    /// limits apply to.
+    pub length: usize,
+    /// The body that a translation of it sends.
+    pub body: String,
+}
+
 pub(crate) struct TranslationInput {
     pub source: Source,
     pub is_comment: bool,
@@ -192,23 +203,24 @@ impl Document {
         ))
     }
 
-    /// The ranges of the comment groups with words in them, in order.
-    pub fn comment_ranges(&mut self, uri: &Uri, limit: Duration) -> Vec<Range> {
-        self.read_comments(uri, limit);
-        let (Some(indexed), Reading::Done(comments)) = (self.text.as_ref(), &self.comments) else {
+    /// The comment groups with words in them, in order.
+    pub fn comments(&mut self, uri: &Uri, limit: Duration) -> Vec<Comment> {
+        let groups = self.comment_groups(uri, limit);
+        let Some(indexed) = self.text.as_ref() else {
             return Vec::new();
         };
-        let text = indexed.as_str();
-        comments
-            .groups(text)
+        groups
             .into_iter()
-            .filter(|group| !comments.body(text, group.clone()).trim().is_empty())
-            .filter_map(|group| {
-                let bytes = comments.range(group);
-                Some(Range::new(
+            .filter_map(|(bytes, body)| {
+                let range = Range::new(
                     indexed.position(bytes.start).ok()?,
                     indexed.position(bytes.end).ok()?,
-                ))
+                );
+                Some(Comment {
+                    range,
+                    length: bytes.len(),
+                    body,
+                })
             })
             .collect()
     }
@@ -216,6 +228,14 @@ impl Document {
     /// The bodies of the comment groups with words in them, as a translation
     /// of each sends them.
     pub fn comment_bodies(&mut self, uri: &Uri, limit: Duration) -> Vec<String> {
+        self.comment_groups(uri, limit)
+            .into_iter()
+            .map(|(_, body)| body)
+            .collect()
+    }
+
+    /// The bytes and the body of each comment group with words in it.
+    fn comment_groups(&mut self, uri: &Uri, limit: Duration) -> Vec<(ByteRange<usize>, String)> {
         self.read_comments(uri, limit);
         let (Some(indexed), Reading::Done(comments)) = (self.text.as_ref(), &self.comments) else {
             return Vec::new();
@@ -224,8 +244,8 @@ impl Document {
         comments
             .groups(text)
             .into_iter()
-            .map(|group| comments.body(text, group))
-            .filter(|body| !body.trim().is_empty())
+            .map(|group| (comments.range(group.clone()), comments.body(text, group)))
+            .filter(|(_, body)| !body.trim().is_empty())
             .collect()
     }
 
@@ -278,16 +298,24 @@ mod tests {
     const LIMIT: Duration = Duration::from_secs(60);
 
     #[test]
-    fn comment_ranges_list_the_groups_with_words_in_order() {
+    fn comments_list_the_groups_with_words_in_order() {
         let uri: Uri = "untitled:sample".parse().unwrap();
         // A comment of only decorations has no words.
         let text = "// first\n// second\nfn f() {}\n//\n/**\n *\n */\n/* third */ /* open";
         let mut document = Document::new(1, 1, "rust".into(), text.into());
         assert_eq!(
-            document.comment_ranges(&uri, LIMIT),
+            document.comments(&uri, LIMIT),
             [
-                Range::new(Position::new(0, 0), Position::new(1, 9)),
-                Range::new(Position::new(7, 0), Position::new(7, 11)),
+                Comment {
+                    range: Range::new(Position::new(0, 0), Position::new(1, 9)),
+                    length: 18,
+                    body: "first\nsecond".to_owned()
+                },
+                Comment {
+                    range: Range::new(Position::new(7, 0), Position::new(7, 11)),
+                    length: 11,
+                    body: "third ".to_owned()
+                },
             ]
         );
     }
@@ -298,8 +326,12 @@ mod tests {
         let text = "/**\n *\n */\na {}\n/**\n * Theme colors.\n */";
         let mut document = Document::new(1, 1, "css".into(), text.into());
         assert_eq!(
-            document.comment_ranges(&uri, LIMIT),
-            [Range::new(Position::new(4, 0), Position::new(6, 3))]
+            document.comments(&uri, LIMIT),
+            [Comment {
+                range: Range::new(Position::new(4, 0), Position::new(6, 3)),
+                length: 24,
+                body: "Theme colors.".to_owned()
+            }]
         );
     }
 

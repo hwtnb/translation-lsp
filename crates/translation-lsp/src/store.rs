@@ -114,6 +114,8 @@ impl Store {
                     order: BTreeMap::new(),
                     clock: 0,
                     changes: 0,
+                    #[cfg(test)]
+                    reads: 0,
                     bytes: 0,
                     count_limit: limits.cache.entries,
                     byte_limit: limits
@@ -165,14 +167,7 @@ impl Store {
     pub async fn get(&self, key: Key) -> Option<Content> {
         let (replied, changes) = {
             let mut memory = self.memory();
-            if let Some(entry) = memory.get(&key) {
-                let content = entry.content.clone();
-                if let Some(disk) = self.enabled_disk()
-                    && entry.touched.elapsed() >= TOUCH_INTERVAL
-                {
-                    entry.touched = Instant::now();
-                    disk.send(Operation::Touch(key));
-                }
+            if let Some(content) = self.use_memory(&mut memory, key) {
                 return Some(content);
             }
             let disk = self.enabled_disk()?;
@@ -185,6 +180,10 @@ impl Store {
             if !disk.send(read) {
                 return None;
             }
+            #[cfg(test)]
+            {
+                memory.reads += 1;
+            }
             (replied, memory.changes)
         };
         let content = replied.await.ok()??;
@@ -194,6 +193,23 @@ impl Store {
             memory.insert(key, content.clone());
         }
         Some(content)
+    }
+
+    /// What `key` keeps in memory, without reading the disk.
+    pub fn peek(&self, key: Key) -> Option<Content> {
+        self.use_memory(&mut self.memory(), key)
+    }
+
+    /// What `key` keeps in memory, marking its file as used now and then.
+    fn use_memory(&self, memory: &mut Memory, key: Key) -> Option<Content> {
+        let entry = memory.get(&key)?;
+        if let Some(disk) = self.enabled_disk()
+            && entry.touched.elapsed() >= TOUCH_INTERVAL
+        {
+            entry.touched = Instant::now();
+            disk.send(Operation::Touch(key));
+        }
+        Some(entry.content.clone())
     }
 
     /// Keeps `content` for `key` in memory and, with `disk_cache`, on disk,
@@ -237,6 +253,13 @@ impl Store {
         }
     }
 
+    /// How many times translations were stored or forgotten. Keeping what
+    /// was read from disk in memory, or dropping what was used least
+    /// recently, is not counted.
+    pub fn changes(&self) -> u64 {
+        self.memory().changes
+    }
+
     /// Whether memory keeps no translation.
     pub fn is_empty(&self) -> bool {
         self.memory().entries.is_empty()
@@ -253,6 +276,12 @@ impl Store {
     pub(crate) fn uses(&self) -> u64 {
         self.memory().clock
     }
+
+    /// How many times the disk was read, for tests that count reads.
+    #[cfg(test)]
+    pub(crate) fn reads(&self) -> u64 {
+        self.memory().reads
+    }
 }
 
 /// The translations in memory, the least recently used dropped first beyond
@@ -264,6 +293,9 @@ struct Memory {
     clock: u64,
     /// How many times translations were stored or forgotten.
     changes: u64,
+    /// How many times the disk was read.
+    #[cfg(test)]
+    reads: u64,
     bytes: usize,
     count_limit: usize,
     byte_limit: usize,

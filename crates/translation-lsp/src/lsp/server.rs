@@ -5,6 +5,7 @@ mod menu;
 mod parts;
 mod scheduler;
 mod selection;
+mod stored_lenses;
 mod translation;
 mod worker;
 
@@ -15,6 +16,7 @@ use commands::ServerCommand;
 use menu::Card;
 use scheduler::{PendingReply, Scheduler, Sharing, Translation, TranslationRequest};
 use selection::Selection;
+use stored_lenses::Lookups;
 #[cfg(test)]
 use worker::run_job;
 use worker::{Administered, Completion, Finished, Job, Task, WorkerEvent, worker};
@@ -79,7 +81,7 @@ use crate::{
 
 use super::{
     activity::{Activity, Phase, Problem, Work},
-    document::Document,
+    document::{Comment, Document},
     preview::{
         Preview,
         cache::{Cache, Lens, Stored, overlaps},
@@ -160,6 +162,8 @@ struct Server<P: TranslationProvider> {
     cache: Cache<P::Context>,
     /// The translations kept by what was sent, which outlive the cache.
     store: Store,
+    /// The lookups of stored translations for the CodeLenses of comments.
+    lookups: Lookups<P::Context>,
     problem: Option<ShownProblem<P::Context>>,
     administrations: HashMap<RequestId, Administration<P::Context>>,
     documents: HashMap<Uri, Document>,
@@ -439,6 +443,7 @@ pub(crate) fn serve_initialized<P: TranslationProvider>(
 ) -> ServerResult<()> {
     let (finished_sender, finished) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
     let mut server = Server::start(finished_sender, provider, settings, ui, cache_directory)?;
+    let mut stored = server.lookups.results();
     let result = (|| {
         server.publish_activity();
         loop {
@@ -492,6 +497,14 @@ pub(crate) fn serve_initialized<P: TranslationProvider>(
                 recv(finished) -> event => match event? {
                     WorkerEvent::Started(ticket) => server.scheduler.mark_running(ticket),
                     WorkerEvent::Finished(completion) => server.finish(connection, completion)?,
+                },
+                recv(stored) -> looked => match looked {
+                    Ok(looked) => server.take_stored(looked)?,
+                    // The thread ended or could not start: stop looking up.
+                    Err(_) => {
+                        server.lookups.stopped();
+                        stored = never();
+                    }
                 },
                 recv(deadline) -> _ => server.expire(connection)?,
             }
@@ -582,10 +595,16 @@ impl<P: TranslationProvider> Server<P> {
                 ))
             })?;
         let activity = Activity::new(ui.clone());
+        let lookups = Lookups::new(
+            store.clone(),
+            settings.target_language.clone(),
+            settings.translation_limits.cache.entries,
+        );
         Ok(Self {
             provider,
             cache: Cache::new(settings.translation_limits),
             store,
+            lookups,
             settings,
             ui,
             activity,
@@ -698,6 +717,16 @@ impl<P: TranslationProvider> Server<P> {
     /// none: memory keeps some, or `disk_cache` keeps them on disk.
     fn has_stored(&self) -> bool {
         !self.store.is_empty() || self.store.disk_enabled()
+    }
+
+    /// Whether `Delete translations of this document` has something to
+    /// delete. Without the text of the document, which an edit it could not
+    /// apply discards, no key of what it sends can be made.
+    fn can_delete_document(&self, uri: &Uri) -> bool {
+        self.documents
+            .get(uri)
+            .is_some_and(|document| document.text().is_some())
+            && (self.cache.has_document(uri) || self.has_stored())
     }
 
     fn check_cache(&mut self) -> RequestResult<P::Context> {
@@ -914,7 +943,7 @@ impl<P: TranslationProvider> Server<P> {
                     ),
                 )?);
             }
-            if self.cache.has_document(uri) || self.has_stored() {
+            if self.can_delete_document(uri) {
                 translations.push(
                     ServerCommand::DeleteDocumentTranslations(uri.clone())
                         .action(menu::DELETE_DOCUMENT.into())?,
@@ -936,7 +965,9 @@ impl<P: TranslationProvider> Server<P> {
     /// line, and the menu takes the line above the first one, as in Markdown.
     /// A translation shows its first line, and a dictionary entry its term and
     /// first meaning; either line shows all of it. A failure gets Retry; and
-    /// one in progress, Cancel.
+    /// one in progress, Cancel. With `comment_lens`, the comments with
+    /// nothing yet are looked up in the stored translations, and CodeLenses
+    /// are asked for again when one is found.
     fn code_lenses(&mut self, params: CodeLensParams) -> RequestResult<Vec<CodeLens>> {
         let uri = params.text_document.uri;
         let limit = Duration::from_millis(self.settings.comment_parse_timeout_ms);
@@ -952,12 +983,17 @@ impl<P: TranslationProvider> Server<P> {
         let comments = if !comment_lines {
             Vec::new()
         } else {
-            let ranges = document.comment_ranges(&uri, limit);
+            let comments = document.comments(&uri, limit);
             report_comment_failure(&self.ui, &uri, document)?;
-            ranges
+            comments
         };
+        let context = self.provider.context().ok();
+        // As in Hover, results of another account or key are not shown.
+        if let Some(context) = &context {
+            self.cache.retain_context(context);
+        }
         let document = &self.documents[&uri];
-        let ready = self.provider.context().is_ok();
+        let ready = context.is_some();
         let translates = ready
             && self
                 .settings
@@ -1049,7 +1085,7 @@ impl<P: TranslationProvider> Server<P> {
                 ranges.push(lens.range);
             }
         }
-        for range in comments {
+        for &Comment { range, .. } in &comments {
             if !ranges.contains(&range) {
                 if translates {
                     lenses.push(lens(
@@ -1062,7 +1098,7 @@ impl<P: TranslationProvider> Server<P> {
                 ranges.push(range);
             }
         }
-        let menu = ServerCommand::Menu(Some(uri)).command("Settings".into())?;
+        let menu = ServerCommand::Menu(Some(uri.clone())).command("Settings".into())?;
         lenses.extend(ranges.into_iter().map(|range| CodeLens {
             range,
             command: Some(menu.clone()),
@@ -1072,6 +1108,9 @@ impl<P: TranslationProvider> Server<P> {
             let mut menu = self.menu_lenses(None);
             menu.append(&mut lenses);
             return Ok(menu);
+        }
+        if let Some(context) = context {
+            self.look_up_stored(&uri, context, comments);
         }
         Ok(lenses)
     }
@@ -1183,6 +1222,7 @@ impl<P: TranslationProvider> Server<P> {
                     let params: DidOpenTextDocumentParams = parse(notification.params)?;
                     let document = params.text_document;
                     self.invalidate(connection, &document.uri)?;
+                    self.lookups.forget(&document.uri);
                     self.next_session += 1;
                     self.documents.insert(
                         document.uri,
@@ -1207,6 +1247,7 @@ impl<P: TranslationProvider> Server<P> {
                     let params: DidCloseTextDocumentParams = parse(notification.params)?;
                     self.invalidate(connection, &params.text_document.uri)?;
                     self.documents.remove(&params.text_document.uri);
+                    self.lookups.forget(&params.text_document.uri);
                 }
                 "window/workDoneProgress/cancel" => {
                     let params: WorkDoneProgressCancelParams = parse(notification.params)?;

@@ -801,6 +801,60 @@ fn disk_cache_answers_hover_after_a_restart_without_a_request() {
     }
 }
 
+/// With `disk_cache`, a server started again shows the translation of a
+/// comment it translated before in the comment's CodeLens before Hover asks,
+/// without a request: the second server fails every request it sends.
+#[cfg(not(windows))]
+#[test]
+fn disk_cache_shows_a_stored_translation_in_a_code_lens_after_a_restart() {
+    let uri = "file:///restart-lens.rs";
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let hover = json!({"textDocument": {"uri": uri}, "position": range["start"]});
+    let home = Home::new();
+    let options = json!({"disk_cache": {"enabled": true}});
+    let mut client = Client::configured_in(&[], false, false, options, false, home.clone());
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let shown = client.call("textDocument/hover", hover.clone()).unwrap();
+    assert_preview(&shown, COMMENT, COMMENT_JA, &range);
+    client.finish(true);
+    drop(client);
+
+    // The editor asks for CodeLenses again when the server asks it to.
+    let mut client = Client::spawn_in(&["--mock-fail"], false, false, home);
+    client
+        .call(
+            "initialize",
+            json!({
+                "initializationOptions": {"provider": {"name": "mock"}, "disk_cache": {"enabled": true}},
+                "processId": null,
+                "rootUri": null,
+                "capabilities": {
+                    "general": { "positionEncodings": ["utf-16"] },
+                    "workspace": {"codeLens": {"refreshSupport": true}},
+                }
+            }),
+        )
+        .unwrap();
+    client.notify("initialized", json!({}));
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    assert_eq!(
+        lens_titles(&lenses(&mut client, uri)),
+        ["Translate", "Settings"]
+    );
+    while client.lens_refreshes.is_empty() {
+        client.pump();
+    }
+    let found = lenses(&mut client, uri);
+    assert_eq!(
+        lens_titles(&found),
+        [COMMENT_JA.lines().next().unwrap(), "Settings"]
+    );
+    assert!(found.iter().all(|lens| lens["range"] == range));
+    let shown = client.call("textDocument/hover", hover).unwrap();
+    assert_preview(&shown, COMMENT, COMMENT_JA, &range);
+    client.finish(true);
+}
+
 #[test]
 fn deleting_a_cached_comment_refreshes_its_lens_and_next_hover_translates_again() {
     let uri = "file:///delete-lens.rs";
@@ -2292,6 +2346,13 @@ fn invalid_incremental_sync_discards_cache_and_recovers_with_full_text() {
     let action = client.action(uri, range.clone());
     let execution = client.execute(action);
     client.receive(execution, TIMEOUT).unwrap();
+    // The translation is stored before the update.
+    assert!(
+        client.notice()["message"]
+            .as_str()
+            .unwrap()
+            .ends_with(READY)
+    );
     client.change(
         uri,
         2,
@@ -2301,7 +2362,16 @@ fn invalid_incremental_sync_discards_cache_and_recovers_with_full_text() {
         }]),
     );
     assert!(client.hover(uri, range["start"].clone()).is_null());
-    assert_eq!(client.actions(uri, range.clone()), json!([]));
+    // Without its text, the document has no translation to delete of its
+    // own, while the stored one may still be deleted with the others.
+    let actions = client.actions(uri, range.clone());
+    let titles: Vec<_> = actions
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|action| action["title"].as_str().unwrap())
+        .collect();
+    assert_eq!(titles, ["Delete all cached translations"]);
     client.change(uri, 3, json!([{ "text": MARKDOWN_DOCUMENT }]));
     let action = client.action(uri, range.clone());
     let execution = client.execute(action);

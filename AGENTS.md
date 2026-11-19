@@ -123,7 +123,13 @@ relative to the repository root.
   position (`lsp/preview/cache.rs`). Translations kept by what was sent
   (`store.rs`) stay across both: the key of each holds the text, the
   provider's identity, and the languages, never the document, the position,
-  or the account. A retry sends and replaces the stored result.
+  or the account. A retry sends and replaces the stored result. CodeLenses
+  of comments that nothing overlaps look up their stored translations away
+  from the request loop (`lsp/server/stored_lenses.rs`) and put them into the
+  cache by position, without a request or a slot, only while the document
+  is synchronized and it, the stored translations, and the authentication
+  context are as the lookup started from, where nothing took their range,
+  and without dropping another result.
   Hover waiters retain independent cancellation and deadlines, including queue
   waiting time. Accepted comment Hover work survives its response cancellation or
   expiry, shares the automatic admission limit with selection automation, and

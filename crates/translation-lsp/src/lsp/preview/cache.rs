@@ -271,6 +271,21 @@ impl<C: Clone + PartialEq> Cache<C> {
         lenses
     }
 
+    /// Whether no range result of `uri`, whether a translation, a failure, or
+    /// a text found in the target language, overlaps `range`.
+    pub fn is_vacant(&self, uri: &Uri, range: Range) -> bool {
+        !self.entries.iter().any(|e| {
+            &e.uri == uri && e.stored.output() == Output::Range && overlaps(e.stored.range(), range)
+        })
+    }
+
+    /// Whether a translation of `bytes` fits in without dropping another
+    /// result.
+    pub fn has_room(&self, bytes: usize) -> bool {
+        let used: usize = self.entries.iter().map(|e| e.stored.text().len()).sum();
+        self.entries.len() < self.count_limit && used + bytes <= self.byte_limit
+    }
+
     pub fn failed_range(&self, uri: &Uri, position: Position) -> Option<Range> {
         self.newest_failure_at(uri, position)
             .map(|index| self.entries[index].stored.range())

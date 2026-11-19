@@ -14,9 +14,11 @@ use uuid::Uuid;
 use super::{menu::DELETE_ALL, *};
 use crate::{
     lsp::preview::Form,
-    providers::{Intent, Kind, mock::MockContext},
+    providers::{Intent, Kind},
     store::Identity,
 };
+
+mod lenses;
 
 const WAIT: Duration = Duration::from_secs(5);
 /// A Rust file with the same comment twice.
@@ -35,6 +37,10 @@ struct Record {
     delay: Duration,
     /// Written after each translation, to tell one request from the next.
     suffix: String,
+    /// The provider has no account or key.
+    unavailable: bool,
+    /// The account or key that translations are made with.
+    account: u32,
 }
 
 #[derive(Clone, Default)]
@@ -70,10 +76,13 @@ impl Counter {
 }
 
 impl TranslationProvider for Counter {
-    type Context = MockContext;
+    type Context = u32;
 
-    fn context(&self) -> Result<MockContext, ProviderError> {
-        Ok(MockContext)
+    fn context(&self) -> Result<u32, ProviderError> {
+        if self.record().unavailable {
+            return Err(ProviderError::configuration("Synthetic missing key"));
+        }
+        Ok(self.record().account)
     }
 
     fn identity(&self, _output: Output) -> Identity {
@@ -86,8 +95,8 @@ impl TranslationProvider for Counter {
         _output: Output,
         text: &str,
         _target_language: &str,
-        context: MockContext,
-    ) -> Result<Translated<MockContext>, ProviderError> {
+        context: u32,
+    ) -> Result<Translated<u32>, ProviderError> {
         let text = self.answer(text).await?;
         if intent == Intent::Automatic && self.record().same_language {
             return Ok(Translated {
@@ -107,8 +116,8 @@ impl TranslationProvider for Counter {
         &self,
         text: &str,
         _target_language: &str,
-        context: MockContext,
-    ) -> Result<Translated<MockContext>, ProviderError> {
+        context: u32,
+    ) -> Result<Translated<u32>, ProviderError> {
         Ok(Translated {
             text: self.answer(text).await?,
             context,
@@ -123,8 +132,8 @@ impl TranslationProvider for Counter {
         term: &str,
         line: &str,
         _target_language: &str,
-        context: MockContext,
-    ) -> Result<Translated<MockContext>, ProviderError> {
+        context: u32,
+    ) -> Result<Translated<u32>, ProviderError> {
         let text = self.answer(&format!("{term} | {line}")).await?;
         Ok(Translated {
             text,
@@ -160,7 +169,7 @@ struct Editor {
     server: Server<Counter>,
     connection: Connection,
     client: Connection,
-    events: Receiver<WorkerEvent<MockContext>>,
+    events: Receiver<WorkerEvent<u32>>,
     next_id: i32,
     next_session: u64,
 }
