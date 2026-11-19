@@ -5,8 +5,10 @@ use tree_sitter::{Language, Node, ParseOptions, ParseState, Parser};
 use super::Comment;
 
 pub(super) enum Recovery {
-    SkipError,
     StopAtLiteral,
+    /// Stops at an error whose source the function says may hide where a
+    /// literal ends.
+    StopAt(fn(&[u8]) -> bool),
 }
 
 pub(super) fn parse(
@@ -52,11 +54,15 @@ pub(super) fn parse(
             let fragment = &source[node.byte_range()];
             // Recovery may place apparent comments after an unfinished literal.
             // Without a trustworthy token boundary, keep only earlier comments.
-            if matches!(recovery, Recovery::StopAtLiteral)
-                && (fragment.contains(&b'"')
-                    || fragment.contains(&b'\'')
-                    || fragment.windows(2).any(|pair| pair == b"/*"))
-            {
+            let stop = match recovery {
+                Recovery::StopAtLiteral => {
+                    fragment.contains(&b'"')
+                        || fragment.contains(&b'\'')
+                        || fragment.windows(2).any(|pair| pair == b"/*")
+                }
+                Recovery::StopAt(hides) => hides(fragment),
+            };
+            if stop {
                 return Some(comments);
             }
         } else {

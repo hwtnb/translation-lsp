@@ -271,6 +271,9 @@ fn csharp_skips_ambiguous_errors_and_unclosed_comments_or_strings() {
         "class A { void F( {\n// Ambiguous comment.\n}",
         "class A {}\n/* Unclosed comment.",
         "var s = @\"\n// Inside unclosed string.",
+        "var s = $@\"\n// Inside unclosed string.",
+        "var s = @$\"\n// Inside unclosed string.",
+        "var s = @\"a \"\" b\n// Inside unclosed string.",
         "var s = \"\"\"\n// Inside unclosed string.",
         "var s = \"unclosed // Inside string.",
     ] {
@@ -278,6 +281,20 @@ fn csharp_skips_ambiguous_errors_and_unclosed_comments_or_strings() {
         let comments = parsed("csharp", &uri, &source);
         assert_eq!(comments.0.len(), 1, "{broken}");
         assert_eq!(comments.body(&source, 0..1), "Valid before error.");
+    }
+}
+
+#[test]
+fn csharp_keeps_comments_after_an_error_that_closes_its_verbatim_strings() {
+    let uri = "untitled:Example".parse().unwrap();
+    for source in [
+        "// Before.\nclass A { void F( { var s = @\"a \"\" b\"; }\n// After.",
+        "// Before.\nvar s = \"unclosed\n// After.",
+        "// Before.\nvar a = b @ c;\n// After.",
+    ] {
+        let comments = parsed("csharp", &uri, source);
+        assert_eq!(comments.0.len(), 2, "{source}");
+        assert_eq!(comments.body(source, 1..2), "After.");
     }
 }
 
