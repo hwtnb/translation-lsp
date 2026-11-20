@@ -41,11 +41,19 @@ The other settings in `initialization_options` work as described under [Configur
 
 `effort` sets how much work the model spends on a response; `low` is the lightest and cheapest. Every request sends `effort`, so `model` must support it; according to the API documentation, older models such as Claude Haiku 4.5 do not.
 
-With `thinking` set to `false`, the model answers without a reasoning step. With `true`, the model decides when to reason before answering. Reasoning is never displayed, and its tokens count toward the cost and the output token limit. Some models do not accept requests without thinking: if you use another model and set `thinking` to `false` explicitly, the API can return HTTP 400. In that case, omit `thinking` or set it to `true`. The omitted value is chosen by comparing `model` with `claude-haiku-5-5` exactly.
+With `thinking` set to `false`, the model answers without a reasoning step. With `true`, the model decides when to reason before answering. Reasoning is never displayed, and its tokens count toward the cost and the output token limit.
 
-`speed` set to `fast` runs the model with faster output at a higher price. According to [Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode), it is a research preview on the Claude API only, for Claude Opus 5.5, Claude Opus 5, and Claude Opus 4.8, and access is requested from your account manager or through the waitlist. With another model, the API returns an error for `fast` or processes the request at the standard speed. Exceeding the Fast mode rate limits returns HTTP 429 or 529, which is handled like any rate limit or overload.
+Some models do not accept requests without thinking. If you use another model and set `thinking` to `false` explicitly, the API can return HTTP 400; omit `thinking` or set it to `true`. The omitted value is `false` only for a `model` that is exactly `claude-haiku-5-5`.
 
-When a translation with `speed` completes, the server writes the requested value and the `usage.speed` the response reports to the language server log, for example `translation-lsp: Anthropic speed requested fast, served fast`. In Zed, run `dev: open language server logs` from the Command Palette to read it. When the response reports no value, the line says `(not reported)`. The source text, the translation, and the key are not written.
+`speed` set to `fast` runs the model with faster output at a higher price. According to [Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode):
+
+- It is a research preview on the Claude API only, for Claude Opus 5.5, Claude Opus 5, and Claude Opus 4.8.
+- Access is requested from your account manager or through the waitlist.
+- With another model, the API returns an error for `fast` or processes the request at the standard speed.
+
+Exceeding the Fast mode rate limits returns HTTP 429 or 529, which is handled like any rate limit or overload.
+
+When a translation with `speed` completes, the server writes the requested value and the `usage.speed` the response reports to the language server log, for example `translation-lsp: Anthropic speed requested fast, served fast`. When the response reports no value, the line says `(not reported)`. In Zed, run `dev: open language server logs` from the Command Palette to read it. The source text, the translation, and the key are not written.
 
 Unknown fields are rejected: there is no setting for the API key or the API endpoint. Restart the language server after changing these settings.
 
@@ -69,9 +77,14 @@ What `provider.document` changes for every provider is described under [Tab tran
 
 ## Authentication
 
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `Anthropic API key…`, then run `Save Anthropic API key`. A terminal window of the OS opens and asks for the key. Paste the key there and press Enter; the terminal does not show what you paste. When the terminal reports that the key was saved, press Enter and return to Zed: the next translation uses the key, without a language server restart. Pressing Enter without a key saves nothing.
-
 Create the key in the [Claude Console](https://platform.claude.com/settings/keys) for a single workspace. The server sends no workspace ID, so the API refuses every request made with a key that is not scoped to one workspace. You can give the key an expiration; a request with an expired key fails as a rejected key.
+
+To save the key:
+
+1. In a supported document, run `editor: toggle code actions` from Zed's Command Palette and choose `Anthropic API key…`.
+2. Run `Save Anthropic API key`. A terminal window of the OS opens and asks for the key.
+3. Paste the key and press Enter. The terminal does not show what you paste. Pressing Enter without a key saves nothing.
+4. When the terminal reports that the key was saved, press Enter and return to Zed. The next translation uses the key, without a language server restart.
 
 While no usable key is saved, `Anthropic API key…` is the only code action of the server. While one is saved, the menu has these items instead:
 
@@ -80,11 +93,24 @@ While no usable key is saved, `Anthropic API key…` is the only code action of 
 
 While a key is saved, the menu appears in Markdown and Plain Text documents, and in other documents only in a range whose translation failed, such as with a rejected key. To replace or remove the key at another time, open a Markdown or Plain Text file.
 
-The server opens Terminal on macOS and a new console window on Windows. On Linux it tries these in order and uses the first that starts: `xdg-terminal-exec`, `x-terminal-emulator`, `gnome-terminal`, `ptyxis`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `foot`, `wezterm`, `xterm`.
+### When no terminal window opens
 
-The notice that follows `Save Anthropic API key` or `Replace Anthropic API key` shows a command: the path of the language server, then `anthropic-key`. When no window appears, run that command in a terminal yourself. That is the case on Linux when none of the terminals above starts, and in remote development, where the server runs on the remote machine and opens no window on yours; run the command in a terminal on the remote machine. In PowerShell, put `&` before a path in quotation marks. The command asks for the key in the terminal it runs in and fails where there is none; it does not read the key from a pipe.
+The server opens Terminal on macOS and a new console window on Windows. On Linux it uses the first of these that starts:
 
-The key is saved in the file `anthropic-api-key` in the server's credential directory, and the server checks the directory and the file each time it needs the key. It reads the file again when the modification time, the size, or, on macOS and Linux, the inode of the file has changed. The file holds the key alone; whitespace and line breaks around the key are ignored. A file that you create or edit yourself is read the same way.
+- `xdg-terminal-exec` and `x-terminal-emulator`, which open the terminal chosen on the system
+- `gnome-terminal`, `ptyxis`, `konsole`, and `xfce4-terminal`
+- `kitty`, `alacritty`, `foot`, `wezterm`, and `xterm`
+
+The notice that follows `Save Anthropic API key` or `Replace Anthropic API key` shows a command: the path of the language server, then `anthropic-key`. When no window appears, run that command in a terminal yourself:
+
+- On Linux, when none of the terminals above starts.
+- In remote development, where the server runs on the remote machine and opens no window on yours. Run the command in a terminal on the remote machine.
+
+In PowerShell, put `&` before a path in quotation marks. The command asks for the key in the terminal it runs in and fails where there is none; it does not read the key from a pipe.
+
+### Key file
+
+The key is saved in the file `anthropic-api-key` in the server's credential directory. The file holds the key alone; whitespace and line breaks around the key are ignored. A file that you create or edit yourself is read the same way. The server checks the directory and the file each time it needs the key, and reads the file again when it has changed.
 
 | OS | Key file |
 | --- | --- |
@@ -92,7 +118,9 @@ The key is saved in the file `anthropic-api-key` in the server's credential dire
 | macOS | `~/Library/Application Support/translation-lsp/anthropic-api-key` |
 | Linux | `$XDG_CONFIG_HOME/translation-lsp/anthropic-api-key`, or `~/.config/translation-lsp/anthropic-api-key` when unset |
 
-On macOS and Linux, the directory must have mode `0700` and the file mode `0600`, exactly, and neither may be a symbolic link. On Windows, neither may be a symbolic link; the server does not check who can access them. The command creates the directory and the file that way. It does not change a directory that exists with other permissions: it saves nothing and reports what the directory must be.
+On macOS and Linux, the directory must have mode `0700` and the file mode `0600`, exactly, and neither may be a symbolic link. On Windows, neither may be a symbolic link; the server does not check who can access them.
+
+The command creates the directory and the file that way. It does not change a directory that exists with other permissions: it saves nothing and reports what the directory must be.
 
 The key reaches the file from the terminal. It is not written in the Zed settings and does not pass through an environment variable or through the messages between Zed and the server. The server also ignores `ANTHROPIC_API_KEY`: Claude Code prefers that variable over a subscription login, so exporting it for your whole shell would move your ordinary Claude Code usage to API billing.
 
@@ -110,23 +138,31 @@ The `Anthropic API key…` menu saves, replaces, and removes the key. It has no 
 
 The text submitted for translation is described under [What is sent](../usage.md#what-is-sent).
 
-Each request contains the translation instructions as the system prompt and the text to translate, between `<source_text>` tags, as a single user message. To look up a word, the system prompt holds the dictionary instructions instead, and the message holds the term between `<term>` tags and its line between `<line>` tags. Conversation history is not sent. The request asks for at most 64,000 output tokens, or fewer when the number of bytes in `translation_limits.output_kib` (1,024 per KiB) is smaller. A translation read in Hover also asks for at most 16,384 tokens plus 4 tokens per byte of the source, or of the line of a term, so that text in a comment cannot make the model write at length; thinking counts toward this limit. A translation that reaches its limit is reported as an error instead of being shown incomplete.
+Each request goes to `https://api.anthropic.com/v1/messages`. It holds the translation instructions as the system prompt and the text to translate as a single user message. To look up a word, the request holds the dictionary instructions, the term, and its line instead. Conversation history is not sent.
 
-With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
+The output of each request is limited, and a translation that reaches its limit is reported as an error instead of being shown incomplete:
+
+- A request asks for at most 64,000 output tokens, or fewer when the number of bytes in `translation_limits.output_kib` (1,024 per KiB) is smaller.
+- A translation read in Hover also asks for at most 16,384 tokens plus 4 tokens per byte of the source, or of the line of a term. This keeps text in a comment from making the model write at length. Thinking counts toward this limit.
+
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once. The instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
 
 ## Errors and pauses
 
-A billing error, a rejected key, a key that is not scoped to one workspace, an unknown model, and a permission error stop automatic translation and report the HTTP status, the API's error type, and the request ID. After fixing billing in the Claude Console or correcting `provider.model` or `provider.document.model`, run a selection or document translation explicitly; automatic translation resumes when that succeeds. A stop for a rejected key, or for a key that is not scoped to one workspace, ends when you save another key from `Anthropic API key…`: the stop belongs to the key it happened with.
+| Error | What happens | What to do |
+| --- | --- | --- |
+| A billing error, an unknown model, or a permission error | Automatic translation stops. The error reports the HTTP status, the API's error type, and the request ID. | Fix billing in the Claude Console, or correct `provider.model` or `provider.document.model`. Then run a selection or document translation explicitly; automatic translation resumes when it succeeds. |
+| A rejected key, or a key that is not scoped to one workspace | Automatic translation stops for that key, with the same report. | Save another key from `Anthropic API key…`; the stop ends. |
+| A rate limit or an overload | The request is retried once, as described under [Automatic retries](../behavior.md#automatic-retries). | — |
+| The model declines a text | The request fails with the reported category. It is not retried and does not pause automatic translation. | — |
 
 Saving, replacing, or removing the key needs no language server restart. Translations and failures kept for one key are not shown for another, and a translation that is in progress when the key changes is discarded when it completes. Changing a setting requires a language server restart.
-
-Rate limits and overload are retried once as described under [Automatic retries](../behavior.md#automatic-retries). If the model declines a text, the request fails with the reported category, is not retried, and does not pause automatic translation.
 
 The rules shared by every provider are described under [Pauses](../behavior.md#pauses) and [Automatic retries](../behavior.md#automatic-retries).
 
 ## Stored data
 
-The key is stored as plain text in the file `anthropic-api-key` described under [Authentication](#authentication), in the directory where the ChatGPT provider stores its credentials. The `anthropic-key` command, which the menu runs in a terminal, writes the file, and creates the directory when it is missing. `Remove Anthropic API key` deletes the file and nothing else. Otherwise the language server only reads the file.
+The key is stored as plain text in the file `anthropic-api-key` described under [Key file](#key-file), in the directory where the ChatGPT provider stores its credentials. The `anthropic-key` command, which the menu runs in a terminal, writes the file, and creates the directory when it is missing. `Remove Anthropic API key` deletes the file and nothing else. Otherwise the language server only reads the file.
 
 To open Terminal on macOS, the server writes a script to the temporary directory. The script holds the path of the language server and no key, and deletes itself when Terminal runs it.
 

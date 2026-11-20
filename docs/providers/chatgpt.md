@@ -64,7 +64,13 @@ The `service_tier` of those responses was `default` with or without `priority`, 
 
 ## Authentication
 
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `ChatGPT account…`, then run `Continue with ChatGPT / Choose account`. Add a registration or choose a saved one, and complete sign-in and plan permission in the browser. Loading settings, opening the account menu, and Hover do not start an OAuth sign-in flow.
+To connect your account:
+
+1. In a supported document, run `editor: toggle code actions` from Zed's Command Palette and choose `ChatGPT account…`.
+2. Run `Continue with ChatGPT / Choose account`, then add a registration or choose a saved one.
+3. Complete sign-in and plan permission in the browser.
+
+Loading settings, opening the account menu, and Hover do not start an OAuth sign-in flow.
 
 When the account is ready, the connection item becomes `Change ChatGPT account` and the plan permission item is hidden. Sign-out appears only while signed in. While a management operation is running, duplicate management candidates are hidden. If the connection state cannot be read, use `Check ChatGPT connection…` and follow its message.
 
@@ -90,7 +96,7 @@ Check usage in ChatGPT settings. The `ChatGPT Usage` item under [Authentication]
 
 The text submitted for translation is described under [What is sent](../usage.md#what-is-sent).
 
-With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent).
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once. The instructions that a part adds are described under [What is sent](../usage.md#what-is-sent).
 
 ## Errors and pauses
 

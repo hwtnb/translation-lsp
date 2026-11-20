@@ -58,23 +58,31 @@ ChatGPTを使う場合は、本人のChatGPTアカウントで接続し、ChatGP
 
 `speed` の値は、書いたとおりに `service_tier` として送ります。そのため、選べる値はOpenAI Responses APIの値です。`ultrafast` を使えるアカウントは限られます。FastとUltrafastは、通常の速度よりプランの使用量を多く使います。[ChatGPTの料金](https://learn.chatgpt.com/docs/pricing)を参照してください。
 
-2026-10-14の時点で、ChatGPTアカウント経由の要求は、`fast` に `Unsupported service_tier: fast` を返しました。`priority` は受け付けられ、`speed` なしの要求の約1.5倍の速さで出力しました。
+2026-10-14の時点で、ChatGPTアカウント経由の要求は、`fast` にエラーを返しました。エラーは `Unsupported service_tier: fast` でした。`priority` は受け付けられ、`speed` なしの要求の約1.5倍の速さで出力しました。
 
 そのときの応答の `service_tier` は、`priority` の有無にかかわらず `default` でした。そのため、応答から速度が適用されたかどうかは分かりません。このプロバイダーでは、サーバーは速度をログに書きません。
 
 ## 認証
 
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`ChatGPT account…` から `Continue with ChatGPT / Choose account` を実行します。アカウントの選択肢から新規追加または保存済みの登録を選び、ブラウザで認証と利用許可を完了してください。設定の読み込み、アカウント管理メニューを開く操作、ホバーだけでは認証を開始しません。
+アカウントは次の手順でつなぎます。
+
+1. 対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行します。メニューから `ChatGPT account…` を選びます。
+2. `Continue with ChatGPT / Choose account` を実行し、アカウントの選択肢から新規追加または保存済みの登録を選びます。
+3. ブラウザで認証と利用許可を完了してください。
+
+設定の読み込み、アカウント管理メニューを開く操作、ホバーだけでは認証を開始しません。
 
 利用可能になると接続項目は `Change ChatGPT account` に変わり、利用許可の項目は表示されません。サインアウトはサインイン中だけ表示されます。管理操作中は重複操作の候補を表示しません。接続状態を読み取れない場合は `Check ChatGPT connection…` を実行し、表示された案内を確認してください。
 
 利用可能な間、`ChatGPT account…` はMarkdownとPlain Textの文書に出ます。ほかの文書では、翻訳に失敗した範囲にだけ出ます。それ以外のときにアカウントの変更、使用量の確認、サインアウトをするには、MarkdownかPlain Textのファイルを開いてください。
 
+アカウントのメニューには、次の項目があります。
+
 - `Enable ChatGPT plan use` は、サインイン済みでプラン利用が許可されていない場合に使います。
 - `ChatGPT Usage` は、[ChatGPTの使用量設定](https://chatgpt.com/settings/usage)を開きます。利用枠やクレジットの許可はこの設定に従います。
 - `Sign out of ChatGPT` は、現在の登録のセッション終了を試み、その登録の認証情報を削除します。別の登録は残ります。通信のため終了を確認できなかった場合は案内に従ってChatGPT設定からアプリを切断できます。
 
-認証更新で `invalid_grant` などが返された場合は、`ChatGPT account…` → `Continue with ChatGPT / Choose account` から保存済みの登録を選び、再接続します。
+認証更新で `invalid_grant` などが返された場合は、再接続します。`ChatGPT account…` → `Continue with ChatGPT / Choose account` から保存済みの登録を選んでください。
 
 接続方式は[公式のSign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)に基づきます。
 

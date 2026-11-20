@@ -2,11 +2,15 @@
 
 [日本語](../ja/providers/openai-compatible.md)
 
-Select the `openai_compatible` provider to translate with a service that accepts the Chat Completions requests of the OpenAI API, such as OpenRouter, the Gemini API, Ollama, or LM Studio. `base_url` names the service: requests go there, and an API key is sent with them only when you have saved one for that service from the `OpenAI-compatible API key…` code action.
+Select the `openai_compatible` provider to translate with a service that accepts the Chat Completions requests of the OpenAI API, such as OpenRouter, the Gemini API, Ollama, or LM Studio.
+
+`base_url` names the service: requests go there. An API key is sent with them only when you have saved one for that service from the `OpenAI-compatible API key…` code action.
 
 ## Settings for each service
 
-Choose the `provider` of the service you use from the sections below, and write it in `initialization_options` under `lsp` → `translation-lsp` in the Zed settings. The `base_url` values are those in each service's documentation, and the models are examples. Model names are those of the service you send to. The other settings in `initialization_options` work as described under [Configuration](../configuration.md).
+Choose the `provider` of the service you use from the sections below, and write it in `initialization_options` under `lsp` → `translation-lsp` in the Zed settings. The other settings in `initialization_options` work as described under [Configuration](../configuration.md).
+
+The `base_url` values are those in each service's documentation. The models are examples; model names are those of the service you send to.
 
 ### Gemini API
 
@@ -95,7 +99,12 @@ What `provider.document` changes for every provider is described under [Tab tran
 
 A service that needs no key, such as Ollama or LM Studio on your computer, is used without one. Requests carry no `Authorization` header until you save a key.
 
-To save a key, run `editor: toggle code actions` from Zed's Command Palette in a supported document, choose `OpenAI-compatible API key…`, then run `Save OpenAI-compatible API key`. A terminal window of the OS opens, names the address the key will be sent to, and asks for the key. Paste the key there and press Enter; the terminal does not show what you paste. The next translation sends the key as `Authorization: Bearer`, without a language server restart.
+To save a key:
+
+1. In a supported document, run `editor: toggle code actions` from Zed's Command Palette and choose `OpenAI-compatible API key…`.
+2. Run `Save OpenAI-compatible API key`. A terminal window of the OS opens, names the address the key will be sent to, and asks for the key.
+3. Paste the key and press Enter. The terminal does not show what you paste. Pressing Enter without a key saves nothing.
+4. When the terminal reports that the key was saved, press Enter and return to Zed. The next translation sends the key as `Authorization: Bearer`, without a language server restart.
 
 While a key is saved, the menu has these items instead:
 
@@ -104,9 +113,11 @@ While a key is saved, the menu has these items instead:
 
 The menu appears in Markdown and Plain Text documents, and in other documents only in a range whose translation failed, such as when the service refused the request without a key. To save, replace, or remove the key at another time, open a Markdown or Plain Text file.
 
-The terminal opens and the key is saved as for the Anthropic API key, described under [Authentication](anthropic.md#authentication) of that page. The notice that follows `Save OpenAI-compatible API key` or `Replace OpenAI-compatible API key` shows the command to run by hand when no window appears: the path of the language server, then `api-key` and the address of the service, such as `api-key https://openrouter.ai`.
+The terminal opens as for the Anthropic API key, described under [When no terminal window opens](anthropic.md#when-no-terminal-window-opens) of that page. The notice that follows `Save OpenAI-compatible API key` or `Replace OpenAI-compatible API key` shows the command to run by hand when no window appears. The command is the path of the language server, then `api-key` and the address of the service, such as `api-key https://openrouter.ai`.
 
-A key belongs to the scheme, host, and port of `base_url`, and is sent there only. Each has a file of its own in the server's credential directory, named `api-key-`, the scheme, the host, and the port, joined by `-`, such as `api-key-https-openrouter.ai-443` or `api-key-http-localhost-11434`. An IPv6 address is written in brackets with its colons as `_`, as in `api-key-http-[__1]-8080`. Changing `base_url` to another service uses that service's key, or none; the keys of other services stay in their files. The directory and the files are checked as the Anthropic key file is.
+A key belongs to the scheme, host, and port of `base_url`, and is sent there only. Changing `base_url` to another service uses that service's key, or none; the keys of other services stay in their files.
+
+Each key has a file of its own in the server's credential directory, checked as the [Anthropic key file](anthropic.md#key-file) is. The file is named `api-key-`, the scheme, the host, and the port, joined by `-`, such as `api-key-https-openrouter.ai-443` or `api-key-http-localhost-11434`. An IPv6 address is written in brackets with its colons as `_`, as in `api-key-http-[__1]-8080`.
 
 | OS | Credential directory |
 | --- | --- |
@@ -132,21 +143,31 @@ A model on your computer may take longer than the default deadlines. Raise `hove
 
 The text submitted for translation is described under [What is sent](../usage.md#what-is-sent).
 
-Each request is a streamed Chat Completions request with two messages: the translation instructions as the system message, and the text to translate, between `<source_text>` tags, as the user message. To look up a word, the system message holds the dictionary instructions instead, and the user message holds the term between `<term>` tags and its line between `<line>` tags. Conversation history is not sent. A translation read in Hover sends `max_tokens` of 16,384 plus 4 per byte of the source, or of the line of a term, or the number of bytes in `translation_limits.output_kib` (1,024 per KiB) when that is smaller, so that text in a comment cannot make the model write at length. A translation opened in a tab sends no `max_tokens`, since a limit above a model's own may be refused, and is bounded by `translation_limits.output_kib`.
+Each request is a streamed Chat Completions request with two messages: the translation instructions as the system message, and the text to translate as the user message. To look up a word, the messages hold the dictionary instructions, the term, and its line instead. Conversation history is not sent.
+
+The output of a request is limited as follows:
+
+- A translation read in Hover sends `max_tokens` of 16,384 plus 4 per byte of the source, or of the line of a term. It sends the number of bytes in `translation_limits.output_kib` (1,024 per KiB) instead when that is smaller. This keeps text in a comment from making the model write at length.
+- A translation opened in a tab sends no `max_tokens`, since a limit above a model's own may be refused, and is bounded by `translation_limits.output_kib`.
 
 The translation is the text of the reply's first choice. Reasoning that a service returns in a field of its own is not shown. Reasoning that a model writes into the text of the reply is shown as part of the translation.
 
-With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once. The instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
 
 ## Errors and pauses
 
-A completed reply ends with the `finish_reason` `stop`. A reply that ends at the token limit (`length`), is stopped by a content filter (`content_filter`), ends for another reason, or ends without a reason is reported as an error instead of being shown incomplete. An error that the service sends after the reply has begun is reported as a stream failure; when its code is a number, as OpenRouter gives it, the code is read as the HTTP status.
+A reply is shown only when it completes, with the `finish_reason` `stop`. A reply that ends at the token limit, is stopped by a content filter, or ends for another reason or without one is reported as an error instead of being shown incomplete.
 
-A refused key or a missing one (HTTP 401), missing credit (402), a permission error (403), and an unknown model or address (404) stop automatic translation and report the HTTP status, the error code, and the request ID when the service gives them. For HTTP 401, the error also names the address the request went to, and says whether a key was saved for it. After correcting the cause, run a selection or document translation explicitly; automatic translation resumes when that succeeds. A stop for a refused key ends when you save another key from `OpenAI-compatible API key…`.
+An error that the service sends after the reply has begun is reported as a stream failure. When its code is a number, as OpenRouter gives it, the code is read as the HTTP status.
+
+| Error | What happens | What to do |
+| --- | --- | --- |
+| Missing credit (HTTP 402), a permission error (403), or an unknown model or address (404) | Automatic translation stops. The error reports the HTTP status, the error code, and the request ID when the service gives them. | Correct the cause. Then run a selection or document translation explicitly; automatic translation resumes when it succeeds. |
+| A refused key or a missing one (HTTP 401) | Automatic translation stops, with the same report. The error also names the address the request went to, and says whether a key was saved for it. | Save a key from `OpenAI-compatible API key…`, or another key in place of a refused one; the stop ends. |
+| A timeout (408), a rate limit (429), or a server error | The request is retried once, as described under [Automatic retries](../behavior.md#automatic-retries). This includes errors reported in the stream or with the code `rate_limit_exceeded`, `server_error`, or `server_is_overloaded`. | — |
+| A content filter stop | The request fails. It is not retried and does not pause automatic translation. | — |
 
 Saving, replacing, or removing the key needs no language server restart. Translations and failures kept with one key, or without a key, are not shown with another, and a translation that is in progress when the key changes is discarded when it completes. Changing a setting requires a language server restart.
-
-A timeout (408), a rate limit (429), and server errors, also those reported in the stream or with the code `rate_limit_exceeded`, `server_error`, or `server_is_overloaded`, are retried once as described under [Automatic retries](../behavior.md#automatic-retries). A content filter stop is not retried and does not pause automatic translation.
 
 The rules shared by every provider are described under [Pauses](../behavior.md#pauses) and [Automatic retries](../behavior.md#automatic-retries).
 

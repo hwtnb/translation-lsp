@@ -58,9 +58,14 @@ What `provider.document` changes for every provider is described under [Tab tran
 
 ## Authentication
 
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `OpenAI API key…`, then run `Save OpenAI API key`. A terminal window of the OS opens and asks for the key. Paste the key there and press Enter; the terminal does not show what you paste. When the terminal reports that the key was saved, press Enter and return to Zed: the next translation uses the key, without a language server restart. Pressing Enter without a key saves nothing.
-
 Create the key on the [API keys page](https://platform.openai.com/api-keys) of the OpenAI Platform.
+
+To save the key:
+
+1. In a supported document, run `editor: toggle code actions` from Zed's Command Palette and choose `OpenAI API key…`.
+2. Run `Save OpenAI API key`. A terminal window of the OS opens and asks for the key.
+3. Paste the key and press Enter. The terminal does not show what you paste. Pressing Enter without a key saves nothing.
+4. When the terminal reports that the key was saved, press Enter and return to Zed. The next translation uses the key, without a language server restart.
 
 While no usable key is saved, `OpenAI API key…` is the only code action of the server. While one is saved, the menu has these items instead:
 
@@ -69,9 +74,9 @@ While no usable key is saved, `OpenAI API key…` is the only code action of the
 
 While a key is saved, the menu appears in Markdown and Plain Text documents, and in other documents only in a range whose translation failed, such as with a rejected key. To replace or remove the key at another time, open a Markdown or Plain Text file.
 
-The terminal opens and the key is saved as for the Anthropic API key, described under [Authentication](anthropic.md#authentication) of that page. The notice that follows `Save OpenAI API key` or `Replace OpenAI API key` shows the command to run by hand when no window appears: the path of the language server, then `api-key https://api.openai.com`.
+The terminal opens as for the Anthropic API key, described under [When no terminal window opens](anthropic.md#when-no-terminal-window-opens) of that page. The notice that follows `Save OpenAI API key` or `Replace OpenAI API key` shows the command to run by hand when no window appears. The command is the path of the language server, then `api-key https://api.openai.com`.
 
-The key is saved in the file `api-key-https-api.openai.com-443` in the server's credential directory, with the same checks of the directory and the file as the Anthropic key file. The [OpenAI-compatible](openai-compatible.md) provider uses the same file when its `base_url` is on `https://api.openai.com`.
+The key is saved in the file `api-key-https-api.openai.com-443` in the server's credential directory, with the same checks of the directory and the file as the [Anthropic key file](anthropic.md#key-file). The [OpenAI-compatible](openai-compatible.md) provider uses the same file when its `base_url` is on `https://api.openai.com`.
 
 | OS | Key file |
 | --- | --- |
@@ -95,17 +100,25 @@ The `OpenAI API key…` menu saves, replaces, and removes the key. It has no usa
 
 The text submitted for translation is described under [What is sent](../usage.md#what-is-sent).
 
-Each request goes to `https://api.openai.com/v1/responses` with `store` set to `false`. It contains the translation instructions as `instructions` and the text to translate, between `<source_text>` tags, as a single user input. To look up a word, the instructions are the dictionary instructions, and the input holds the term between `<term>` tags and its line between `<line>` tags. Conversation history is not sent. A translation read in Hover asks for at most 16,384 output tokens plus 4 tokens per byte of the source, or of the line of a term, or fewer when the number of bytes in `translation_limits.output_kib` (1,024 per KiB) is smaller, so that text in a comment cannot make the model write at length; reasoning counts toward this limit. A translation opened in a tab sends no token limit and is bounded by `translation_limits.output_kib`. A translation that reaches its limit is reported as an error instead of being shown incomplete.
+Each request goes to `https://api.openai.com/v1/responses` with `store` set to `false`. It holds the translation instructions and, as a single user input, the text to translate. To look up a word, the request holds the dictionary instructions, the term, and its line instead. Conversation history is not sent.
 
-With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once; the instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
+The output of each request is limited, and a translation that reaches its limit is reported as an error instead of being shown incomplete:
+
+- A translation read in Hover asks for at most 16,384 output tokens plus 4 tokens per byte of the source, or of the line of a term. It asks for fewer when the number of bytes in `translation_limits.output_kib` (1,024 per KiB) is smaller. This keeps text in a comment from making the model write at length. Reasoning counts toward this limit.
+- A translation opened in a tab sends no token limit and is bounded by `translation_limits.output_kib`.
+
+With [`document_split`](../configuration.md#document-split) enabled, a translation opened in a tab can be sent as one request for each part, several at once. The instructions that a part adds are described under [What is sent](../usage.md#what-is-sent). Each is a request of the form described here, with the limits of a translation opened in a tab.
 
 ## Errors and pauses
 
-A rejected key, an exhausted quota, an unknown model, a value the model does not accept for `effort` or `speed`, and a permission error stop automatic translation and report the HTTP status, the error code, and the request ID. After correcting billing in the OpenAI Platform or the settings, run a selection or document translation explicitly; automatic translation resumes when that succeeds. A stop for a rejected key ends when you save another key from `OpenAI API key…`: the stop belongs to the key it happened with.
+| Error | What happens | What to do |
+| --- | --- | --- |
+| An exhausted quota, an unknown model, a value the model does not accept for `effort` or `speed`, or a permission error | Automatic translation stops. The error reports the HTTP status, the error code, and the request ID. | Correct billing in the OpenAI Platform or the settings. Then run a selection or document translation explicitly; automatic translation resumes when it succeeds. |
+| A rejected key | Automatic translation stops for that key, with the same report. | Save another key from `OpenAI API key…`; the stop ends. |
+| A rate limit or a server error | The request is retried once, as described under [Automatic retries](../behavior.md#automatic-retries). | — |
+| The content filter stops the response | The request fails with that category. It is not retried and does not pause automatic translation. | — |
 
 Saving, replacing, or removing the key needs no language server restart. Translations and failures kept for one key are not shown for another, and a translation that is in progress when the key changes is discarded when it completes. Changing a setting requires a language server restart.
-
-Rate limits and server errors are retried once as described under [Automatic retries](../behavior.md#automatic-retries). If the response is stopped by the content filter, the request fails with that category, is not retried, and does not pause automatic translation.
 
 The rules shared by every provider are described under [Pauses](../behavior.md#pauses) and [Automatic retries](../behavior.md#automatic-retries).
 
