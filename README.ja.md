@@ -2,13 +2,15 @@
 
 [English](README.md)
 
-ZedでRust、JavaScript／JSX、TypeScript／TSX、C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、JSON、JSONC、YAML、TOML、シェルスクリプト、PowerShell、Dockerfile、Docker Compose、メイクファイルのコメント、Pythonのドキュメンテーション文字列、Elixirの `@moduledoc`、`@doc`、`@typedoc` の文字列、選択したMarkdownなどの文章を翻訳します。訳文はホバー表示（テキスト上で開く情報表示）で読めます。原文はエディタに残ります。コードのコメントにマウスポインターを重ねると、初回から翻訳が始まります。プロバイダーが使える状態では、Markdownの文章を選択して安定させるとバックグラウンドで翻訳し、その範囲のホバーで訳文を読めます。
+Translation LSPは、Zedでコードのコメントと、Markdownの文章を翻訳し、ホバー表示（テキスト上で開く情報表示）に訳文を出します。原文は変わりません。Rust、TypeScript、Python、Go、シェルスクリプトなど、40の言語と形式のコメントを読めます。言語の一覧は[対応言語](docs/ja/languages.md)にあります。
 
-ChatGPTを使う場合は、本人のChatGPTアカウントで接続し、ChatGPTプランの利用を許可します。Anthropic APIとOpenAI APIのプロバイダーは、本人のAPIキーでそれぞれのAPIを呼びます。OpenAI互換のプロバイダーは、OpenRouter、Gemini API、Ollama、LM Studioなど、指定したサービスを呼びます。APIキーは、保存した場合にだけ送ります。DeepL APIとGoogle Cloud Translationのプロバイダーは、本人のAPIキーでそれぞれの翻訳サービスを呼びます。プロバイダーを選ぶまでは、文章を外部へ送りません。
+翻訳には、ChatGPT（本人のプラン）、Anthropic API、OpenAI API、OllamaなどのOpenAI互換のサービスを使えます。翻訳サービスのDeepL APIとGoogle Cloud Translationも使えます。プロバイダーを選ぶまでは、文章を外部へ送りません。
 
 - **ホバー:** コメントにマウスポインターを重ねると、訳文を読めます。
 
   ![Zedのホバー表示に出た、ドキュメンテーションコメントの訳文。コード例を含むMarkdownとして表示されている](docs/images/hover.png)
+
+- **Markdownの選択:** Markdownの文章を選択するとバックグラウンドで翻訳し、その範囲のホバーで訳文を読めます。
 
 - **CodeLens:** CodeLensを有効にすると、訳文の1行目がコメントの上に出ます。クリックすると全体を読めます。
 
@@ -25,6 +27,8 @@ Translation LSPは、開発用拡張として導入します。Zedがチェッ�
 1. Zedと、[rustup経由のRust](https://www.rust-lang.org/tools/install)を導入します。Zedは、開発用拡張のビルドにRustを使います。
 2. このリポジトリをクローンし、[公開済みリリース](https://github.com/hwtnb/zed-translation-lsp/releases)のタグをチェックアウトします。
 3. Zedの拡張画面で `Install Dev Extension` を選び、チェックアウト内の **`crates/zed-extension`** を指定します。[Zedの開発用拡張の導入手順](https://zed.dev/docs/extensions/developing-extensions)も参照してください。
+
+Zedの設定で言語の言語サーバーを列挙している場合は、その一覧に `"translation-lsp"` を加えてください。[言語サーバーの設定](docs/ja/languages.md#言語サーバーの設定)を参照してください。
 
 言語サーバーを最初に起動するとき、拡張は自分と同じバージョンのサーバーをそのリリースから取得し、以後の起動では保存したサーバーを使います。リリースのないバージョンのチェックアウトでは、取得できるサーバーがありません。サーバーを配布している環境は次のとおりです。
 
@@ -56,15 +60,11 @@ cargo build -p translation-lsp --release --locked
 
 ビルドした実行ファイルの絶対パスを、[サーバーのパス](docs/ja/configuration.md#サーバーのパス)の説明に沿って `lsp.translation-lsp.binary.path` に設定します。拡張はその実行ファイルを起動し、サーバーを取得しません。
 
-C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Proto、GraphQL、Clojure、Haskell、OCaml、OCaml Interface、Scala、Dart、Elixir、JSON、JSONC、YAML、TOML、Shell Script、PowerShell、Dockerfile、Docker Compose、Makeの言語サーバーを明示している場合は、[言語サーバーの設定](docs/ja/languages.md#言語サーバーの設定)を参照してください。
-
 ## プロバイダーの設定
 
 プロバイダーがないと、言語サーバーは何も翻訳しません。起動したときに、Zedの設定ファイルと英語版READMEのこの節を開くボタンを添えて、プロバイダーを選ぶよう求めます。その後も、対応する文書のコードアクションの `Set up Translation LSP…` から同じボタンを出せます。
 
-既存のZed設定の `lsp` に次のいずれかの項目を追加してプロバイダーを選び、Zedのコードアクションから接続します。設定を変更したら言語サーバーを再起動してください。`target_language` は訳文の言語です。[ほかのよく使う設定](#ほかのよく使う設定)を参照してください。すべての設定は[設定](docs/ja/configuration.md)で説明します。
-
-### ChatGPT
+既存のZed設定の `lsp` に次のような項目を追加してプロバイダーを選び、言語サーバーを再起動します。この例はChatGPTを選びます。ほかのプロバイダーにするには、`name` を下の表の値に変えます。`target_language` は訳文の言語です。[ほかのよく使う設定](#ほかのよく使う設定)を参照してください。すべての設定は[設定](docs/ja/configuration.md)で説明します。
 
 ```json
 {
@@ -83,112 +83,28 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 }
 ```
 
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`ChatGPT account…` から `Continue with ChatGPT / Choose account` を実行して、ブラウザで認証とプラン利用の許可を完了します。ほかの設定とアカウント管理メニューは[ChatGPT](docs/ja/providers/chatgpt.md)で説明します。
+次に、プロバイダーに接続します。対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、表の項目を選びます。キーを保存すると端末のウィンドウが開くので、キーを貼り付けてEnterを押してください。
 
-### Anthropic API
+| プロバイダー | `name` | 接続のしかた | 詳しい説明 |
+| --- | --- | --- | --- |
+| ChatGPT | `chatgpt` | `ChatGPT account…` から `Continue with ChatGPT / Choose account` を実行し、ブラウザで認証とプラン利用の許可を完了します。 | [ChatGPT](docs/ja/providers/chatgpt.md) |
+| Anthropic API | `anthropic_api` | `Anthropic API key…` から `Save Anthropic API key` を実行します。 | [Anthropic API](docs/ja/providers/anthropic.md) |
+| OpenAI API | `openai_api` | `OpenAI API key…` から `Save OpenAI API key` を実行します。 | [OpenAI API](docs/ja/providers/openai-api.md) |
+| OpenAI互換API | `openai_compatible` | キーが要るサービスでは、`OpenAI-compatible API key…` から `Save OpenAI-compatible API key` を実行します。 | [OpenAI互換API](docs/ja/providers/openai-compatible.md) |
+| DeepL API | `deepl` | `DeepL API key…` から `Save DeepL API key` を実行します。 | [DeepL API](docs/ja/providers/deepl.md) |
+| Google Cloud Translation | `google_translate` | `Google Cloud API key…` から `Save Google Cloud API key` を実行します。 | [Google Cloud Translation](docs/ja/providers/google-translate.md) |
 
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "anthropic_api",
-          "model": "claude-haiku-5-5",
-          "effort": "low"
-        }
-      }
-    }
-  }
-}
-```
+プロバイダーによって、次の点が違います。
 
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`Anthropic API key…` から `Save Anthropic API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。キーの作り方、ほかの設定、費用は[Anthropic API](docs/ja/providers/anthropic.md)で説明します。
+- ChatGPT、Anthropic API、OpenAI APIでは、`model` と `effort` は省略できます。使える値は各プロバイダーのページにあるので、`name` を変えたら、この2つも変えるか消してください。
+- OpenAI互換のプロバイダーには、サービスのアドレスの `base_url` と、そのサービスのモデル名の `model` が必要です。[お使いのコンピューターのOllama](docs/ja/providers/openai-compatible.md#お使いのコンピューターのollama)のように、キーの要らないサービスは、キーなしで使えます。
+- DeepL APIとGoogle Cloud Translationは、`name` のほかに項目を取りません。`target_language` は言語コードにする必要があり、選択した単語は意味を調べずに翻訳します。
 
-### OpenAI API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "openai_api",
-          "model": "gpt-6-luna",
-          "effort": "low"
-        }
-      }
-    }
-  }
-}
-```
-
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`OpenAI API key…` から `Save OpenAI API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。ほかの設定と費用は[OpenAI API](docs/ja/providers/openai-api.md)で説明します。
-
-### OpenAI互換API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "openai_compatible",
-          "base_url": "http://localhost:11434/v1",
-          "model": "gemma3"
-        }
-      }
-    }
-  }
-}
-```
-
-`base_url` にはサービスのアドレスを、`model` にはそのサービスのモデル名を指定します。上の例は、お使いのコンピューターのOllamaに取り込んだモデルを使います。Ollamaのように、キーの要らないサービスは、キーなしで使えます。キーが要るサービスでは、コードアクションの `OpenAI-compatible API key…` から `Save OpenAI-compatible API key` を実行します。いくつかのサービスのアドレスとほかの設定は[OpenAI互換API](docs/ja/providers/openai-compatible.md)で説明します。
-
-### DeepL API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "deepl"
-        }
-      }
-    }
-  }
-}
-```
-
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`DeepL API key…` から `Save DeepL API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLでは、`target_language` を言語コードにする必要があります。また、選択した単語は意味を調べずに翻訳します。文章の送り方と費用は[DeepL API](docs/ja/providers/deepl.md)で説明します。
-
-### Google Cloud Translation
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "google_translate"
-        }
-      }
-    }
-  }
-}
-```
-
-対応する文書でZedのコマンドパレットから `editor: toggle code actions` を実行し、`Google Cloud API key…` から `Save Google Cloud API key` を実行します。開いた端末のウィンドウにキーを貼り付けて、Enterを押してください。DeepLと同じく、`target_language` を言語コードにする必要があり、選択した単語は意味を調べずに翻訳します。キーの作り方と費用は[Google Cloud Translation](docs/ja/providers/google-translate.md)で説明します。
+キーの作り方と費用も、各プロバイダーのページで説明します。
 
 ### ほかのよく使う設定
 
-次の設定は `initialization_options` の中で `provider` と並べて書きます。どれも省略できます。
+次の設定は `initialization_options` の中で `provider` と並べて書きます。どれも省略できます。`provider` と同じく、変えたら言語サーバーを再起動してください。
 
 | 設定 | 既定値 | 内容 |
 | --- | --- | --- |
@@ -206,14 +122,17 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 | 操作 | 方法 |
 | --- | --- |
 | コメントのホバー | 対応するコードのコメントにマウスポインターを重ねるか、カーソルを置いてZedの `editor: hover` を実行します。 |
-| Markdownの選択 | [プロバイダーの設定](#プロバイダーの設定)のとおりプロバイダーが使える状態で、`features.automatic_selection` が `true` の場合、Markdownの文章を選択して安定させるとバックグラウンドで翻訳します。その範囲でホバーを開いて訳文を読みます。 |
-| `Translate selection to …` | すぐに実行したい場合やバックグラウンド翻訳が失敗した場合は、コードアクションの `Translate selection to …` を使います。このコードアクションは、完了すると通知 `Translation ready. Hover over the selected text to view it.` を表示します。 |
-| 単語の意味を調べる | 1行で3語以下の語句か識別子1つ（`retain`、`retain_completed` など）を選択します。ホバーには訳文の代わりに単語の説明が表示されます。説明はモデルが書きます。拡張機能に辞書のデータは含まれていません。DeepL APIとGoogle Cloud Translationでは、意味を調べずに翻訳します。 |
-| `… and open in tab` | Markdownまたはプレーンテキスト（Zedの言語名は `Plain Text`）では、`Translate selection to … and open in tab` で訳文を別タブに開けます。選択がない場合は `Translate document to … and open in tab` となり、文書全体を翻訳します。 |
-| CodeLens | Zedの設定で `"code_lens": "on"` にすると、コメントに `Translate \| Settings` を、翻訳済みの範囲に訳文の1行目を表示します。クリックすると訳文の全体を読めます。Markdownとプレーンテキストでは、1行目の上にメニューの行を表示します。 |
-| 取り消し | 1件を止めるには、その範囲にカーソルか選択範囲を置き、コードアクションの `Cancel translation of lines …` を実行します。`Cancel all translations` はアカウントメニューを残してすべての翻訳を取り消します。 |
+| Markdownの選択 | `features.automatic_selection` が `true` の場合、Markdownの文章を選択して安定させるとバックグラウンドで翻訳します。その範囲でホバーを開いて訳文を読みます。 |
+| `Translate selection to …` | このコードアクションは、選択範囲をすぐに翻訳します。バックグラウンド翻訳が失敗したあとにも使えます。終わったら、選択範囲でホバーを開いて訳文を読みます。 |
+| 単語の意味を調べる | 1行で3語以下の語句か識別子1つを選択します。ホバーには、モデルが書いた単語の説明が出ます。DeepL APIとGoogle Cloud Translationでは、意味を調べずに翻訳します。 |
+| `… and open in tab` | Markdownまたはプレーンテキスト（Zedの言語名は `Plain Text`）では、このコードアクションで選択範囲の訳文を別の文書に開けます。選択がない場合は文書全体を翻訳します。 |
+| CodeLens | Zedの設定で `"code_lens": "on"` にすると、コメントに `Translate \| Settings` を、翻訳済みの範囲に訳文の1行目を表示します。クリックすると訳文の全体を読めます。 |
+| 取り消し | 範囲にカーソルを置いてコードアクションの `Cancel translation of lines …` を選ぶか、`Cancel all translations` を選びます。 |
+| 削除 | 訳文のカードの `Delete translation`、コメントのCodeLensの `Settings` メニュー、Markdownとプレーンテキストのコードアクションを使います。 |
 
-これらの操作の規則は[使い方](docs/ja/usage.md)で説明します。
+同じプロバイダーと設定で翻訳済みの文章は、別の場所や別の文書にあっても、送り直さずに訳文を表示します。[`disk_cache`](docs/ja/configuration.md#ディスクキャッシュ)を有効にすると、その訳文は再起動のあとも残ります。
+
+これらの操作の規則は[使い方](docs/ja/usage.md)で、キャッシュは[キャッシュ](docs/ja/behavior.md#キャッシュ)で説明します。
 
 ## 送信する前に
 
@@ -221,20 +140,21 @@ C#、C、C++、Python、Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js�
 - コメントに認証情報が書かれていれば、それも一緒に送信されます。
 - `features.automatic_selection` が `true` の場合、Markdownの文章は、コピーのために選択しただけでも送信されることがあります。
 - 単語の意味を調べると、その語のある行も送信します。
+- [`disk_cache`](docs/ja/configuration.md#ディスクキャッシュ)を有効にすると、完了した訳文をこのコンピューターのファイルに書きます。ファイルは暗号化しません。送った文章そのものは書きません。ただし、単語の説明には調べた語と用例が、訳文にはコードや識別子など翻訳しなかった部分が残ります。
 
 1回の要求に含める内容は[送信する内容](docs/ja/usage.md#送信する内容)で説明します。費用は各プロバイダーのページで説明します。
 
 ## ドキュメント
 
-- [設定](docs/ja/configuration.md): 設定の全体例、サーバーのパス、翻訳する言語、機能の切り替え、タイミング、サイズの上限、受付とキャッシュの上限、モデルの変更。
-- [ChatGPT](docs/ja/providers/chatgpt.md): ChatGPTプロバイダーの設定と、アカウントへの接続。
-- [Anthropic API](docs/ja/providers/anthropic.md): Anthropicプロバイダーの設定と、APIキー。
-- [OpenAI API](docs/ja/providers/openai-api.md): OpenAI APIプロバイダーの設定と、APIキー。
-- [OpenAI互換API](docs/ja/providers/openai-compatible.md): OpenAI互換プロバイダーの設定、いくつかのサービスのアドレス、APIキー。
-- [DeepL API](docs/ja/providers/deepl.md): DeepLプロバイダーの設定、文章の送り方、APIキー。
-- [Google Cloud Translation](docs/ja/providers/google-translate.md): Google Cloud Translationプロバイダーの設定とAPIキー。
-- [使い方](docs/ja/usage.md): ホバー、選択、単語の意味を調べる、タブに開く翻訳、状態表示、取り消しと再試行、送信する内容。
-- [動作](docs/ja/behavior.md): 受付、処理が続く条件、自動選択、キャッシュ、期限、再試行、停止。
+- [設定](docs/ja/configuration.md): すべての設定と全体例。サーバーのパスとディスクキャッシュも含みます。
+- [ChatGPT](docs/ja/providers/chatgpt.md): 設定と、アカウントへの接続。
+- [Anthropic API](docs/ja/providers/anthropic.md): 設定とAPIキー。
+- [OpenAI API](docs/ja/providers/openai-api.md): 設定とAPIキー。
+- [OpenAI互換API](docs/ja/providers/openai-compatible.md): 設定、いくつかのサービスのアドレス、APIキー。
+- [DeepL API](docs/ja/providers/deepl.md): 設定、文章の送り方、APIキー。
+- [Google Cloud Translation](docs/ja/providers/google-translate.md): 設定とAPIキー。
+- [使い方](docs/ja/usage.md): 翻訳のしかたごとの使い方、取り消しと訳文の削除、送信する内容。
+- [動作](docs/ja/behavior.md): 翻訳の処理が始まる、待つ、止まる条件と、訳文のキャッシュ。
 - [対応言語](docs/ja/languages.md): 対応する言語、コメントの抽出、言語サーバーの設定。
 - [開発](docs/ja/development.md): 検証、モックのプロバイダーとサンプル、CI、依存関係の方針。
 

@@ -2,13 +2,15 @@
 
 [日本語](README.ja.md)
 
-Translate comments in Rust, JavaScript/JSX, TypeScript/TSX, C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, JSON, JSONC, YAML, TOML, shell scripts, PowerShell, Dockerfile, Docker Compose, and makefiles, including Python docstrings and the strings given to Elixir's `@moduledoc`, `@doc`, and `@typedoc`, in Zed's Hover. Select Markdown prose to prepare a translation in the background. Hover over the original text to read the translation. The source stays in the editor unchanged.
+Translation LSP translates code comments and Markdown in Zed and shows the translation in Hover; the source stays unchanged. It reads comments in 40 languages and file formats, including Rust, TypeScript, Python, Go, and shell scripts. The full list is under [Languages](docs/languages.md).
 
-The ChatGPT provider uses your ChatGPT account with permission to use your plan. The Anthropic API and OpenAI API providers call those APIs with your API key. The OpenAI-compatible provider calls a service you name, such as OpenRouter, the Gemini API, Ollama, or LM Studio, with an API key only when you save one. The DeepL API and Google Cloud Translation providers call those translation services with your API key. Until you select a provider, the extension sends no text to an external service.
+You can translate with ChatGPT using your plan, the Anthropic API, the OpenAI API, or an OpenAI-compatible service such as Ollama. Two translation services, the DeepL API and Google Cloud Translation, also work. Until you select a provider, the extension sends no text to an external service.
 
 - **Hover:** Hover over a comment to read its translation.
 
   ![A translated doc comment in Zed's Hover, shown as Markdown with its code example](docs/images/hover.png)
+
+- **Markdown selection:** Select Markdown prose to translate it in the background, then hover over it to read the translation.
 
 - **CodeLens:** With CodeLens on, the first line of the translation shows above the comment; click it to read all of it.
 
@@ -25,6 +27,8 @@ Install Translation LSP as a development extension: Zed builds the extension fro
 1. Install Zed and [Rust through rustup](https://www.rust-lang.org/tools/install). Zed builds development extensions with Rust.
 2. Clone this repository and check out the tag of a [published release](https://github.com/hwtnb/zed-translation-lsp/releases).
 3. In Zed's Extensions view, choose `Install Dev Extension` and select **`crates/zed-extension`** in the checkout. See [Zed's development extension instructions](https://zed.dev/docs/extensions/developing-extensions).
+
+If your Zed settings list the language servers of a language, add `"translation-lsp"` to that list; see [Language server settings](docs/languages.md#language-server-settings).
 
 When the language server first starts, the extension downloads the server of its own version from that release and keeps it for later starts. A checkout whose version has no release has no server to download. Servers are published for these systems:
 
@@ -56,15 +60,11 @@ cargo build -p translation-lsp --release --locked
 
 Set `lsp.translation-lsp.binary.path` to the absolute path of the executable you built, as described under [Server path](docs/configuration.md#server-path). The extension then starts that executable and downloads nothing.
 
-If you list language servers explicitly for C#, C, C++, Python, Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Proto, GraphQL, Clojure, Haskell, OCaml, OCaml Interface, Scala, Dart, Elixir, JSON, JSONC, YAML, TOML, Shell Script, PowerShell, Dockerfile, Docker Compose, or Make, see [Language server settings](docs/languages.md#language-server-settings).
-
 ## Set up a provider
 
 Without a provider, the language server translates nothing. When it starts, it asks you to choose one, with buttons that open Zed's settings file and this section. Later, `Set up Translation LSP…` in the code actions of a supported document offers the same buttons.
 
-Select one provider by adding one of the following entries to `lsp` in your existing Zed settings, then connect it from Zed's code actions. Restart the language server after changing the settings. `target_language` is the language translations are written in; see [Other common settings](#other-common-settings). Every setting is described under [Configuration](docs/configuration.md).
-
-### ChatGPT
+Select a provider by adding an entry like the following to `lsp` in your existing Zed settings, then restart the language server. This example selects ChatGPT; change `name` to select another provider from the table below. `target_language` is the language translations are written in; see [Other common settings](#other-common-settings). Every setting is described under [Configuration](docs/configuration.md).
 
 ```json
 {
@@ -83,112 +83,28 @@ Select one provider by adding one of the following entries to `lsp` in your exis
 }
 ```
 
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `ChatGPT account…`, then run `Continue with ChatGPT / Choose account`, and complete sign-in and plan permission in the browser. See [ChatGPT](docs/providers/chatgpt.md) for the other settings and the account menu.
+Then connect the provider: in a supported document, run `editor: toggle code actions` from Zed's Command Palette and choose the item in the table. Saving a key opens a terminal window; paste the key there and press Enter.
 
-### Anthropic API
+| Provider | `name` | How to connect | Details |
+| --- | --- | --- | --- |
+| ChatGPT | `chatgpt` | Choose `ChatGPT account…`, run `Continue with ChatGPT / Choose account`, and complete sign-in and plan permission in the browser. | [ChatGPT](docs/providers/chatgpt.md) |
+| Anthropic API | `anthropic_api` | Choose `Anthropic API key…`, then run `Save Anthropic API key`. | [Anthropic API](docs/providers/anthropic.md) |
+| OpenAI API | `openai_api` | Choose `OpenAI API key…`, then run `Save OpenAI API key`. | [OpenAI API](docs/providers/openai-api.md) |
+| OpenAI-compatible API | `openai_compatible` | For a service that needs a key, choose `OpenAI-compatible API key…`, then run `Save OpenAI-compatible API key`. | [OpenAI-compatible API](docs/providers/openai-compatible.md) |
+| DeepL API | `deepl` | Choose `DeepL API key…`, then run `Save DeepL API key`. | [DeepL API](docs/providers/deepl.md) |
+| Google Cloud Translation | `google_translate` | Choose `Google Cloud API key…`, then run `Save Google Cloud API key`. | [Google Cloud Translation](docs/providers/google-translate.md) |
 
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "anthropic_api",
-          "model": "claude-haiku-5-5",
-          "effort": "low"
-        }
-      }
-    }
-  }
-}
-```
+The providers differ in a few ways:
 
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `Anthropic API key…`, then run `Save Anthropic API key`. Paste the key in the terminal window that opens and press Enter. See [Anthropic API](docs/providers/anthropic.md) for creating the key, the other settings, and cost.
+- For ChatGPT, the Anthropic API, and the OpenAI API, `model` and `effort` are optional. Each provider's page lists the values it takes, so change or remove them when you change `name`.
+- The OpenAI-compatible provider needs `base_url`, the address of the service, and `model`, one of its model names. A service that needs no key, such as [Ollama on your computer](docs/providers/openai-compatible.md#ollama-on-your-computer), works without one.
+- The DeepL API and Google Cloud Translation take no fields other than `name`. With them, `target_language` must be a language code, and a selected word is translated instead of looked up.
 
-### OpenAI API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "openai_api",
-          "model": "gpt-6-luna",
-          "effort": "low"
-        }
-      }
-    }
-  }
-}
-```
-
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `OpenAI API key…`, then run `Save OpenAI API key`. Paste the key in the terminal window that opens and press Enter. See [OpenAI API](docs/providers/openai-api.md) for the other settings and cost.
-
-### OpenAI-compatible API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "openai_compatible",
-          "base_url": "http://localhost:11434/v1",
-          "model": "gemma3"
-        }
-      }
-    }
-  }
-}
-```
-
-Set `base_url` to the address of the service and `model` to one of its model names; the example above uses a model pulled into Ollama on your computer. A service that needs no key, such as Ollama, is ready without one. For a service that needs a key, choose `OpenAI-compatible API key…` from the code actions, then run `Save OpenAI-compatible API key`. See [OpenAI-compatible API](docs/providers/openai-compatible.md) for the addresses of some services and the other settings.
-
-### DeepL API
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "deepl"
-        }
-      }
-    }
-  }
-}
-```
-
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `DeepL API key…`, then run `Save DeepL API key`. Paste the key in the terminal window that opens and press Enter. With DeepL, `target_language` must be a language code, and a selected word is translated instead of looked up. See [DeepL API](docs/providers/deepl.md) for how the text is sent and cost.
-
-### Google Cloud Translation
-
-```json
-{
-  "lsp": {
-    "translation-lsp": {
-      "initialization_options": {
-        "target_language": "ja",
-        "provider": {
-          "name": "google_translate"
-        }
-      }
-    }
-  }
-}
-```
-
-In a supported document, run `editor: toggle code actions` from Zed's Command Palette, choose `Google Cloud API key…`, then run `Save Google Cloud API key`. Paste the key in the terminal window that opens and press Enter. As with DeepL, `target_language` must be a language code, and a selected word is translated instead of looked up. See [Google Cloud Translation](docs/providers/google-translate.md) for creating the key and cost.
+Each provider's page also describes creating the key and cost.
 
 ### Other common settings
 
-These settings sit next to `provider` in `initialization_options`. Each can be omitted.
+These settings sit next to `provider` in `initialization_options`. Each can be omitted. Restart the language server after changing them, as after changing `provider`.
 
 | Setting | Default | What it sets |
 | --- | --- | --- |
@@ -206,14 +122,17 @@ These settings sit next to `provider` in `initialization_options`. Each can be o
 | Operation | How |
 | --- | --- |
 | Comment Hover | Hover over a supported code comment, or place the cursor in it and run Zed's `editor: hover`. |
-| Markdown selection | With a provider ready, as described under [Set up a provider](#set-up-a-provider), and `features.automatic_selection` set to `true`, select Markdown prose and keep the selection stable. Translation starts in the background; Hover over that range to read it. |
-| `Translate selection to …` | To translate immediately or recover from a background failure, use the `Translate selection to …` Code Action. The Code Action shows `Translation ready. Hover over the selected text to view it.` when complete. |
-| Word lookup | Select up to three words or one identifier on one line, such as `retain` or `retain_completed`. Hover shows a dictionary entry instead of a translation. The model writes the entry; the extension includes no dictionary data. The DeepL API and Google Cloud Translation translate the selection instead. |
-| `… and open in tab` | In Markdown or Plain Text, use `Translate selection to … and open in tab` to read the translation in a separate document. With no selection, the action becomes `Translate document to … and open in tab` and translates the whole document. |
-| CodeLens | With `"code_lens": "on"` in Zed's settings, comments get `Translate \| Settings`, and translated ranges show the first line of the translation; click it to read all of it. Markdown and Plain Text get a menu line above the first line. |
-| Cancel | To stop one accepted translation, place the cursor or a selection in its range and choose `Cancel translation of lines …` from Code Actions. `Cancel all translations` stops all translation work without canceling an account menu. |
+| Markdown selection | With `features.automatic_selection` set to `true`, select Markdown prose and keep the selection stable. Translation starts in the background; Hover over that range to read it. |
+| `Translate selection to …` | This Code Action translates the selection immediately, also after a background failure. When it is done, Hover over the selection to read it. |
+| Word lookup | Select up to three words or one identifier on one line. Hover shows a dictionary entry that the model writes. The DeepL API and Google Cloud Translation translate it instead. |
+| `… and open in tab` | In Markdown or Plain Text, this Code Action opens the translation of the selection in a separate document, or of the whole document when nothing is selected. |
+| CodeLens | With `"code_lens": "on"` in Zed's settings, comments get `Translate \| Settings`, and translated ranges show the first line of the translation; click it to read all of it. |
+| Cancel | Place the cursor in a range and choose `Cancel translation of lines …` from Code Actions, or choose `Cancel all translations`. |
+| Delete | Use `Delete translation` on a translation's card, the `Settings` menu of a comment's CodeLens, or Code Actions in Markdown and Plain Text. |
 
-The rules of these operations are described under [Usage](docs/usage.md).
+A text already translated with the same provider and settings is shown again without being sent, even at another place or in another document. With [`disk_cache`](docs/configuration.md#disk-cache) enabled, these translations also last across restarts.
+
+The rules of these operations are described under [Usage](docs/usage.md), and the cache under [Cache](docs/behavior.md#cache).
 
 ## Before you send text
 
@@ -221,20 +140,21 @@ The rules of these operations are described under [Usage](docs/usage.md).
 - If a comment contains a credential, the credential is sent with it.
 - With `features.automatic_selection` set to `true`, selecting Markdown prose just to copy it can also send it for translation.
 - Looking up a word also sends the line it is on.
+- With [`disk_cache`](docs/configuration.md#disk-cache) enabled, completed translations are written to files on this computer, without encryption. The text that was sent is not written; a dictionary entry holds its word and example sentence, and a translation holds what was left untranslated, such as code and identifiers.
 
 What each request contains is described under [What is sent](docs/usage.md#what-is-sent). Cost is described on each provider's page.
 
 ## Documentation
 
-- [Configuration](docs/configuration.md): the full settings example, the server path, languages, features, timing, size limits, work and cache limits, and changing the model.
-- [ChatGPT](docs/providers/chatgpt.md): the settings of the ChatGPT provider and connecting your account.
-- [Anthropic API](docs/providers/anthropic.md): the settings of the Anthropic provider and its API key.
-- [OpenAI API](docs/providers/openai-api.md): the settings of the OpenAI API provider and its API key.
-- [OpenAI-compatible API](docs/providers/openai-compatible.md): the settings of the OpenAI-compatible provider, the addresses of some services, and their API keys.
-- [DeepL API](docs/providers/deepl.md): the settings of the DeepL provider, how the text is sent, and its API key.
-- [Google Cloud Translation](docs/providers/google-translate.md): the settings of the Google Cloud Translation provider and its API key.
-- [Usage](docs/usage.md): Hover, selections, looking up words, translations opened in a tab, status, canceling and retrying, and what is sent.
-- [Behavior](docs/behavior.md): admission, what keeps work running, automatic selection, the cache, deadlines, retries, and pauses.
+- [Configuration](docs/configuration.md): every setting, with a full example, including the server path and the disk cache.
+- [ChatGPT](docs/providers/chatgpt.md): settings and connecting your account.
+- [Anthropic API](docs/providers/anthropic.md): settings and the API key.
+- [OpenAI API](docs/providers/openai-api.md): settings and the API key.
+- [OpenAI-compatible API](docs/providers/openai-compatible.md): settings, the addresses of some services, and API keys.
+- [DeepL API](docs/providers/deepl.md): settings, how the text is sent, and the API key.
+- [Google Cloud Translation](docs/providers/google-translate.md): settings and the API key.
+- [Usage](docs/usage.md): each way of translating, canceling and deleting translations, and what is sent.
+- [Behavior](docs/behavior.md): when translation work starts, waits, and stops, and how translations are cached.
 - [Languages](docs/languages.md): supported languages, comment extraction, and language server settings.
 - [Development](docs/development.md): checks, the mock provider and its samples, CI, and the dependency policy.
 
