@@ -714,7 +714,7 @@ fn deletion_is_offered_while_translations_are_stored() {
     assert_eq!(editor.delete_titles(&uri, cursor), titles);
 }
 
-/// The check of `docs/development.md` with `samples/long-document.md`.
+/// The check of `docs/development/README.md` with `samples/long-document.md`.
 #[test]
 fn deleting_a_list_item_of_the_long_sample_sends_one_part_again() {
     let sample = include_str!("../../../../../samples/long-document.md").replace("\r\n", "\n");

@@ -61,8 +61,8 @@ relative to the repository root.
   for user-facing changes.
 - Use `major.minor` Cargo compatibility ranges and track `Cargo.lock`. Any exact
   pin needs a documented compatibility reason. Keep Oxc crates on the same release
-  line; consult the Unicode compatibility note in `docs/development.md` before
-  lexer updates.
+  line; consult the Unicode compatibility note in `docs/development/README.md`
+  before lexer updates.
 - When updating `zed_extension_api`, verify the intended Zed host supports that
   API version as well as checking the WASM build.
 

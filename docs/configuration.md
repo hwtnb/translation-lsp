@@ -375,7 +375,7 @@ Two combinations are also limited. They are checked for the configured worst cas
 - `max(input_kib.hover, input_kib.document) × work.admitted` must not exceed `262144` KiB (256 MiB). For example, 16 MiB document input with 64 accepted jobs is rejected; use at most 16 accepted jobs at that input limit.
 - `output_kib × work.concurrent` must not exceed `65536` KiB (64 MiB). A 16 MiB output limit permits at most four simultaneous translations.
 
-These ceilings are a local resource policy, not measured hardware limits or provider guarantees. Source documents, parser state, allocator overhead, transport buffers, and temporary translation files are additional costs, so these figures are **not a process-memory guarantee**. A limit beyond these ceilings needs a change in the server; Zed settings cannot raise them. The reasons for the ceilings are described under [Size limit ceilings](development.md#size-limit-ceilings).
+These ceilings are a local resource policy, not measured hardware limits or provider guarantees. Source documents, parser state, allocator overhead, transport buffers, and temporary translation files are additional costs, so these figures are **not a process-memory guarantee**. A limit beyond these ceilings needs a change in the server; Zed settings cannot raise them. The reasons for the ceilings are described under [Size limit ceilings](development/README.md#size-limit-ceilings).
 
 Increasing a local limit does not increase the model's context or output capacity or extend the request deadline. A translation opened in a tab sends its text as one whole unless [`document_split`](#document-split) is enabled. Failed, incomplete, and oversized results are not displayed or saved as completed translations.
 

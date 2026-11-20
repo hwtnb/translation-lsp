@@ -155,8 +155,8 @@ cargo build -p translation-lsp --release --locked
 - [Google Cloud Translation](docs/ja/providers/google-translate.md): 設定とAPIキー。
 - [使い方](docs/ja/usage.md): 翻訳のしかたごとの使い方、取り消しと訳文の削除、送信する内容。
 - [動作](docs/ja/behavior.md): 翻訳の処理が始まる、待つ、止まる条件と、訳文のキャッシュ。
-- [対応言語](docs/ja/languages.md): 対応する言語、コメントの抽出、言語サーバーの設定。
-- [開発](docs/ja/development.md): 検証、モックのプロバイダーとサンプル、CI、依存関係の方針。
+- [対応言語](docs/ja/languages.md): 対応する言語、コメントが翻訳されないとき、言語サーバーの設定。
+- [開発](docs/ja/development/README.md): 検証、モックのプロバイダーとサンプル、CI、依存関係の方針。
 
 ## ライセンス
 

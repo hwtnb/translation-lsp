@@ -155,8 +155,8 @@ What each request contains is described under [What is sent](docs/usage.md#what-
 - [Google Cloud Translation](docs/providers/google-translate.md): settings and the API key.
 - [Usage](docs/usage.md): each way of translating, canceling and deleting translations, and what is sent.
 - [Behavior](docs/behavior.md): when translation work starts, waits, and stops, and how translations are cached.
-- [Languages](docs/languages.md): supported languages, comment extraction, and language server settings.
-- [Development](docs/development.md): checks, the mock provider and its samples, CI, and the dependency policy.
+- [Languages](docs/languages.md): supported languages, comments that are not translated, and language server settings.
+- [Development](docs/development/README.md): checks, the mock provider and its samples, CI, and the dependency policy.
 
 ## License
 
