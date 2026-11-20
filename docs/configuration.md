@@ -82,7 +82,12 @@ A server on PATH comes before the downloaded one, so updating the extension does
 
 ### Manual installation
 
-Set `binary.path` when the extension cannot reach GitHub, when no server is published for your system, or to use a server you built. Either build the server as described under [Build the server from source](../README.md#build-the-server-from-source), or download the archive for your system from the release of the extension's version and extract it. To check a downloaded archive, compare its SHA-256 with its line in the release's `SHA256SUMS`: use `sha256sum` on Linux, `shasum -a 256` on macOS, or `Get-FileHash -Algorithm SHA256` in PowerShell. Keep the license files that the archive contains next to the executable.
+Set `binary.path` when the extension cannot reach GitHub, when no server is published for your system, or to use a server you built. Get the server in one of two ways:
+
+- Build it as described under [Build the server from source](../README.md#build-the-server-from-source).
+- Download the archive for your system from the release of the extension's version and extract it. Keep the license files that the archive contains next to the executable.
+
+To check a downloaded archive, compare its SHA-256 with its line in the release's `SHA256SUMS`: use `sha256sum` on Linux, `shasum -a 256` on macOS, or `Get-FileHash -Algorithm SHA256` in PowerShell.
 
 `binary.path` is an absolute path for the OS where the server runs, including `.exe` on Windows. For example:
 
@@ -116,7 +121,9 @@ In that language, neither Hover translation nor the Code Actions appear. To turn
 
 UI labels are in English regardless of `target_language`. `target_language` defaults to `ja`; `source_language` defaults to `auto`. With `auto`, the same translation request identifies the source language.
 
-A value that is an ISO 639 language code, alone or with subtags such as `zh-Hans` or `pt-BR`, is shown with the English name of its language, as `Japanese (ja)`, both in Code Action titles and in the instructions sent to the provider. Any other value, such as `Japanese`, is used as written. The DeepL API and Google Cloud Translation take no instructions and only language codes; see [Settings](providers/deepl.md#settings) of the DeepL API page and [Settings](providers/google-translate.md#settings) of the Google Cloud Translation page.
+A value that is an ISO 639 language code, alone or with subtags such as `zh-Hans` or `pt-BR`, is shown with the English name of its language, as `Japanese (ja)`, both in Code Action titles and in the instructions sent to the provider. Any other value, such as `Japanese`, is used as written.
+
+The DeepL API and Google Cloud Translation take no instructions and only language codes; see [Settings](providers/deepl.md#settings) of the DeepL API page and [Settings](providers/google-translate.md#settings) of the Google Cloud Translation page.
 
 ## Features
 
@@ -231,9 +238,20 @@ Any other setting inside `hover`, or any other value, is a settings error.
 
 Any other setting inside `document_split`, or any other value, is a settings error.
 
-Markdown is divided only where a block that is inside no other block starts, and before a heading where it can be: sections, each from a heading to the next, join the part before them while that part stays within `chunk_kib`. Only a section of more than twice `chunk_kib` is divided between its own paragraphs, lists, tables, and code blocks, and it shares no part with another section, except a small last part as described below. A heading never ends a part: it stays with the block after it, and so do the headings right before it, even beyond `chunk_kib`. A list, quote, table, code block, or HTML block is never divided, however large. Plain Text is divided between paragraphs, at blank lines. A last part of less than a quarter of `chunk_kib` joins the part before it. A part without a letter or a digit, such as a thematic break alone, is not sent and stays as written.
+A text is divided as follows:
 
-The translations of the parts are joined in the order of the document, with the line breaks between the parts as written. `document_timeout_ms` covers all the parts together, and `translation_limits.output_kib` applies to the joined translation: once the parts that completed exceed it, the translation fails and no more parts are sent. If any part fails, or its translation comes back blank, nothing opens, and the requests still in progress stop. With `document_split` enabled, a tab translation and a range translation are separate operations, as with `provider.document`; see [Admission and execution slots](behavior.md#admission-and-execution-slots). What each request holds is described under [What is sent](usage.md#what-is-sent).
+- Markdown is divided before a heading where it can be, so that a part holds whole sections up to about `chunk_kib`. Only a section of more than twice `chunk_kib` is divided between its own paragraphs, lists, tables, and code blocks.
+- A heading stays with the block after it, and a list, quote, table, code block, or HTML block is never divided, so a part can exceed `chunk_kib`.
+- Plain Text is divided between paragraphs, at blank lines.
+- A part without a letter or a digit, such as a thematic break alone, is not sent and stays as written.
+
+The translations of the parts are joined in the order of the document, with the line breaks between the parts as written.
+
+- `document_timeout_ms` covers all the parts together.
+- `translation_limits.output_kib` applies to the joined translation: once the parts that completed exceed it, the translation fails and no more parts are sent.
+- If any part fails, or its translation comes back blank, nothing opens, and the requests still in progress stop.
+
+With `document_split` enabled, a tab translation and a range translation are separate operations, as with `provider.document`; see [Admission and execution slots](behavior.md#admission-and-execution-slots). What each request holds is described under [What is sent](usage.md#what-is-sent).
 
 Limitations:
 
@@ -266,7 +284,12 @@ The translations are kept in the folder `translation-lsp/translations` inside th
 | Linux | `$XDG_CACHE_HOME/translation-lsp/translations`, or `~/.cache/translation-lsp/translations` when `XDG_CACHE_HOME` is unset |
 | Windows | `%LOCALAPPDATA%\translation-lsp\translations` |
 
-Each file holds one translation, one part of a translation sent in parts, one dictionary entry with its CodeLens line, or the result that an automatic request found the text already in the target language. Its name is a SHA-256 hash of what was sent and the settings that change the translation, as described under [Cache](behavior.md#cache). The text that was sent and the lines around it are not written; a dictionary entry holds its word and example sentence, and a translation holds what was left untranslated, such as code and identifiers. The files are not encrypted. On macOS and Linux, the folder and each file are open to their owner alone. Failed, incomplete, canceled, and timed-out results are not written. When the folder cannot be used, translations are kept in memory only, and the server writes one line to its log for each kind of failure, without the text or the translation.
+Each file holds one translation, one part of a translation sent in parts, one dictionary entry with its CodeLens line, or the result that an automatic request found the text already in the target language. Its name is a SHA-256 hash of what was sent and the settings that change the translation.
+
+- The text that was sent and the lines around it are not written. A dictionary entry holds its word and example sentence, and a translation holds what was left untranslated, such as code and identifiers.
+- The files are not encrypted. On macOS and Linux, the folder and each file are open to their owner alone.
+- Failed, incomplete, canceled, and timed-out results are not written.
+- When the folder cannot be used, translations are kept in memory only, and the server writes one line to its log for each kind of failure, without the text or the translation.
 
 The server cleans the folder after it starts and then every six hours, apart from translation requests. It removes the translations not used for longer than `days`, then the least recently used ones while the rest take more than 64 MiB; the 64 MiB limit is fixed. A translation is used when a request finds it, in memory or on disk. Files of other names in the folder stay.
 
@@ -309,9 +332,19 @@ Work and cache limits are optional objects inside `translation_limits`:
 }
 ```
 
-`admitted` counts running and queued translation operations, including canceled workers until they terminate. `concurrent` limits all executing translations, `documents` limits operations dispatched as tab translations, `automatic` limits jobs retained by comment Hover or automatic selection without a manual or tab request, and `hover_waiters` limits individual pending Hover responses. All counts must be positive integers. Require `documents <= concurrent <= admitted` and `automatic < admitted`. This reserves admission capacity for explicit requests, but does not reserve an idle worker. Increasing concurrency can increase simultaneous provider usage.
+Each count is a positive integer:
 
-`cache.entries` bounds the combined successful, failed, and tab cache entries across all documents. `cache.capacity_kib` bounds their stored text, not total process memory. The effective capacity is the greater of this value and `output_kib`, so one maximum-size result can fit. The translations kept in memory by what was sent, described under [Cache](behavior.md#cache), take the same two limits of their own. Metadata, source documents, in-flight input, and temporary tab files are outside this text budget. Defaults are a starting point for sequential reading, not measured provider or hardware limits. Omitted nested fields retain their defaults; restart the language server after changing them.
+- `admitted`: running and queued translations, including canceled ones until their workers end
+- `concurrent`: translations running at once
+- `documents`: pieces of work started as tab translations at once
+- `automatic`: translations kept by comment Hover or automatic selection without a manual or tab request
+- `hover_waiters`: Hover responses waiting at once
+
+The counts must satisfy `documents <= concurrent <= admitted` and `automatic < admitted`. This leaves room to accept explicit requests, but does not keep a worker idle. Increasing concurrency can increase simultaneous provider usage.
+
+`cache.entries` bounds the combined successful, failed, and tab cache entries across all documents. `cache.capacity_kib` bounds their stored text, not total process memory. The effective capacity is the greater of this value and `output_kib`, so one maximum-size result can fit. The translations kept in memory by what was sent, described under [Cache](behavior.md#cache), take the same two limits of their own.
+
+Metadata, source documents, in-flight input, and temporary tab files are outside this text budget. Defaults are a starting point for sequential reading, not measured provider or hardware limits. Omitted nested fields retain their defaults; restart the language server after changing them.
 
 ## Maximum values
 
@@ -337,7 +370,10 @@ The following are **maximum configurable values**, separate from the defaults ab
 | --- | --- |
 | `days` | `365` |
 
-Two combined limits also apply: `max(input_kib.hover, input_kib.document) × work.admitted` must not exceed `262144` KiB (256 MiB), and `output_kib × work.concurrent` must not exceed `65536` KiB (64 MiB). For example, 16 MiB document input with 64 accepted jobs is rejected; use at most 16 accepted jobs at that input limit. A 16 MiB output limit permits at most four simultaneous translations. These checks apply to configured worst cases, even when the queue is currently empty.
+Two combinations are also limited. They are checked for the configured worst case, even when the queue is empty:
+
+- `max(input_kib.hover, input_kib.document) × work.admitted` must not exceed `262144` KiB (256 MiB). For example, 16 MiB document input with 64 accepted jobs is rejected; use at most 16 accepted jobs at that input limit.
+- `output_kib × work.concurrent` must not exceed `65536` KiB (64 MiB). A 16 MiB output limit permits at most four simultaneous translations.
 
 These ceilings are a local resource policy, not measured hardware limits or provider guarantees. Source documents, parser state, allocator overhead, transport buffers, and temporary translation files are additional costs, so these figures are **not a process-memory guarantee**. A limit beyond these ceilings needs a change in the server; Zed settings cannot raise them. The reasons for the ceilings are described under [Size limit ceilings](development.md#size-limit-ceilings).
 

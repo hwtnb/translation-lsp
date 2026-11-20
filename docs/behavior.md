@@ -2,33 +2,35 @@
 
 [日本語](ja/behavior.md)
 
-This page describes the rules the language server follows: how much work it accepts, what keeps accepted work running, how it tracks automatic selections, what Hover returns, what it caches, and how deadlines, retries, and pauses apply. The operations themselves are described under [Usage](usage.md).
+This page describes what happens to translation work: how much runs at once, what keeps it running, what Hover shows, which translations are kept and reused, and when automatic translation stops. The operations themselves are described under [Usage](usage.md).
 
 ## Admission and execution slots
 
-By default, up to two translations run at once and eight are accepted across all open documents. Multiple ranges in the same document can be accepted. Exact duplicate targets share one operation. At most one tab translation starts at a time, leaving capacity for range translations. Accepted work keeps its queue order, except that range work may bypass a tab waiting for the tab limit.
+By default, up to two translations run at once, and up to eight are accepted, running or queued, across all open documents. Requests for exactly the same range share one translation. At most one piece of work starts as a tab translation at a time, so range translations keep a slot. Accepted work runs in order, except that range work can pass a tab translation waiting for its slot.
 
-A tab request for a range already accepted shares that operation and does not acquire another slot. That sharing applies without `provider.document` and with `document_split` off. With the Anthropic API, OpenAI API, and OpenAI-compatible providers, a range request asks for fewer output tokens than a tab request (see What is sent on the [Anthropic API](providers/anthropic.md#what-is-sent), [OpenAI API](providers/openai-api.md#what-is-sent), and [OpenAI-compatible API](providers/openai-compatible.md#what-is-sent) pages), so a tab shares a range operation only until its request is sent, and the shared request then asks for the tab's limit; a tab requested after that is a separate operation. With `provider.document` or [`document_split`](configuration.md#document-split) enabled, a tab translation and a range translation of the same range are separate operations: neither joins the other, each counts toward the accepted limit, and each takes its own slot.
+An explicit request refused because the queue is full reports its file and lines and says that it was not accepted. These limits are set under [`translation_limits.work`](configuration.md#work-and-cache-limits).
 
-A tab translation sent in parts is still one operation with one slot, and sends up to `document_split.parallel` parts at once, so the provider can receive the requests of that many parts from it besides those of other operations. It opens only when every part has succeeded: the first part that fails ends it and stops the requests of the other parts. After cancellation, expiry, a document edit, a change of authorization, or a stop described under [Pauses](#pauses), no request of a remaining part is sent.
+A tab translation of a range already accepted shares that work. It is separate work, counted and run on its own, in these cases:
 
-Configure these limits below `translation_limits.work`.
+- `provider.document` or [`document_split`](configuration.md#document-split) is enabled.
+- With the Anthropic API, OpenAI API, and OpenAI-compatible providers, the range request has already been sent.
+
+A tab translation sent in parts is one piece of work with one slot, but it sends up to `document_split.parallel` parts at once, so the provider can receive that many requests from it. It opens only when every part has succeeded: the first part that fails stops the others. After cancellation, expiry, a document edit, a change of account or key, or a stop described under [Pauses](#pauses), no further part is sent.
 
 ## What keeps accepted work running
 
-Selection and tab commands acknowledge acceptance immediately. Changing or clearing a selection, switching tabs, or canceling that command's LSP response does not cancel accepted work. A Hover response can be canceled or time out independently, without canceling an accepted comment translation. Moving from comment A to B keeps A running or queued; return to either comment to read its completed result. Merely passing over a comment can therefore consume provider usage once Zed sends a Hover request.
+Accepted work keeps running when the selection changes or is cleared, when you switch tabs, and when Zed cancels a Hover response or the response times out. Moving from comment A to comment B keeps A running or queued; return to either comment to read its result. Merely passing over a comment can therefore consume provider usage once Zed sends a Hover request.
 
-Editing anywhere in the source document, closing it, changing authorization, or shutting down the server invalidates affected work and the results of the cache by position; the translations kept by what was sent stay, as described under [Cache](#cache). Token refresh does not invalidate them. With the providers that take an API key, saving, replacing, or removing the key changes authorization. Opening and dismissing the account or key menu of a provider leaves translations running.
+Editing the source document, closing it, changing the account or API key, or shutting down the server ends the affected work and removes its translations at those positions. The translations kept by what was sent stay, as described under [Cache](#cache), though shutting down keeps only those on disk with `disk_cache`. Opening and closing a provider's account or key menu leaves translations running.
 
 ## Automatic selection
 
-A stable automatic selection that overlaps the immediately preceding selection replaces only that previous operation's automatic ownership. Empty or ineligible selections do not break this adjustment chain. Observing another document or a non-overlapping eligible selection does. Explicit requests and other Hover waiters keep shared work alive.
+Comment Hover and automatic Markdown selection share a limit of three automatic translations by default. When the limit is reached:
 
-Comment Hover and automatic selection share the default limit of three automatic operations. A comment Hover rejected at capacity is not retained; return to it when capacity is available or run a manual selection translation. For automatic selection, when capacity is full, only the latest unaccepted candidate remains: selecting D then E may leave D untranslated. The candidate is labeled `selection not yet accepted` and is not included in the accepted queue count. An explicit request rejected for capacity reports the file name and line range and states that it was not accepted.
+- A comment Hover is not accepted. Return to the comment later, or run `Translate selection to …`.
+- Only the latest Markdown selection waits, and the status bar shows `selection not yet accepted`. Selecting D and then E may leave D untranslated.
 
-Selection changes are observed through Zed range requests. One server tracks the latest candidate and adjustment chain, not independent selections in separate editors. Previously accepted distinct ranges remain. Copying selected prose can still trigger automatic translation. A failed background operation is not automatically submitted again.
-
-Code Action requests restricted to unrelated kinds do not change automatic selection tracking.
+When a new automatic selection that overlaps the one just before it becomes stable and starts translating, the translation of the earlier selection stops, unless another request also asked for it. Earlier ranges that do not overlap stay translated. One server follows the latest selection, not one selection per editor. A failed background translation is not sent again automatically.
 
 ## What Hover returns
 
@@ -38,30 +40,65 @@ Hover first returns the newest completed translation covering the position. A ne
 
 The server keeps completed translations in two ways: by position, for what Hover, CodeLenses, and tabs show, and by what was sent, so that the same text is not sent again.
 
-The cache by position holds multiple ranges in memory, bounded across the server by `translation_limits.cache`. The most recently requested successful range covering the Hover position wins, even if requests finish out of order. A new successful result removes older results that it fully contains. Other entries are evicted in least-recently-used order when count or capacity is exceeded.
+### Translations at a position
 
-Tab results are separate from Hover results, with at most one successful tab result per source document, and share the global cache budget. An explicit translation request without a cached result for its output can reuse the other output's completed translation of exactly the same range, subject to the requested input limit. Opening a tab alone does not make its result visible in Hover; explicitly translate that range for Hover to reuse it. With `provider.document` or `document_split` enabled, neither output reuses the other's cached result: each request is translated with its own settings, or in parts.
+Translations at a position stay in memory within `translation_limits.cache`, counted across all documents; the least recently used go first. Hover shows the newest requested translation that covers its position, and a new translation removes the older ones it fully contains. Each document keeps at most one tab translation.
 
-Editing or closing the source document, changing accounts, or reconnecting removes the affected entries of the cache by position. A place where comment Hover found the text already in the target language shows nothing until the document changes, even when the same text is translated elsewhere. After eviction, Markdown Hover does not automatically translate the range again; select it or run the manual action. Comment Hover can start a new translation.
+An explicit translation of exactly the range that a tab translated, or the reverse, reuses that translation when the range is within the input limit of the request that uses it, unless `provider.document` or `document_split` is enabled. A tab translation alone does not appear on Hover.
 
-Before a translation is sent, the server also looks for one made from the same request: the same text, provider, model, settings that change the translation, such as `effort` but not `speed`, `target_language`, and `source_language`, and the same kind of result: the translation of a whole text, the translation of one part of a text sent in parts, a dictionary entry with the line of its term, or the result that an automatic request found the text already in the target language. One that is found is shown without a request, wherever its text is: at another place, in another document, or after an edit that left the text as it was. An automatic request uses a stored translation, or else a stored result that the text is in the target language; an explicit request uses only a stored translation, because it always translates. With the DeepL API and Google Cloud Translation, a selection short enough to be looked up is translated like other text, and its translation is not stored. A translation in a tab sent in parts looks up each part and sends only the parts not found; each part is stored when its translation completes, even if the document then fails. A text that is sent whole is stored alike for a range and for a tab, so the two share it when they send the same settings, with `document_split` enabled too. These translations stay when the account or the API key changes, and are used with the new one. They are kept in memory within limits of their own equal to `translation_limits.cache`, and, with [`disk_cache`](configuration.md#disk-cache), on disk, where they are used after a restart. Without `disk_cache`, Hover does not store text on disk; opening a translation tab writes the completed result to a temporary file. Failed, interrupted, canceled, and expired work never publishes a partial translation and is never stored. A retained range failure is shown as an error, not as translated text.
+Editing or closing the document, or changing the account or key, removes the affected translations at positions. After a Markdown range is removed, Hover does not translate it again: select it again or run the Code Action. Comment Hover translates a comment again. Where comment Hover found the text already in the target language, nothing shows until the document changes.
 
-In code, CodeLenses look up the stored translations of the comments that no result and no translation in progress overlaps, away from the requests. A comment longer than `translation_limits.input_kib.hover` is not looked up, as it is never translated for its range. A document is looked up again after it, the stored translations, or the account changes, or when a translation in progress kept one of its comments out of the last lookup; when only the stored translations changed, the comments already looked up are looked up in memory only. A lookup finds at most `translation_limits.cache.entries` translations, as the cache keeps no more. A translation found this way enters the cache by position as the provider's translation of the comment would: Hover shows it, deleting it deletes its stored translation, and it counts toward `translation_limits.cache`. It does not take a place that a result or a translation in progress took while it was looked up, it drops no other result when the cache is full, and it is put in only while the document is synchronized and it, the stored translations, and the account are as the lookup started from. Looking up sends no request, takes no admission or execution slot, and shows no `Translating…`. Results that a text is in the target language are not looked up this way.
+### Translations kept by what was sent
 
-Zed keeps a CodeLens line that shows the same text after an edit, such as the translation of a comment after a line is added above the comment, with the command of the version it was made for. The server runs the line of a translation or of `Translation failed`, and `Retry`, from such a line on the same range where it is now, if no edit since touched that range; in code, that range must also still be a whole comment. `Translate` of a comment follows only where the comment starts, and translates the whole comment that starts there now, so it also works after the comment was edited, written further, or given another line at its end. They are refused when an edit touched the range, or for `Translate` crossed its start; when the comments now group differently there, as when a comment line added right above joins the comment; and when an edit made a CR and an LF on either side of it one line break, as when a CR is typed right before an LF. They also need the edits made since the line was made, which the server keeps for the last 512 updates and 4,096 changes in all: one update that changes more places than that, a replaced text, a lost synchronization, or a reopened document leaves an older line refused. `Translate in tab` translates the whole document as it is now, whatever was edited, unless the document was reopened or its synchronization was lost. Code Actions keep needing the version they were made for, as Zed asks for them again each time. After the language server restarts while a file stays open, Zed also keeps such lines for the server that ended, and they do nothing until the file is closed and opened again; the server cannot change that.
+Before sending a text, the server looks for a translation of the same text made with the same provider, model, settings, and languages. One that is found is shown without a request, wherever the text is: at another place, in another document, or after an edit that left the text as it was. These translations stay when the account or the API key changes.
 
-Retry actions always request a new translation or join one already in progress: they do not use a stored translation, and their result takes its place. Reopening the same cached tab result reuses its temporary file unless it was deleted or its saved contents changed.
+- An automatic request also uses a kept result that the text is in the target language. An explicit request uses only a kept translation, because it always translates.
+- Retry actions never use a kept translation: they send the text again, or join the same translation in progress, and replace it.
+- A dictionary entry is used again only for the same term on the same line.
+- A tab translation sent in parts looks up each part and sends only the parts not found. Each part is kept once it completes, even if the document then fails.
+- With the DeepL API and Google Cloud Translation, a selection short enough to be looked up is translated and not kept.
 
-Deleting cached results for one range removes the translation for Hover, the tab translation, the recorded failure, and the same-language result for exactly that range, with the stored translations they came from and the stored result that the same text is in the target language. Document deletion clears every cached result for that source document with their stored translations, and also the stored translations of what the current text of the document sends with the current settings: the whole text, its parts when a tab sends it in parts, and in code each comment, so that it also works after a restart. These two remove stored translations from disk only with `disk_cache` enabled. Confirmed global deletion clears results across all documents, including results added while the confirmation was open, and every stored translation in memory and on disk, even with `disk_cache` off. Open translation tabs and accepted translation work remain in place.
+These translations are kept in memory within limits of their own equal to `translation_limits.cache`. With [`disk_cache`](configuration.md#disk-cache), they are also kept on disk and used after a restart. Without it, Hover writes no text to disk; a translation opened in a tab is written to a temporary file, as described under [Opening a translation in a tab](usage.md#opening-a-translation-in-a-tab).
+
+Failed, interrupted, canceled, and expired work never shows a partial translation and is never kept. A failure is shown as an error, not as translated text. What deleting removes is described under [Deleting cached translations](usage.md#deleting-cached-translations).
+
+## CodeLens lines after an edit
+
+Zed keeps a CodeLens line after an edit when it shows the same text, such as the translation of a comment after a line is added above the comment. The line keeps the command of the version it was made for. Clicking it works as follows:
+
+- The line of a translation or of `Translation failed`, and `Retry`, act on their range where it is now. In code, that range must still be a whole comment.
+- `Translate` follows where the comment starts and translates the whole comment that starts there now, also after the comment was edited or extended.
+- `Translate in tab` translates the whole document as it is now, unless the document was reopened or its synchronization was lost.
+
+These lines, except `Translate in tab`, are refused in these cases:
+
+- An edit touched the range, or, for `Translate`, crossed the start of the comment.
+- The comments there now group differently, as when a comment line added right above joins the comment.
+- An edit joined a CR and an LF into one line break, as when a CR is typed right before an LF.
+- The document was reopened, its text was replaced, or its synchronization was lost.
+- The server no longer has every edit made since the line was made, which happens after very many edits.
+
+Code Actions that name a range work only in the version they were made for, as Zed asks for them again each time. After the language server restarts while a file stays open, Zed keeps the lines of the server that ended. They do nothing until the file is closed and opened again; the server cannot change that.
 
 ## Deadlines
 
-Each Hover response waits up to 20 seconds from receipt, including queue time. Manual and automatic selection work has a 30-second execution budget and tab work has 180 seconds, starting when dispatched to a worker. Retained comment translations use `hover_timeout_ms`, with a default 20-second execution cap starting at dispatch, independently of the Hover response deadline. Repeated joins never restart execution time; adding a longer-lived owner can increase the budget from the original start. API calls, credential refresh, retries, and streaming use that budget. Queue time is additional for retained work, and admission and concurrency limits bound the number of operations ahead of it. OAuth and management operations have separate internal limits.
+- A Hover response waits up to `hover_timeout_ms`, 20 seconds by default, from when it arrives, including time in the queue.
+- The comment translation behind it keeps running after the response ends, for up to the same time from when the translation starts.
+- Selection translations have `selection_timeout_ms`, 30 seconds by default, and tab translations, including a selection opened in a tab, `document_timeout_ms`, 180 seconds, from when they start. Time in the queue comes on top.
+
+The time covers API calls, credential refresh, retries, and streaming. Joining work that is already running never restarts its time; when a selection or tab request with a longer limit joins, the limit grows, counted from the original start. Sign-in and menu operations have limits of their own.
 
 ## Automatic retries
 
-An explicit temporary service error, including an overload reported after HTTP 200, is retried at most once within the original deadline. The server waits two seconds by default, or uses a numeric `Retry-After` of up to 120 seconds. Other `Retry-After` values leave the error for manual retry. Cancellation, document changes, and account changes also stop a pending retry. After an API key is saved, replaced, or removed, a pending retry is not sent. Connection failures and interrupted streams are not automatically replayed. A retry sends the same model, `effort`, and `speed`; no failure makes the server send a request again without `speed`.
+An explicit temporary service error, including an overload reported after HTTP 200, is retried at most once within the original deadline.
+
+- The server waits two seconds, or the seconds of a numeric `Retry-After` of up to 120. Any other `Retry-After` leaves the error for you to retry.
+- Cancellation, a document change, or a change of account or API key stops a pending retry.
+- Connection failures and interrupted streams are not retried automatically.
+- A retry sends the same model, `effort`, and `speed`. No failure makes the server send a request again without `speed`.
 
 ## Pauses
 
-Usage limits, account restrictions, and configuration errors pause automatic translation and return an error. After resolving the cause, explicitly run a selection or document translation to retry; restarting or reconnecting is unnecessary. Automatic translation stays paused until an explicit retry succeeds. Jobs accepted before the stop do not send new HTTP requests; repeated stop notifications are suppressed and affected retained ranges keep their failure state. The providers that take an API key follow the same rules for billing, key, model, and permission errors; see Errors and pauses on the [Anthropic API](providers/anthropic.md#errors-and-pauses), [OpenAI API](providers/openai-api.md#errors-and-pauses), and [OpenAI-compatible API](providers/openai-compatible.md#errors-and-pauses) pages. When a document is sent in parts, the success of one part counts as a successful explicit translation, even when the document fails as a whole.
+Usage limits, account restrictions, and configuration errors pause automatic translation and return an error. After fixing the cause, run a selection or document translation explicitly. Automatic translation resumes when that succeeds; restarting or reconnecting is not needed.
+
+Work accepted before the pause sends no new request and keeps its failure, and the pause is not reported again for each of them. The providers that take an API key also pause for billing, key, model, and permission errors; see Errors and pauses on the [Anthropic API](providers/anthropic.md#errors-and-pauses), [OpenAI API](providers/openai-api.md#errors-and-pauses), and [OpenAI-compatible API](providers/openai-compatible.md#errors-and-pauses) pages. When a document is sent in parts, the success of one part counts as a successful explicit translation, even when the document fails as a whole.
