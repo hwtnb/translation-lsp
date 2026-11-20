@@ -21,7 +21,9 @@ A tab translation sent in parts is one piece of work with one slot, but it sends
 
 Accepted work keeps running when the selection changes or is cleared, when you switch tabs, and when Zed cancels a Hover response or the response times out. Moving from comment A to comment B keeps A running or queued; return to either comment to read its result. Merely passing over a comment can therefore consume provider usage once Zed sends a Hover request.
 
-Editing the source document, closing it, changing the account or API key, or shutting down the server ends the affected work and removes its translations at those positions. The translations kept by what was sent stay, as described under [Cache](#cache), though shutting down keeps only those on disk with `disk_cache`. Opening and closing a provider's account or key menu leaves translations running.
+Editing the source document, closing it, changing the account or API key, or shutting down the server ends the affected work and removes its translations at those positions. The translations kept by what was sent stay, as described under [Cache](#cache), though shutting down keeps only those on disk with `disk_cache`.
+
+Translations keep running, and Hover still works, while the `Settings` menu or a provider's account or key menu is open. Once you choose an item that starts an account operation, Hover and new translations are refused until the operation ends, including while it waits for a choice or a confirmation.
 
 ## Automatic selection
 
@@ -86,7 +88,7 @@ Code Actions that name a range work only in the version they were made for, as Z
 - The comment translation behind it keeps running after the response ends, for up to the same time from when the translation starts.
 - Selection translations have `selection_timeout_ms`, 30 seconds by default, and tab translations, including a selection opened in a tab, `document_timeout_ms`, 180 seconds, from when they start. Time in the queue comes on top.
 
-The time covers API calls, credential refresh, retries, and streaming. Joining work that is already running never restarts its time; when a selection or tab request with a longer limit joins, the limit grows, counted from the original start. Sign-in and menu operations have limits of their own.
+The time covers API calls, credential refresh, retries, and streaming. Joining work that is already running never restarts its time; when a selection or tab request with a longer limit joins, the limit grows, counted from the original start. Sign-in and other account operations have limits of their own, which include the time they wait for a choice or a confirmation. The `Settings` menu and a provider's account or key menu have none.
 
 ## Automatic retries
 

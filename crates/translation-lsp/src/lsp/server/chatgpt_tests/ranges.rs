@@ -360,7 +360,7 @@ async fn only_a_code_action_waiting_on_a_range_says_that_it_is_ready() {
             })
             .unwrap();
         server
-            .card_response(Response::new_ok(card, json!({"title": RETRY})))
+            .card_response(&connection, Response::new_ok(card, json!({"title": RETRY})))
             .unwrap();
     };
     server

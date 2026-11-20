@@ -24,15 +24,6 @@ pub(super) struct Job<C> {
 }
 
 pub(super) enum Task<C> {
-    AccountMenu {
-        ui: Ui,
-    },
-    /// The server menu and the commands it offers.
-    Menu {
-        ui: Ui,
-        message: String,
-        choices: Vec<Command>,
-    },
     /// Opens Zed's settings file in the editor.
     OpenSettings {
         ui: Ui,
@@ -78,8 +69,6 @@ pub(super) struct Completion<T> {
 
 /// What an administration job gives.
 pub(super) enum Administered {
-    /// The command chosen from the account menu or another menu, or none.
-    Choice(Option<Command>),
     /// An operation that has nothing to tell.
     Done,
     /// A message for the user.
@@ -215,44 +204,6 @@ pub(super) async fn run_job<P: TranslationProvider>(
                 Err(error) => (Err(error), Vec::new()),
             };
             Finished::Translation(Completion { ticket, result }, keys)
-        }
-        Task::AccountMenu { ui } => {
-            let result = until_deadline(&mut deadline, || true, async {
-                let commands = provider.account_commands();
-                let titles: Vec<_> = commands
-                    .iter()
-                    .map(|command| command.title.to_owned())
-                    .collect();
-                ui.choose("", &titles).await.map(|choice| {
-                    Administered::Choice(choice.and_then(|title| {
-                        commands
-                            .into_iter()
-                            .find(|command| command.title == title)
-                            .map(|command| Command::new(title, command.command.into(), None))
-                    }))
-                })
-            })
-            .await;
-            Finished::Administration(Completion { ticket, result })
-        }
-        Task::Menu {
-            ui,
-            message,
-            choices,
-        } => {
-            let result = until_deadline(&mut deadline, || true, async {
-                let titles: Vec<_> = choices
-                    .iter()
-                    .map(|command| command.title.clone())
-                    .collect();
-                ui.choose(&message, &titles).await.map(|choice| {
-                    Administered::Choice(
-                        choice.and_then(|title| choices.into_iter().find(|c| c.title == title)),
-                    )
-                })
-            })
-            .await;
-            Finished::Administration(Completion { ticket, result })
         }
         Task::OpenSettings { ui } => {
             let result = until_deadline(&mut deadline, || true, async {

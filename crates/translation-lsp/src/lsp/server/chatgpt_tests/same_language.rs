@@ -245,7 +245,7 @@ async fn join_after_sending(
         else {
             panic!("Expected the delete confirmation to still be open");
         };
-        server.card_response(response).unwrap();
+        server.card_response(&connection, response).unwrap();
     }
 
     (messages, shown)
@@ -592,7 +592,7 @@ async fn a_card_retry_that_joins_after_sending_is_sent_again_despite_an_older_ta
     wait_held(&tail, 1).await;
     fixture.state.lock().unwrap().stream_tail_gate = None;
     server
-        .card_response(Response::new_ok(card, json!({"title": RETRY})))
+        .card_response(&connection, Response::new_ok(card, json!({"title": RETRY})))
         .unwrap();
     assert_eq!(server.scheduler.translations().len(), 1);
     tail.release.notify_one();

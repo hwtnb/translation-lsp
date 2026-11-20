@@ -154,11 +154,50 @@ impl ServerCommand {
     }
 }
 
+/// What a command answers.
+pub(super) enum Caller {
+    /// A `workspace/executeCommand` request, which the result answers.
+    Request(RequestId),
+    /// The menu card on which the user chose the command, which nothing
+    /// answers. Menus offer no translation commands; the ID only fills the
+    /// parameter of `queue`, as for a card's Retry.
+    Menu(RequestId),
+}
+
+impl Caller {
+    /// The request that the result answers, if any.
+    fn request(&self) -> Option<RequestId> {
+        match self {
+            Self::Request(id) => Some(id.clone()),
+            Self::Menu(_) => None,
+        }
+    }
+
+    /// The ID that translation work is queued under.
+    fn id(self) -> RequestId {
+        match self {
+            Self::Request(id) | Self::Menu(id) => id,
+        }
+    }
+}
+
 impl<P: TranslationProvider> Server<P> {
+    /// Runs the command of request `id`. `None` means that the request is
+    /// answered later.
     pub(super) fn execute_command(
         &mut self,
         connection: &Connection,
         id: RequestId,
+        params: ExecuteCommandParams,
+    ) -> RequestResult<Option<Value>> {
+        self.run_command(connection, Caller::Request(id), params)
+    }
+
+    /// Runs a command as things are now, from a request or a menu.
+    pub(super) fn run_command(
+        &mut self,
+        connection: &Connection,
+        caller: Caller,
         params: ExecuteCommandParams,
     ) -> RequestResult<Option<Value>> {
         if params.command == LENS_COMMAND {
@@ -216,24 +255,30 @@ impl<P: TranslationProvider> Server<P> {
                 self.confirm_delete_all().map_err(provider_failure)?;
                 Ok(Some(Value::Null))
             }
-            ServerCommand::Account(command) => {
-                let ui = self.ui.clone();
-                let task = if command == SETTINGS_COMMAND {
-                    Task::AccountMenu { ui }
-                } else {
-                    Task::Administration { command, ui }
-                };
-                self.start_administration(connection, id, task)
+            ServerCommand::Account(command) if command == SETTINGS_COMMAND => {
+                let choices = self
+                    .provider
+                    .account_commands()
+                    .into_iter()
+                    .map(|entry| Command::new(entry.title.into(), entry.command.into(), None))
+                    .collect();
+                self.open_menu("", choices).map_err(provider_failure)?;
+                Ok(Some(Value::Null))
             }
-            ServerCommand::Menu(uri) => self.start_administration(
+            ServerCommand::Account(command) => self.start_administration(
                 connection,
-                id,
-                Task::Menu {
+                caller.request(),
+                Task::Administration {
+                    command,
                     ui: self.ui.clone(),
-                    message: self.menu_message().into(),
-                    choices: self.menu_choices(uri.as_ref())?,
                 },
             ),
+            ServerCommand::Menu(uri) => {
+                let choices = self.menu_choices(uri.as_ref())?;
+                self.open_menu(self.menu_message(), choices)
+                    .map_err(provider_failure)?;
+                Ok(Some(Value::Null))
+            }
             ServerCommand::Automatic(on) => {
                 self.set_automatic(connection, on)?;
                 Ok(Some(Value::Null))
@@ -247,7 +292,7 @@ impl<P: TranslationProvider> Server<P> {
                 }
                 self.start_administration(
                     connection,
-                    id,
+                    caller.request(),
                     Task::OpenSettings {
                         ui: self.ui.clone(),
                     },
@@ -276,17 +321,17 @@ impl<P: TranslationProvider> Server<P> {
             }
             ServerCommand::TranslateSelection(target) => {
                 self.check_feature(Feature::SelectionAction, &target)?;
-                self.queue(id, target, PendingReply::Command { notice: true })
+                self.queue(caller.id(), target, PendingReply::Command { notice: true })
             }
             ServerCommand::LensTranslate(target) => {
                 self.check_feature(Feature::SelectionAction, &target)?;
-                self.queue(id, target, PendingReply::Command { notice: false })
+                self.queue(caller.id(), target, PendingReply::Command { notice: false })
             }
             ServerCommand::Retry(target) => {
-                self.queue(id, target, PendingReply::Retry { notice: true })
+                self.queue(caller.id(), target, PendingReply::Retry { notice: true })
             }
             ServerCommand::LensRetry(target) => {
-                self.queue(id, target, PendingReply::Retry { notice: false })
+                self.queue(caller.id(), target, PendingReply::Retry { notice: false })
             }
             ServerCommand::Show(target) => {
                 let gone = || {

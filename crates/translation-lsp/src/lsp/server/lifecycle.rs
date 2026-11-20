@@ -4,18 +4,20 @@ impl<P: TranslationProvider> Server<P> {
     pub(super) fn expire(&mut self, connection: &Connection) -> ServerResult<()> {
         self.preview_files.expire(&self.ui);
         let now = Instant::now();
-        let ids: Vec<_> = self
+        let tickets: Vec<_> = self
             .administrations
             .iter()
             .filter(|(_, work)| work.deadline <= now)
-            .map(|(id, _)| id.clone())
+            .map(|(&ticket, _)| ticket)
             .collect();
-        for id in ids {
-            let work = self.administrations.remove(&id).unwrap();
+        for ticket in tickets {
+            let work = self.administrations.remove(&ticket).unwrap();
             let _ = work.stop.send(None);
             let error = failure(ErrorCode::RequestFailed, "Account operation timed out");
             self.command_failure(&error)?;
-            respond(connection, id, Err(error))?;
+            if let Some(id) = work.request {
+                respond(connection, id, Err(error))?;
+            }
         }
         for (ticket, work) in self.scheduler.take_expired(now) {
             self.complete(
@@ -107,12 +109,46 @@ impl<P: TranslationProvider> Server<P> {
             refuse_translation(connection, id, ErrorCode::RequestCanceled)
                 .map_err(|error| error.message)?;
         }
-        let ids: Vec<_> = self.administrations.keys().cloned().collect();
-        for id in ids {
-            self.cancel(connection, &id, ErrorCode::RequestCanceled)
+        let tickets: Vec<_> = self.administrations.keys().copied().collect();
+        for ticket in tickets {
+            self.cancel_administration(connection, ticket, ErrorCode::RequestCanceled)
                 .map_err(|error| error.message)?;
         }
         Ok(())
+    }
+
+    /// The ticket of the account operation that answers request `id`.
+    pub(super) fn administration_of(&self, id: &RequestId) -> Option<u64> {
+        self.administrations
+            .iter()
+            .find(|(_, work)| work.request.as_ref() == Some(id))
+            .map(|(&ticket, _)| ticket)
+    }
+
+    /// Stops an account operation, refusing the request it answers, if any.
+    fn cancel_administration(
+        &mut self,
+        connection: &Connection,
+        ticket: u64,
+        code: ErrorCode,
+    ) -> RequestResult<()> {
+        let Some(work) = self.administrations.remove(&ticket) else {
+            return Ok(());
+        };
+        let _ = work.stop.send(None);
+        let Some(id) = work.request else {
+            return Ok(());
+        };
+        connection
+            .sender
+            .send(
+                Response {
+                    id,
+                    response_result: Err(failure(code, "Account operation cancelled")),
+                }
+                .into(),
+            )
+            .map_err(|_| failure(ErrorCode::InternalError, "Client disconnected"))
     }
 
     pub(super) fn cancel(
@@ -121,18 +157,8 @@ impl<P: TranslationProvider> Server<P> {
         id: &RequestId,
         code: ErrorCode,
     ) -> RequestResult<()> {
-        if let Some(work) = self.administrations.remove(id) {
-            let _ = work.stop.send(None);
-            connection
-                .sender
-                .send(
-                    Response {
-                        id: id.clone(),
-                        response_result: Err(failure(code, "Account operation cancelled")),
-                    }
-                    .into(),
-                )
-                .map_err(|_| failure(ErrorCode::InternalError, "Client disconnected"))?;
+        if let Some(ticket) = self.administration_of(id) {
+            self.cancel_administration(connection, ticket, code)?;
         }
         if self.scheduler.remove_waiter(id) {
             refuse_translation(connection, id.clone(), code)?;

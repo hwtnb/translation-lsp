@@ -83,7 +83,9 @@ impl Editor {
             .ui
             .response(Response::new_ok(card.id, json!({"title": button})))
         {
-            self.server.card_response(response).unwrap();
+            self.server
+                .card_response(&self.connection, response)
+                .unwrap();
         }
         target
     }

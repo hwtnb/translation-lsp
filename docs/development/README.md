@@ -31,7 +31,7 @@ Hover over the comments in these samples.
 
 | Languages | Samples |
 | --- | --- |
-| Rust | [samples/comment.rs](../../samples/comment.rs) |
+| Rust | [samples/comment.rs](../../samples/comment.rs). With the menu of the comment's `Settings` left open, Hover over the comment still shows its translation. |
 | C# | [samples/comment.cs](../../samples/comment.cs), with ordinary and XML documentation comments |
 | C, C++ | [samples/comment.c](../../samples/comment.c) and [samples/comment.cpp](../../samples/comment.cpp), including Doxygen comments |
 | JavaScript, JSX | [samples/comment.js](../../samples/comment.js) and [samples/comment.jsx](../../samples/comment.jsx) |

@@ -1394,14 +1394,15 @@ fn comment_lens_off_leaves_lines_only_on_translated_comments_and_the_menu_on_top
 }
 
 /// Opens the server menu with `settings`, checks its message and titles, and
-/// picks `choice`. Gives the request of the command that opened the menu.
+/// that the command that opened it is answered before anything is chosen,
+/// and picks `choice`.
 fn choose_in_menu<const N: usize>(
     client: &mut Client,
     settings: &Value,
     message: &str,
     titles: [&str; N],
     choice: &str,
-) -> RequestId {
+) {
     let id = client.execute(settings.clone());
     let menu = client.prompt();
     assert_eq!(menu.params["message"], message);
@@ -1409,8 +1410,8 @@ fn choose_in_menu<const N: usize>(
         menu.params["actions"],
         json!(titles.map(|title| json!({"title": title})).as_slice())
     );
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
     client.send(Response::new_ok(menu.id, json!({"title": choice})).into());
-    id
 }
 
 #[test]
@@ -1428,14 +1429,13 @@ fn the_settings_code_lens_turns_automatic_translation_off_and_on_and_opens_zed_s
 
     // Turning automatic translation off cancels the comment Hover in progress
     // and starts no other, but leaves the comment's Translate.
-    let off = choose_in_menu(
+    choose_in_menu(
         &mut client,
         &settings,
         ON,
         ["Turn off automatic translation", "Open Zed settings file"],
         "Turn off automatic translation",
     );
-    assert!(client.receive(off, TIMEOUT).unwrap().is_null());
     let error = client.receive(hover, TIMEOUT).unwrap_err();
     assert_eq!(error.code, ErrorCode::RequestCanceled as i32);
     assert!(client.hover(uri, start.clone()).is_null());
@@ -1444,18 +1444,17 @@ fn the_settings_code_lens_turns_automatic_translation_off_and_on_and_opens_zed_s
         ["Translate", "Settings"]
     );
 
-    let on = choose_in_menu(
+    choose_in_menu(
         &mut client,
         &settings,
         OFF,
         ["Turn on automatic translation", "Open Zed settings file"],
         "Turn on automatic translation",
     );
-    assert!(client.receive(on, TIMEOUT).unwrap().is_null());
     let range = range_for(COMMENT_DOCUMENT, COMMENT);
     assert_preview(&client.hover(uri, start), COMMENT, COMMENT_JA, &range);
 
-    let open = choose_in_menu(
+    choose_in_menu(
         &mut client,
         &settings,
         ON,
@@ -1475,7 +1474,31 @@ fn the_settings_code_lens_turns_automatic_translation_off_and_on_and_opens_zed_s
         "{path}"
     );
     client.send(Response::new_ok(document.id, json!({"success": true})).into());
-    assert!(client.receive(open, TIMEOUT).unwrap().is_null());
+    client.finish(true);
+}
+
+#[test]
+fn hover_translates_while_the_settings_menu_is_open() {
+    const OFF: &str = "Automatic translation: Off until the language server restarts";
+    let uri = "file:///open-menu.rs";
+    let mut client = lens_client(&[], uri, true);
+    let found = lenses(&mut client, uri);
+    assert_eq!(lens_titles(&found), ["Translate", "Settings"]);
+    let id = client.execute(found[1]["command"].clone());
+    let menu = client.prompt();
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+
+    let start = range_for(COMMENT_DOCUMENT, COMMENT)["start"].clone();
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    assert_preview(&client.hover(uri, start), COMMENT, COMMENT_JA, &range);
+
+    client
+        .send(Response::new_ok(menu.id, json!({"title": "Turn off automatic translation"})).into());
+    let id = client.execute(found[1]["command"].clone());
+    let menu = client.prompt();
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+    assert_eq!(menu.params["message"], OFF);
+    client.send(Response::new_ok(menu.id, Value::Null).into());
     client.finish(true);
 }
 
@@ -4444,6 +4467,7 @@ fn without_a_provider_the_server_translates_nothing_and_shows_how_to_choose_one(
 
     let id = client.execute(actions[0]["command"].clone());
     let menu = client.prompt();
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
     client.send(Response::new_ok(menu.id, json!({"title": "Open Zed settings file"})).into());
     let settings = client.document();
     assert_eq!(settings.params["external"], false);
@@ -4455,7 +4479,6 @@ fn without_a_provider_the_server_translates_nothing_and_shows_how_to_choose_one(
     client.send(Response::new_ok(settings.id, json!({"success": false})).into());
     let message = "Could not open Zed's settings file. Run zed: open settings file from the \
         Command Palette";
-    assert_eq!(client.receive(id, TIMEOUT).unwrap_err().message, message);
     assert_eq!(client.notice()["message"], message);
     assert!(client.notifications.is_empty());
     client.finish(true);

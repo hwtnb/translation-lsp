@@ -72,7 +72,7 @@ To connect your account:
 
 Loading settings, opening the account menu, and Hover do not start an OAuth sign-in flow.
 
-When the account is ready, the connection item becomes `Change ChatGPT account` and the plan permission item is hidden. Sign-out appears only while signed in. While a management operation is running, duplicate management candidates are hidden. If the connection state cannot be read, use `Check ChatGPT connection…` and follow its message.
+When the account is ready, the connection item becomes `Change ChatGPT account` and the plan permission item is hidden. Sign-out appears only while signed in. While an account operation runs, Code Actions list only cancellations of translations in progress, not `ChatGPT account…`. The account menu still opens from `Settings`, but an item chosen on it is refused with `An account operation is in progress`. If the connection state cannot be read, use `Check ChatGPT connection…` and follow its message.
 
 While the account is ready, `ChatGPT account…` appears in Markdown and Plain Text documents, and in other documents only in a range whose translation failed. To change the account, open the usage page, or sign out at another time, open a Markdown or Plain Text file.
 

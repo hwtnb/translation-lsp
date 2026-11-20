@@ -1,6 +1,6 @@
 //! The server menu that the Settings CodeLens opens.
 
-use super::*;
+use super::{commands::Caller, *};
 
 /// The menu message while the automatic features follow the settings.
 const AUTOMATIC_ON: &str =
@@ -19,6 +19,8 @@ const CONFIRM_DELETE: &str = "Delete";
 pub(super) enum Card {
     Translation(TranslationTarget),
     ConfirmDeleteAll,
+    /// A menu, with the command of each title.
+    Menu(Vec<Command>),
 }
 
 /// The Markdown of a translation card around `text`. Zed draws a rule in a
@@ -122,8 +124,26 @@ impl<P: TranslationProvider> Server<P> {
         Ok(())
     }
 
+    /// Shows a menu in a card, which stays until the user chooses one of
+    /// `choices` or closes it. Nothing waits for it: the chosen command runs
+    /// when the response comes.
+    pub(super) fn open_menu(
+        &mut self,
+        message: &str,
+        choices: Vec<Command>,
+    ) -> Result<(), ProviderError> {
+        let titles: Vec<_> = choices.iter().map(|choice| choice.title.as_str()).collect();
+        let id = self.ui.show_card(MessageType::INFO, message, &titles)?;
+        self.cards.insert(id, Card::Menu(choices));
+        Ok(())
+    }
+
     /// Runs the action selected on a card that is still open.
-    pub(super) fn card_response(&mut self, response: Response) -> ServerResult<()> {
+    pub(super) fn card_response(
+        &mut self,
+        connection: &Connection,
+        response: Response,
+    ) -> ServerResult<()> {
         let Some(card) = self.cards.remove(&response.id) else {
             return Ok(());
         };
@@ -146,6 +166,23 @@ impl<P: TranslationProvider> Server<P> {
                     self.queue(response.id, target, PendingReply::Retry { notice: false })
                 {
                     self.ui.error(&error.message)?;
+                }
+            }
+            (Card::Menu(choices), Some(title)) => {
+                let Some(choice) = choices.into_iter().find(|choice| choice.title == title) else {
+                    return Ok(());
+                };
+                let params = ExecuteCommandParams {
+                    command: choice.command,
+                    arguments: choice.arguments.unwrap_or_default(),
+                    work_done_progress_params: Default::default(),
+                };
+                // As before a request, so that an operation past its deadline
+                // does not refuse the command.
+                self.expire(connection)?;
+                if let Err(error) = self.run_command(connection, Caller::Menu(response.id), params)
+                {
+                    self.command_failure(&error)?;
                 }
             }
             _ => (),

@@ -31,7 +31,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 | 言語 | サンプル |
 | --- | --- |
-| Rust | [samples/comment.rs](../../../samples/comment.rs) |
+| Rust | [samples/comment.rs](../../../samples/comment.rs)。コメントの `Settings` のメニューを開いたままでも、コメントにホバーすると訳文が出ます。 |
 | C# | [samples/comment.cs](../../../samples/comment.cs)。通常コメントとXMLドキュメントコメント |
 | C、C++ | [samples/comment.c](../../../samples/comment.c)、[samples/comment.cpp](../../../samples/comment.cpp)。Doxygenコメントも含む |
 | JavaScript、JSX | [samples/comment.js](../../../samples/comment.js)、[samples/comment.jsx](../../../samples/comment.jsx) |

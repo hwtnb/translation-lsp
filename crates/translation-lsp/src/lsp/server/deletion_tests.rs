@@ -64,7 +64,9 @@ impl<P: TranslationProvider> Editor<P> {
         if let Some((Purpose::Card, response)) =
             self.server.ui.response(Response::new_ok(prompt.id, choice))
         {
-            self.server.card_response(response).unwrap();
+            self.server
+                .card_response(&self.connection, response)
+                .unwrap();
         }
         prompt.params
     }
@@ -348,7 +350,10 @@ fn settings_passes_its_document_to_delete_only_that_documents_results() {
     }
 
     assert!(editor.delete_actions(&uri, cursor(0, 2)).is_empty());
-    assert!(editor.execute(1, MENU_COMMAND, json!([])).is_none());
+    assert_eq!(
+        editor.execute(1, MENU_COMMAND, json!([])),
+        Some(Value::Null)
+    );
     let old_menu = editor.respond_to_prompt(Value::Null);
     assert_eq!(
         old_menu["actions"],
@@ -357,18 +362,15 @@ fn settings_passes_its_document_to_delete_only_that_documents_results() {
             {"title": menu::DELETE_ALL}
         ])
     );
-    assert!(!editor.finish_next());
-    assert!(editor.reply(1).is_null());
 
     let settings = editor
         .lenses(&uri)
         .into_iter()
         .find(|c| c.title == "Settings")
         .unwrap();
-    assert!(
-        editor
-            .execute(2, &settings.command, json!(settings.arguments))
-            .is_none()
+    assert_eq!(
+        editor.execute(2, &settings.command, json!(settings.arguments)),
+        Some(Value::Null)
     );
     let menu = editor.respond_to_prompt(json!({"title": menu::DELETE_DOCUMENT}));
     assert_eq!(
@@ -379,8 +381,6 @@ fn settings_passes_its_document_to_delete_only_that_documents_results() {
             {"title": menu::DELETE_ALL}
         ])
     );
-    assert!(!editor.finish_next());
-    assert!(editor.reply(2).is_null());
     assert_eq!(
         editor.hover(3, &uri, Position::new(0, 2)),
         Some(Value::Null)
@@ -424,10 +424,13 @@ fn delete_all_clears_results_at_confirmation_and_does_not_stop_translation() {
     let prompt = editor.prompt();
     editor
         .server
-        .card_response(Response::new_ok(
-            "untracked-card".to_owned().into(),
-            json!({"title": "Delete"}),
-        ))
+        .card_response(
+            &editor.connection,
+            Response::new_ok(
+                "untracked-card".to_owned().into(),
+                json!({"title": "Delete"}),
+            ),
+        )
         .unwrap();
     assert_eq!(
         editor.hover(4, &prose, Position::new(0, 2)).unwrap()["range"],
@@ -491,22 +494,24 @@ fn a_delete_all_card_from_settings_allows_an_account_menu_to_open() {
         ),
     );
 
-    assert!(editor.execute(1, MENU_COMMAND, json!([uri])).is_none());
+    assert_eq!(
+        editor.execute(1, MENU_COMMAND, json!([uri])),
+        Some(Value::Null)
+    );
     editor.respond_to_prompt(json!({"title": menu::DELETE_ALL}));
-    assert!(!editor.finish_next());
     let confirmation = editor.prompt();
-    assert!(editor.reply(1).is_null());
     assert_eq!(confirmation.params["actions"], json!([{"title": "Delete"}]));
 
-    assert!(editor.execute(2, SETTINGS_COMMAND, json!([])).is_none());
+    assert_eq!(
+        editor.execute(2, SETTINGS_COMMAND, json!([])),
+        Some(Value::Null)
+    );
     let account = editor.respond_to_prompt(Value::Null);
     assert!(
         account["actions"]
             .as_array()
             .is_some_and(|actions| !actions.is_empty())
     );
-    assert!(!editor.finish_next());
-    assert!(editor.reply(2).is_null());
 
     editor.answer_prompt(confirmation, Value::Null);
     assert!(editor.server.cache.has_document(&uri));

@@ -145,15 +145,15 @@ async fn key_menu_opens_the_terminal_without_disturbing_work_in_progress() {
     assert!(server.hover(1.into(), hover(&uri, 0)).unwrap().is_none());
     received(&fixture, 1).await;
 
-    assert!(
+    assert_eq!(
         server
             .execute_command(
                 &connection,
                 2.into(),
                 parse(json!({"command": SETTINGS_COMMAND})).unwrap(),
             )
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        Some(Value::Null)
     );
     let Message::Request(picker) = message(&client).await else {
         panic!("Expected the menu")
@@ -166,14 +166,14 @@ async fn key_menu_opens_the_terminal_without_disturbing_work_in_progress() {
             {"title": "Remove Anthropic API key"}
         ])
     );
-    server.ui.response(Response::new_ok(
+    let Some((Purpose::Card, chosen)) = server.ui.response(Response::new_ok(
         picker.id,
         json!({"title": "Replace Anthropic API key"}),
-    ));
-    server
-        .finish(&connection, next(&completions).await)
-        .unwrap();
-    assert!(server.administrations.contains_key(&2.into()));
+    )) else {
+        panic!("Expected the menu to be open")
+    };
+    server.card_response(&connection, chosen).unwrap();
+    assert_eq!(server.administrations.len(), 1);
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
@@ -192,11 +192,9 @@ async fn key_menu_opens_the_terminal_without_disturbing_work_in_progress() {
     );
     assert!(text.ends_with(" anthropic-key"), "{text}");
     assert!(!text.contains(KEY));
-    let Message::Response(response) = message(&client).await else {
-        panic!("Expected the command response")
-    };
-    assert_eq!(response.id, 2.into());
-    assert_eq!(response.response_result.unwrap(), Value::Null);
+    // The menu's command was answered when the menu opened, and the chosen
+    // command answers no request.
+    assert!(client.receiver.is_empty());
     assert_eq!(
         *terminal.opened.lock().unwrap(),
         [env::current_exe().unwrap()]
@@ -219,6 +217,144 @@ async fn key_menu_opens_the_terminal_without_disturbing_work_in_progress() {
     );
     assert_eq!(fixture.calls(), 1);
     assert_eq!(fs::read(fixture.keys.file()).unwrap(), KEY.as_bytes());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn the_key_menu_stays_open_while_translating_and_acts_on_the_key_when_chosen() {
+    let fixture = Fixture::new().await;
+    let (mut server, connection, client, completions) =
+        server(fixture.provider(), Settings::default());
+    let uri = open(&mut server, "open-menu.rs", "rust", "// Read this.");
+    let open_menu = |server: &mut Server<AnthropicProvider>, id: i32| {
+        assert_eq!(
+            server
+                .execute_command(
+                    &connection,
+                    id.into(),
+                    parse(json!({"command": SETTINGS_COMMAND})).unwrap(),
+                )
+                .unwrap(),
+            Some(Value::Null)
+        );
+    };
+    let choose = |server: &mut Server<AnthropicProvider>, menu: RequestId, title: &str| {
+        let Some((Purpose::Card, chosen)) = server
+            .ui
+            .response(Response::new_ok(menu, json!({"title": title})))
+        else {
+            panic!("Expected the menu to be open")
+        };
+        server.card_response(&connection, chosen).unwrap();
+    };
+
+    open_menu(&mut server, 1);
+    let Message::Request(menu) = message(&client).await else {
+        panic!("Expected the menu")
+    };
+    assert_eq!(
+        menu.params["actions"],
+        json!([
+            {"title": "Replace Anthropic API key"},
+            {"title": "Remove Anthropic API key"}
+        ])
+    );
+    assert!(server.administrations.is_empty());
+
+    // Hover and Code Actions work while the menu is open.
+    assert!(server.hover(2.into(), hover(&uri, 0)).unwrap().is_none());
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    let Message::Response(hovered) = message(&client).await else {
+        panic!("Expected the Hover response")
+    };
+    assert_eq!(hovered.id, 2.into());
+    assert!(hovered.response_result.unwrap()["contents"]["value"].is_string());
+    assert_eq!(
+        titles(
+            &mut server,
+            &uri,
+            Range::new(Position::new(0, 0), Position::new(0, 13))
+        ),
+        ["Translate selection to Japanese (ja)"]
+    );
+
+    // The key is removed elsewhere before the user chooses to remove it. The
+    // command acts on the key as it is then.
+    fs::remove_file(fixture.keys.file()).unwrap();
+    choose(&mut server, menu.id, "Remove Anthropic API key");
+    let Message::Request(confirmation) = message(&client).await else {
+        panic!("Expected the confirmation")
+    };
+    assert_eq!(confirmation.params["actions"], json!([{"title": "Remove"}]));
+    server.ui.response(Response::new_ok(
+        confirmation.id,
+        json!({"title": "Remove"}),
+    ));
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    let Message::Notification(notice) = message(&client).await else {
+        panic!("Expected the notice")
+    };
+    assert_eq!(notice.params["type"], 3);
+    assert_eq!(notice.params["message"], "No Anthropic API key is saved.");
+    // Nothing answers the menu's request, which the server sent.
+    assert!(client.receiver.is_empty());
+    assert!(server.administrations.is_empty());
+
+    // A key command chosen while another one asks its question is refused,
+    // with a notice and no response.
+    open_menu(&mut server, 3);
+    let Message::Request(menu) = message(&client).await else {
+        panic!("Expected the menu")
+    };
+    let save = menu.params["actions"][0]["title"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        server
+            .execute_command(
+                &connection,
+                4.into(),
+                parse(json!({"command": REMOVE})).unwrap(),
+            )
+            .unwrap()
+            .is_none()
+    );
+    let Message::Request(confirmation) = message(&client).await else {
+        panic!("Expected the confirmation")
+    };
+    choose(&mut server, menu.id, &save);
+    let Message::Notification(refused) = message(&client).await else {
+        panic!("Expected the refusal")
+    };
+    assert_eq!(refused.params["type"], 1);
+    assert_eq!(
+        refused.params["message"],
+        "An account operation is in progress"
+    );
+    assert!(client.receiver.is_empty());
+    server
+        .ui
+        .response(Response::new_ok(confirmation.id, Value::Null));
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    let Message::Notification(notice) = message(&client).await else {
+        panic!("Expected the notice")
+    };
+    assert_eq!(
+        notice.params["message"],
+        "The Anthropic API key was not removed."
+    );
+    let Message::Response(response) = message(&client).await else {
+        panic!("Expected the command response")
+    };
+    assert_eq!(response.id, 4.into());
+    assert!(client.receiver.is_empty());
+    assert!(fixture.keys.names().is_empty());
 }
 
 #[tokio::test(flavor = "current_thread")]

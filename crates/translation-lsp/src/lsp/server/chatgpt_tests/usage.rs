@@ -136,10 +136,10 @@ async fn unrelated_hover_is_null_when_translation_authorization_is_unavailable()
             let deadline = Instant::now() + Duration::from_secs(180);
             let (stop, _receiver) = watch::channel(Some(deadline));
             server.administrations.insert(
-                99.into(),
+                1,
                 Administration {
+                    request: Some(99.into()),
                     change: AccountChange::Never,
-                    ticket: 1,
                     stop,
                     deadline,
                     context: None,

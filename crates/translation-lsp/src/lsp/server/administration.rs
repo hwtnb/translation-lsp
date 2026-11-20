@@ -53,15 +53,9 @@ impl<P: TranslationProvider> Server<P> {
         connection: &Connection,
         completion: Completion<Administered>,
     ) -> ServerResult<()> {
-        let Some(id) = self
-            .administrations
-            .iter()
-            .find(|(_, work)| work.ticket == completion.ticket)
-            .map(|(id, _)| id.clone())
-        else {
+        let Some(operation) = self.administrations.remove(&completion.ticket) else {
             return Ok(());
         };
-        let operation = self.administrations.remove(&id).unwrap();
         match operation.change {
             AccountChange::AtOnce => self.clear_previews(),
             // The user agreed, and the command changed what translations
@@ -77,30 +71,6 @@ impl<P: TranslationProvider> Server<P> {
                 ErrorCode::RequestFailed,
                 "Account operation timed out",
             )),
-            Ok(Administered::Choice(choice)) => {
-                let result = match choice {
-                    None => Ok(Some(Value::Null)),
-                    Some(choice) => self.execute_command(
-                        connection,
-                        id.clone(),
-                        ExecuteCommandParams {
-                            command: choice.command,
-                            arguments: choice.arguments.unwrap_or_default(),
-                            work_done_progress_params: Default::default(),
-                        },
-                    ),
-                };
-                // The chosen command answers the menu's request within its deadline.
-                if let Some(work) = self.administrations.get_mut(&id) {
-                    work.deadline = operation.deadline;
-                    work.stop.send_replace(Some(operation.deadline));
-                }
-                match result {
-                    Ok(None) => return Ok(()),
-                    Ok(Some(value)) => Ok(value),
-                    Err(error) => Err(error),
-                }
-            }
             Ok(Administered::Message(message)) => {
                 self.ui.inform(&message)?;
                 Ok(Value::Null)
@@ -111,14 +81,18 @@ impl<P: TranslationProvider> Server<P> {
         if let Err(error) = &result {
             self.command_failure(error)?;
         }
-        respond(connection, id, result)
+        match operation.request {
+            Some(id) => respond(connection, id, result),
+            None => Ok(()),
+        }
     }
 
-    /// Starts a job on the administration worker and answers its request when it finishes.
+    /// Starts a job on the administration worker and answers `request`, if
+    /// any, when it finishes.
     pub(super) fn start_administration(
         &mut self,
         connection: &Connection,
-        id: RequestId,
+        request: Option<RequestId>,
         task: Task<P::Context>,
     ) -> RequestResult<Option<Value>> {
         if !self.administrations.is_empty() {
@@ -158,10 +132,10 @@ impl<P: TranslationProvider> Server<P> {
                 )
             })?;
         self.administrations.insert(
-            id,
+            ticket,
             Administration {
+                request,
                 change,
-                ticket,
                 stop,
                 deadline,
                 context,

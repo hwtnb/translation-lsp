@@ -139,8 +139,10 @@ struct TranslationTarget {
 }
 
 struct Administration<C> {
+    /// The request that the operation answers when it ends. An operation
+    /// chosen on a menu card answers none.
+    request: Option<RequestId>,
     change: AccountChange,
-    ticket: u64,
     stop: watch::Sender<Option<Instant>>,
     deadline: Instant,
     /// The context when a command that asks before it changes the account was
@@ -168,7 +170,8 @@ struct Server<P: TranslationProvider> {
     /// The lookups of stored translations for the CodeLenses of comments.
     lookups: Lookups<P::Context>,
     problem: Option<ShownProblem<P::Context>>,
-    administrations: HashMap<RequestId, Administration<P::Context>>,
+    /// The account operations by their tickets.
+    administrations: HashMap<u64, Administration<P::Context>>,
     documents: HashMap<Uri, Document>,
     scheduler: Scheduler<P::Context>,
     selection: Option<Selection<P::Context>>,
@@ -182,8 +185,8 @@ struct Server<P: TranslationProvider> {
     /// The range translations in progress when the editor was last asked to
     /// request CodeLenses again.
     lens_tickets: Vec<u64>,
-    /// The ranges of the cards that show translations, by the requests that
-    /// tell which button the user pressed.
+    /// The open cards, by the requests whose responses tell which button
+    /// the user pressed.
     cards: HashMap<RequestId, Card>,
 }
 
@@ -493,7 +496,9 @@ pub(crate) fn serve_initialized<P: TranslationProvider>(
                         Some((Purpose::OpenDocument, response)) => {
                             server.preview_files.response(&server.ui, &response);
                         }
-                        Some((Purpose::Card, response)) => server.card_response(response)?,
+                        Some((Purpose::Card, response)) => {
+                            server.card_response(connection, response)?
+                        }
                         Some((Purpose::RefreshLenses, _)) => (),
                         None => (),
                     },
@@ -757,7 +762,7 @@ impl<P: TranslationProvider> Server<P> {
         self.expire(connection)?;
         let command = request.method == ExecuteCommand::METHOD;
         let id = request.id;
-        if self.scheduler.pending().contains_key(&id) || self.administrations.contains_key(&id) {
+        if self.scheduler.pending().contains_key(&id) || self.administration_of(&id).is_some() {
             // A duplicate live ID is invalid. Retire it once, allowing later reuse
             // without a completed old ticket answering a new request.
             if command {
@@ -1426,6 +1431,8 @@ mod chatgpt_options_tests;
 mod chatgpt_tests;
 #[cfg(test)]
 mod deletion_tests;
+#[cfg(test)]
+mod menu_tests;
 #[cfg(test)]
 mod store_tests;
 #[cfg(test)]

@@ -9,7 +9,7 @@ use crate::providers::chatgpt;
 use super::*;
 
 #[tokio::test(flavor = "current_thread")]
-async fn activity_cancellation_leaves_account_picker_and_its_deadline_alive() {
+async fn activity_cancellation_leaves_the_account_picker_open() {
     let fixture = Fixture::new().await;
     let auth = fixture.auth();
     fixture.connected(&auth, 3600).await;
@@ -71,7 +71,13 @@ async fn activity_cancellation_leaves_account_picker_and_its_deadline_alive() {
         panic!("Expected picker");
     };
     assert_eq!(picker.method, "window/showMessageRequest");
-    let deadline = server.administrations[&2.into()].deadline;
+    // The command that opened the picker is answered at once.
+    let Message::Response(answered) = client.receiver.try_recv().unwrap() else {
+        panic!("Expected the command's response");
+    };
+    assert_eq!(answered.id, 2.into());
+    assert!(answered.response_result.unwrap().is_null());
+    assert!(server.administrations.is_empty());
     server
         .notification(
             &connection,
@@ -84,10 +90,7 @@ async fn activity_cancellation_leaves_account_picker_and_its_deadline_alive() {
     server.publish_activity();
     assert!(server.scheduler.translations().is_empty());
     assert!(server.selection.as_ref().is_none_or(|s| s.start.is_none()));
-    assert_eq!(
-        *server.administrations[&2.into()].stop.borrow(),
-        Some(deadline)
-    );
+    assert!(server.cards.contains_key(&picker.id));
     let Message::Notification(end) = client.receiver.try_recv().unwrap() else {
         panic!("Expected end");
     };
@@ -109,22 +112,16 @@ async fn activity_cancellation_leaves_account_picker_and_its_deadline_alive() {
     server.finish(&connection, canceled).unwrap();
     assert_eq!(server.scheduler.admitted(), 0);
     assert!(fixture.state.lock().unwrap().records.is_empty());
-    assert_eq!(
-        *server.administrations[&2.into()].stop.borrow(),
-        Some(deadline)
-    );
+    assert!(server.cards.contains_key(&picker.id));
     assert!(client.receiver.is_empty(), "Picker must remain pending");
-    server.ui.response(Response::new_ok(picker.id, Value::Null));
-    while !server.administrations.is_empty() {
-        server
-            .finish(&connection, next(&completions).await)
-            .unwrap();
-    }
-    let Message::Response(dismissed) = client.receiver.try_recv().unwrap() else {
-        panic!("Expected picker dismissal");
+    let Some((Purpose::Card, dismissed)) =
+        server.ui.response(Response::new_ok(picker.id, Value::Null))
+    else {
+        panic!("Expected the picker to be open");
     };
-    assert_eq!(dismissed.id, 2.into());
-    assert!(dismissed.response_result.unwrap().is_null());
+    server.card_response(&connection, dismissed).unwrap();
+    assert!(server.cards.is_empty());
+    assert!(server.administrations.is_empty());
     assert!(client.receiver.is_empty());
     assert!(fixture.state.lock().unwrap().records.is_empty());
 }
@@ -182,9 +179,8 @@ async fn administration_reports_admission_worker_and_deadline_failures_but_not_c
             Request::new(3.into(), ExecuteCommand::METHOD.into(), usage.clone()),
         )
         .unwrap();
-    let work = server.administrations.get_mut(&3.into()).unwrap();
-    let ticket = work.ticket;
-    work.deadline = Instant::now();
+    let ticket = server.administration_of(&3.into()).unwrap();
+    server.administrations.get_mut(&ticket).unwrap().deadline = Instant::now();
     server.expire(&connection).unwrap();
     let error = command_notice(&client, 3, 1).unwrap_err();
     assert_eq!(error.code, ErrorCode::RequestFailed as i32);
@@ -388,13 +384,16 @@ async fn account_picker_filters_states_and_closing_it_has_no_effects() {
             ),
         );
         let state = server.provider.auth_ui_state();
-        server
-            .execute_command(
-                &connection,
-                7.into(),
-                parse(json!({"command":SETTINGS_COMMAND})).unwrap(),
-            )
-            .unwrap();
+        assert_eq!(
+            server
+                .execute_command(
+                    &connection,
+                    7.into(),
+                    parse(json!({"command":SETTINGS_COMMAND})).unwrap(),
+                )
+                .unwrap(),
+            Some(Value::Null)
+        );
         let Message::Request(request) = protocol_message(&client).await else {
             panic!("Expected management picker");
         };
@@ -404,18 +403,14 @@ async fn account_picker_filters_states_and_closing_it_has_no_effects() {
             .map(|command| json!({"title":command.title}))
             .collect();
         assert_eq!(request.params["actions"], json!(expected));
-        server.ui.response(Response {
+        let Some((Purpose::Card, response)) = server.ui.response(Response {
             id: request.id,
             response_result: Ok(Value::Null),
-        });
-        server
-            .finish(&connection, next(&completions).await)
-            .unwrap();
-        let Message::Response(response) = protocol_message(&client).await else {
-            panic!("Expected silent dismissal");
+        }) else {
+            panic!("Expected the picker to be open");
         };
-        assert_eq!(response.id, 7.into());
-        assert!(response.response_result.unwrap().is_null());
+        server.card_response(&connection, response).unwrap();
+        assert!(server.administrations.is_empty());
         assert!(client.receiver.try_recv().is_err());
         assert_eq!(
             server.cache.latest(&uri).as_ref().unwrap().translation,
@@ -475,13 +470,16 @@ async fn account_picker_dispatches_only_the_selected_command() {
     {
         assert!(commands.as_array().unwrap().contains(&json!(command)));
     }
-    server
-        .execute_command(
-            &connection,
-            1.into(),
-            parse(json!({"command":SETTINGS_COMMAND})).unwrap(),
-        )
-        .unwrap();
+    assert_eq!(
+        server
+            .execute_command(
+                &connection,
+                1.into(),
+                parse(json!({"command":SETTINGS_COMMAND})).unwrap(),
+            )
+            .unwrap(),
+        Some(Value::Null)
+    );
     let Message::Request(request) = protocol_message(&client).await else {
         panic!("Expected picker");
     };
@@ -494,14 +492,21 @@ async fn account_picker_dispatches_only_the_selected_command() {
             {"title": "ChatGPT Usage"}
         ])
     );
-    server.ui.response(Response {
+    let Some((Purpose::Card, chosen)) = server.ui.response(Response {
         id: request.id,
         response_result: Ok(json!({"title":"ChatGPT Usage"})),
-    });
-    server
-        .finish(&connection, next(&completions).await)
-        .unwrap();
-    assert!(server.administrations.contains_key(&1.into()));
+    }) else {
+        panic!("Expected the picker to be open");
+    };
+    server.card_response(&connection, chosen).unwrap();
+    // The chosen command answers no request.
+    assert!(
+        server
+            .administrations
+            .values()
+            .all(|work| work.request.is_none())
+    );
+    assert_eq!(server.administrations.len(), 1);
     let Message::Request(request) = protocol_message(&client).await else {
         panic!("Expected chosen usage UI");
     };
@@ -514,7 +519,16 @@ async fn account_picker_dispatches_only_the_selected_command() {
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
-    command_notice(&client, 1, 3).unwrap();
+    assert!(server.administrations.is_empty());
+    let messages: Vec<_> = client.receiver.try_iter().collect();
+    assert!(
+        matches!(
+            messages.as_slice(),
+            [Message::Notification(notice)]
+                if notice.method == "window/showMessage" && notice.params["type"] == 3
+        ),
+        "{messages:?}"
+    );
     assert!(fixture.state.lock().unwrap().records.is_empty());
     assert_eq!(auth.store.snapshot().unwrap().unwrap().revision, before);
     drop(completions);
