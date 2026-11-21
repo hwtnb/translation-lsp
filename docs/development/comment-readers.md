@@ -12,7 +12,7 @@ This page describes how the server reads the comments of each language, and the 
 | Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
 | Tree-sitter grammars | C, C++, C#, Python |
 | `granit-parser` scanner | YAML, including Docker Compose |
-| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
 When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
@@ -40,7 +40,7 @@ The server's own readers read each part once, without restarting from an earlier
 
 The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
 
-The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 33 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 35 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -225,6 +225,22 @@ Literal text in double-quoted strings and indented strings (`'' ... ''`) is skip
 When an indented string immediately follows a decimal number with an exponent, as in `[ 1.2e3''# literal'' ]`, the reader takes the text from the `#` inside the string to the end of the line as one comment.
 
 The reader follows Nix's `lexer.l`. When comparing with rnix, account for the fact that rnix ends a `#` comment only at LF. Use LF for bare CR in the comparison input and trim the trailing CR from CRLF comment ranges. An unclosed `/*` starts no comment in `lexer.l` and causes a lexer error in rnix.
+
+### Prisma
+
+The reader finds comments anywhere outside double-quoted strings. Line comments begin with `//` or the documentation marker `///` and end at CR, LF, or the end of the text. Consecutive documentation lines are grouped separately from ordinary lines. Block comments run from `/*` to the first `*/`. An unfinished block hides the rest of the document.
+
+In a string, a backslash escapes the next character on the line. Prisma's `datamodel.pest` grammar accepts a backslash followed by a single LF or CR inside a string. The reader ends the string at the line break, so `//` or `/*` in the remaining text can start a comment. The closing quote can open another string and hide a later comment on that line. An apparent `/*` without a matching `*/` hides all later comments.
+
+Compare byte ranges only in files where the grammar uses neither `CATCH_ALL` nor `BLOCK_LEVEL_CATCH_ALL`. For recognized blocks such as `model`, the grammar skips the rest of the opening line after `{`. Add any comments it skips there before comparing. Exclude files where a block comment starts on that line and continues onto another line, since the grammar parses the following lines separately.
+
+Exclude files with an unrecognized block (`arbitrary_block`), whose body the grammar skips up to the first `}`. Also exclude files with an unfinished block comment.
+
+### Gleam
+
+Line comments begin with `//`, `///` for documentation, or `////` for module documentation. Any slashes after the fourth belong to the body. Adjacent lines can form a group when their opening markers have the same length. Comments end at CR, LF, or the end of the text.
+
+Double-quoted strings can span lines, and a backslash escapes the next character. An unfinished string hides the rest of the document. Compare byte ranges with the Gleam lexer, starting each range at the first slash of the comment.
 
 ### JSON, YAML, and TOML
 

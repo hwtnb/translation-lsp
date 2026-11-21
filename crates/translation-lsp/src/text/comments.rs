@@ -26,6 +26,7 @@ mod dart;
 mod data;
 mod dockerfile;
 mod elixir;
+mod gleam;
 mod go;
 mod graphql;
 mod haskell;
@@ -39,6 +40,7 @@ mod nix;
 mod ocaml;
 mod php;
 mod powershell;
+mod prisma;
 mod proto;
 mod python;
 mod ruby;
@@ -199,6 +201,8 @@ impl Comments {
             Language::Elixir => Some(elixir::parse(text)),
             Language::Terraform | Language::TerraformVars | Language::Hcl => Some(hcl::parse(text)),
             Language::Nix => Some(nix::parse(text)),
+            Language::Prisma => Some(prisma::parse(text)),
+            Language::Gleam => Some(gleam::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),

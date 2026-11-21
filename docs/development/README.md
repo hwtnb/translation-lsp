@@ -51,6 +51,8 @@ Hover over the comments in these samples.
 | Elixir | [samples/comment.ex](../../samples/comment.ex), with comments and docs |
 | Terraform, Terraform Vars, HCL | [samples/comment.tf](../../samples/comment.tf), [samples/comment.tfvars](../../samples/comment.tfvars), and [samples/comment.hcl](../../samples/comment.hcl) |
 | Nix | [samples/comment.nix](../../samples/comment.nix) |
+| Prisma | [samples/comment.prisma](../../samples/comment.prisma) |
+| Gleam | [samples/comment.gleam](../../samples/comment.gleam) |
 | JSON, JSONC | [samples/comment.json](../../samples/comment.json) and [samples/comment.jsonc](../../samples/comment.jsonc). Zed's JSON language server reports the comments in `comment.json`, and Hover translates them all the same. |
 | YAML, TOML | [samples/comment.yaml](../../samples/comment.yaml) and [samples/comment.toml](../../samples/comment.toml) |
 | Shell script, PowerShell | [samples/comment.sh](../../samples/comment.sh) and [samples/comment.ps1](../../samples/comment.ps1) |

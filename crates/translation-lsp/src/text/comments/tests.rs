@@ -1853,6 +1853,8 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "elixir",
         "hcl",
         "nix",
+        "prisma",
+        "gleam",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2144,6 +2146,8 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "elixir",
         "hcl",
         "nix",
+        "prisma",
+        "gleam",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -4111,6 +4115,59 @@ fn nix_templates_only_read_comments_in_their_expressions() {
             "/* after paths */",
             "/* interpolation in path */",
             "# after path",
+        ]
+    );
+}
+
+#[test]
+fn prisma_comments_skip_strings_and_end_at_the_first_block_close() {
+    let source = concat!(
+        r#"url = "https://example.com/a\"/* hidden */" // URL"#,
+        "\r\n",
+        "# Ignored\r",
+        "id Int /* outer /* inner */ @id // Field\n",
+        "text = \"unfinished\\\r",
+        "/// Next line is code again\n",
+        "/* unfinished\n// hidden",
+    );
+    assert_eq!(
+        sources("prisma", "untitled:comment", source),
+        [
+            "// URL",
+            "/* outer /* inner */",
+            "// Field",
+            "/// Next line is code again",
+        ]
+    );
+    assert_eq!(
+        bodies(
+            "prisma",
+            "// ordinary\n/// first\r\n/// second\r//// extra slash\n/*\n * body\n */"
+        ),
+        ["ordinary", "first\r\nsecond\r/ extra slash", "body"]
+    );
+}
+
+#[test]
+fn gleam_groups_comments_by_opening_and_skips_multiline_strings() {
+    let source = concat!(
+        "//// Module\r//// More\r\n///// Extra slash\n",
+        "/// Doc\n/// More\r",
+        "// Ordinary\r// More\n",
+        "let text = \"https://example.com\n",
+        r#"// hidden \" still hidden""#,
+        " // é🙂\r\n",
+        "/* no block */ // trailing\n",
+        "let unfinished = \"\n// hidden",
+    );
+    assert_eq!(
+        bodies("gleam", source),
+        [
+            "Module\rMore\r\n/ Extra slash",
+            "Doc\nMore",
+            "Ordinary\rMore",
+            "é🙂",
+            "trailing",
         ]
     );
 }

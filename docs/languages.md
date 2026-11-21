@@ -39,6 +39,8 @@ Hover translates the comments of the following languages.
 | Elixir | `#` comments, and the strings given to `@moduledoc`, `@doc`, and `@typedoc` |
 | Terraform, Terraform Vars, HCL | `#` and `//` comments, and `/* ... */`, outside the literal text of strings and heredocs |
 | Nix | `#` comments, `/* ... */`, and `/** ... */` documentation comments, outside the literal text of strings |
+| Prisma | `//` and `/* ... */` comments, including `///` documentation comments |
+| Gleam | `//` comments, including `///` and `////` documentation comments |
 | JSON, JSONC | `//` and `/* ... */` |
 | YAML, TOML | `#` comments |
 | Shell scripts | `#` comments in sh, Bash, and zsh scripts |
@@ -119,6 +121,8 @@ If your settings list the language servers of a language explicitly, add `"trans
 | Terraform Vars | `Terraform Vars` | [Terraform extension](https://github.com/zed-extensions/terraform) |
 | HCL | `HCL` | [Terraform extension](https://github.com/zed-extensions/terraform) |
 | Nix | `Nix` | [Nix extension](https://github.com/zed-extensions/nix) |
+| Prisma | `Prisma` | [Prisma extension](https://github.com/zed-extensions/prisma) |
+| Gleam | `Gleam` | [Gleam extension](https://github.com/gleam-lang/zed-gleam) |
 | JSON | `JSON` | Built in |
 | JSONC | `JSONC` | Built in |
 | YAML | `YAML` | Built in |

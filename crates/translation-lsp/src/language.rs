@@ -40,6 +40,8 @@ pub(crate) enum Language {
     TerraformVars,
     Hcl,
     Nix,
+    Prisma,
+    Gleam,
     Json,
     Jsonc,
     Yaml,
@@ -55,7 +57,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 48] = [
+    pub const ALL: [Self; 50] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -93,6 +95,8 @@ impl Language {
         Self::TerraformVars,
         Self::Hcl,
         Self::Nix,
+        Self::Prisma,
+        Self::Gleam,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -146,6 +150,8 @@ impl Language {
             Self::TerraformVars => "terraform-vars",
             Self::Hcl => "hcl",
             Self::Nix => "nix",
+            Self::Prisma => "prisma",
+            Self::Gleam => "gleam",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

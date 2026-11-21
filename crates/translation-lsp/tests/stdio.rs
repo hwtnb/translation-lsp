@@ -2652,6 +2652,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         ),
         ("file:///general.hcl", "hcl", "s = \"# string\""),
         ("file:///general.nix", "nix", "\"# string\""),
+        ("file:///general.prisma", "prisma", "s = \"// string\""),
+        ("file:///general.gleam", "gleam", "let s = \"// string\""),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2720,15 +2722,17 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             // Protocol Buffers strings cannot span lines.
             "proto" => format!("option t =\n\"{}\";", comment.replace('\n', " ")),
             "graphql" => format!("\"\"\"\n{comment}\n\"\"\"\ntype T {{ a: Int }}"),
-            // SCSS and Haskell strings cannot span lines.
+            // SCSS, Haskell, and Prisma strings cannot span lines.
             "scss" => format!("$t: \"{}\";", comment.replace('\n', " ")),
             "haskell" => format!("t = \"{}\"", comment.replace('\n', " ")),
+            "prisma" => format!("s =\n\"{}\"", comment.replace('\n', " ")),
             "clojure" => format!("(def t \"{comment}\")"),
             "scala" => format!("val t = \"\"\"{comment}\"\"\""),
             "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
             "elixir" => format!("t = \"{comment}\""),
             "terraform" | "terraform-vars" | "hcl" => format!("t = <<EOF\n{comment}\nEOF\n"),
             "nix" => format!("''\n{comment}\n''"),
+            "gleam" => format!("let s = \"{comment}\""),
             // The body of `define` is a value.
             "makefile" => format!("define T\n{comment}\nendef"),
             "ruby" => format!("t = \"{comment}\""),
@@ -3839,6 +3843,12 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         ),
         ("file:///comment.hcl", "hcl", sample!("comment.hcl")),
         ("file:///comment.nix", "nix", sample!("comment.nix")),
+        (
+            "file:///comment.prisma",
+            "prisma",
+            sample!("comment.prisma"),
+        ),
+        ("file:///comment.gleam", "gleam", sample!("comment.gleam")),
     ] {
         // Zig, Make, Haskell, and HCL need LF in line endings. Elixir heredocs do too.
         let endings: &[&str] = if matches!(
@@ -3865,6 +3875,21 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
             "terraform-vars" => &["# Retry"],
             "hcl" => &["# Retry", "/* Keep"],
             "nix" => &["# Retry", "/*\n   * Keep", "/** The shell script"],
+            "prisma" => &[
+                "// Retry",
+                "/// A job",
+                "/// The number",
+                "// Use a stable",
+                "// Send updates here.",
+                "/*\n * The status",
+            ],
+            "gleam" => &[
+                "//// Retry",
+                "/// Builds",
+                "// Keep",
+                "// Use the default",
+                "// Include",
+            ],
             _ => &[],
         };
         for ending in endings {
@@ -3912,6 +3937,8 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 "terraform-vars" => &["# sign"],
                 "hcl" => &["// sign"],
                 "nix" => &["# status", "# This line is part", "#retry"],
+                "prisma" => &["// queued", "//example.com"],
+                "gleam" => &["//example.com", "//retry"],
                 _ => &[],
             } {
                 let start = source.find(marker).unwrap();
@@ -4434,8 +4461,8 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
              ocaml, ocaml.interface, scala, dart, elixir, terraform, terraform-vars, hcl, nix, \
-             json, jsonc, yaml, toml, shellscript, powershell, dockerfile, dockercompose, \
-             makefile, markdown, plaintext",
+             prisma, gleam, json, jsonc, yaml, toml, shellscript, powershell, dockerfile, \
+             dockercompose, makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),

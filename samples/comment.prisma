@@ -1,0 +1,19 @@
+// Retry only if the remote service
+// reports a temporary failure.
+
+/// A job waiting to be sent to the remote service.
+model RetryJob {
+  /// The number of retry attempts made so far.
+  retry_count  Int    @default(0)
+  id           Int    @id // Use a stable job identifier.
+  status       String @default("pending // queued")
+  callback_url String @default("https://example.com/jobs") // Send updates here.
+}
+
+/*
+ * The status message includes the protocol separator.
+ * Keep the separator when displaying the message.
+ */
+datasource db {
+  provider = "postgresql"
+}

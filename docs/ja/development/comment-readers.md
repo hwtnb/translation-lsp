@@ -12,7 +12,7 @@
 | Oxcの構文解析器 | JavaScript、TypeScript（HTML文書とコンポーネントファイル内のスクリプトを含む） |
 | Tree-sitterの文法 | C、C++、C#、Python |
 | `granit-parser` のスキャナー | YAML（Docker Composeを含む） |
-| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
+| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、Prisma、Gleam、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
 
 新しいコード言語には専用の読み取りを書きます。実際のファイルと生成したテキストを使い、見つけたコメントをその言語の字句解析器の結果と比べます。Tree-sitterの文法も候補にする場合は、同じ方法でコメントと読み取り時間を比べます。Rustは既存の字句解析器を、JavaScriptとTypeScriptはOxcを引き続き使います。
 
@@ -40,7 +40,7 @@ PowerShellとTOMLの読み取りは、`pwsh-parser` と `toml_parser` の字句�
 
 Rubyの読み取りは、語がローカル変数かどうかを、スコープの深さにかかわらず1つの集合で調べます。
 
-テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む33の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
+テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む35の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
 
 ## 言語ごとの規則
 
@@ -225,6 +225,22 @@ Terraform、Terraform Vars、HCLは同じ読み取りを使います。行コメ
 `[ 1.2e3''# literal'' ]` のように、指数付きの小数の直後に字下げ文字列が続くと、読み取りは文字列内の `#` から行末までを一つのコメントとして扱います。
 
 読み取りはNixの `lexer.l` に従います。比較に使うrnixは `#` のコメントをLFでだけ終えるため、比較用の入力では単独のCRをLFに置き換え、CRLFの場合はコメント範囲の末尾からCRを除きます。閉じていない `/*` は、`lexer.l` ではコメントの始まりにならず、rnixでは字句エラーになります。
+
+### Prisma
+
+二重引用符で囲まれた文字列の外なら、行のどこにあるコメントでも読み取ります。行コメントは `//` またはドキュメントコメントの `///` で始まり、CR、LF、またはファイルの末尾で終わります。ドキュメントコメントは普通のコメントと分けてまとめます。ブロックコメントは `/*` から最初の `*/` までです。閉じていないブロックは、その後のテキストごと読み飛ばします。
+
+文字列内のバックスラッシュは、同じ行の次の1文字をエスケープします。Prismaの `datamodel.pest` 文法では、バックスラッシュの直後に単独のLFかCRがあっても、文字列が続きます。サーバーは行末で文字列を終えるため、次の行の文字列に含まれる `//` や `/*` をコメントの始まりとして扱うことがあります。閉じる二重引用符を新しい文字列の始まりとみなし、その行で引用符に続くコメントを見落とすこともあります。その `/*` に対応する `*/` がなければ、以降のコメントをすべて見落とします。
+
+コメントのバイト範囲は、文法の `CATCH_ALL` と `BLOCK_LEVEL_CATCH_ALL` が受けた行のないファイルだけで比較します。`model` など文法が認識するブロックでは、開く行の `{` の後ろを行末まで読み飛ばすため、そこにあるコメントを比較する範囲に補います。その行で始まるブロックコメントが改行をまたぐ場合、文法は後続の行を別に読むため、比較から外します。
+
+文法が認識しない名前のブロック（`arbitrary_block`）では、最初の `}` までの本文を読み飛ばします。そのようなブロックがあるファイルと、閉じていないブロックコメントがあるファイルは、比較から外します。
+
+### Gleam
+
+行コメントの開始記号は普通の `//`、ドキュメントの `///`、モジュールのドキュメントの `////` です。5個目以降のスラッシュは本文に含めます。隣り合う行は開始記号の長さが同じ場合だけまとめます。コメントはCR、LF、またはファイルの末尾で終わります。
+
+二重引用符で囲んだ文字列は複数行にわたってよく、バックスラッシュは次の1文字をエスケープします。閉じていない文字列は、その後のテキストごと読み飛ばします。Gleamの字句解析器と比較する際は、コメントの最初のスラッシュからのバイト範囲を使います。
 
 ### JSON、YAML、TOML
 

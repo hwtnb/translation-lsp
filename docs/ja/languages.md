@@ -39,6 +39,8 @@
 | Elixir | `#` のコメントと、`@moduledoc`、`@doc`、`@typedoc` に渡した文字列 |
 | Terraform、Terraform Vars、HCL | `#` と `//` のコメント、`/* ... */`（文字列とヒアドキュメントの本文を除く） |
 | Nix | `#` のコメント、`/* ... */`、ドキュメントコメントの `/** ... */`（文字列の本文を除く） |
+| Prisma | `//` のコメント、`/* ... */`、ドキュメントコメントの `///` |
+| Gleam | `//` のコメント、ドキュメントコメントの `///` と `////` |
 | JSON、JSONC | `//` と `/* ... */` |
 | YAML、TOML | `#` のコメント |
 | シェルスクリプト | sh、Bash、zshのスクリプトの `#` のコメント |
@@ -119,6 +121,8 @@ JavaScriptとTypeScriptでは、約10万段を超える入れ子（`[` を10万�
 | Terraform Vars | `Terraform Vars` | [Terraform拡張](https://github.com/zed-extensions/terraform) |
 | HCL | `HCL` | [Terraform拡張](https://github.com/zed-extensions/terraform) |
 | Nix | `Nix` | [Nix拡張](https://github.com/zed-extensions/nix) |
+| Prisma | `Prisma` | [Prisma拡張](https://github.com/zed-extensions/prisma) |
+| Gleam | `Gleam` | [Gleam拡張](https://github.com/gleam-lang/zed-gleam) |
 | JSON | `JSON` | 組み込み |
 | JSONC | `JSONC` | 組み込み |
 | YAML | `YAML` | 組み込み |

@@ -13,7 +13,7 @@ path = ["hwtnb", "zed-translation-lsp", "releases", "download", "**"]
 
 [language_servers.translation-lsp]
 name = "Translation LSP"
-languages = ["Rust", "JavaScript", "TypeScript", "TSX", "CSharp", "C", "C++", "Python", "Go", "Java", "Kotlin", "Swift", "Ruby", "PHP", "HTML", "Vue.js", "Svelte", "Astro", "XML", "CSS", "SCSS", "SQL", "Lua", "Zig", "Proto", "GraphQL", "Clojure", "Haskell", "OCaml", "OCaml Interface", "Scala", "Dart", "Elixir", "Terraform", "Terraform Vars", "HCL", "Nix", "JSON", "JSONC", "YAML", "TOML", "Shell Script", "PowerShell", "Dockerfile", "Docker Compose", "Make", "Markdown", "Plain Text"]
+languages = ["Rust", "JavaScript", "TypeScript", "TSX", "CSharp", "C", "C++", "Python", "Go", "Java", "Kotlin", "Swift", "Ruby", "PHP", "HTML", "Vue.js", "Svelte", "Astro", "XML", "CSS", "SCSS", "SQL", "Lua", "Zig", "Proto", "GraphQL", "Clojure", "Haskell", "OCaml", "OCaml Interface", "Scala", "Dart", "Elixir", "Terraform", "Terraform Vars", "HCL", "Nix", "Prisma", "Gleam", "JSON", "JSONC", "YAML", "TOML", "Shell Script", "PowerShell", "Dockerfile", "Docker Compose", "Make", "Markdown", "Plain Text"]
 
 [language_servers.translation-lsp.language_ids]
 Rust = "rust"
@@ -53,6 +53,8 @@ Terraform = "terraform"
 "Terraform Vars" = "terraform-vars"
 HCL = "hcl"
 Nix = "nix"
+Prisma = "prisma"
+Gleam = "gleam"
 JSON = "json"
 JSONC = "jsonc"
 YAML = "yaml"
