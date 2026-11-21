@@ -6,13 +6,41 @@ This page describes how the server reads the comments of each language, and the 
 
 ## How comments are read
 
-Rust is read with the lexer of the Rust compiler, JavaScript and TypeScript with the Oxc parser, C, C++, C#, and Python with their Tree-sitter grammars, and YAML with a YAML scanner. The other languages are read by readers of the server's own that follow the tokenizer of the language.
+| Reader | Languages |
+| --- | --- |
+| Rust compiler lexer | Rust |
+| Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
+| Tree-sitter grammars | C, C++, C#, Python |
+| `granit-parser` scanner | YAML, including Docker Compose |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
-When adding comment extraction for a code language, write a reader of the server's own and compare the comments it finds with those of the language's own lexer, on real files and on generated texts. Where a Tree-sitter grammar is a candidate too, compare it the same way, and compare their time. Ruby and PHP use the server's own readers: on these checks they agreed with the lexers of the languages where the grammars did not, and took less than a tenth of the time. Java, Kotlin, and Swift use the server's own readers for the same reasons: they agreed with javac, Kotlin's lexer, and the Swift compiler on real files where the grammars of Kotlin and Swift did not, and took about a fiftieth of the time. The other languages in the list below, whose comments follow from a few rules of their tokenizers, use the server's own readers too. SQL has no lexer that its dialects share; its reader follows the token rules of Zed's SQL grammar, and reads the text between `$$` as SQL to find the comments in the body of a function. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
+When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
-A reader is measured against the language's own lexer. Fix a reader where it differs from that lexer on real files or in a form that code commonly uses, where it panics, and where its time grows faster than the size of the text. Where it differs only on texts made for the purpose, and the difference only leaves a comment out or takes part of a literal as a comment, describe the difference under the language in [Rules of each language](#rules-of-each-language) instead of adding to the reader.
+The readers for Ruby and PHP agreed with the languages' lexers where the grammars differed and used less than a tenth of the time. The readers for Java, Kotlin, and Swift agreed with javac, Kotlin's lexer, and the Swift compiler, respectively, on real files and used about a fiftieth of the time. The Kotlin and Swift grammars differed on some of those files.
 
-Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, JSON, TOML, shell script, PowerShell, Dockerfile, and makefile comments are read by the server's own readers, and YAML with the scanner of `granit-parser`. The scripts of HTML documents and component files are read by Oxc. The thread that handles requests waits while the comments of a document are read, so a reader must take time in proportion to the size of the text, whatever the text holds. The reading runs on a thread of its own with a stack of 256 MiB, because Oxc reads nesting by recursion and has no limit of its own on the depth ([oxc#21953](https://github.com/oxc-project/oxc/issues/21953)); only the part of the stack in use takes memory. Code nested more than about 100,000 levels deep still overflows it. The PowerShell and TOML readers replaced the lexers of `pwsh-parser` and `toml_parser`, which took time in proportion to the square of the size on some texts. The server's own readers read each part once, without starting again from an earlier place, and do not recurse. The shell, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, and PHP readers keep what is open on a stack of their own, so only memory limits the depth of nesting. The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes. The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` check the time of the readers of thirty-one languages, YAML included, on repeated pieces of text; add a new reader to both. They do not reach every text, so when changing a reader, check each place that reads back or ahead of the current character.
+The server uses its own readers for the other languages because a few rules of their tokenizers determine which text is a comment.
+
+SQL has no lexer that its dialects share. Its reader follows the token rules of Zed's SQL grammar and reads the text between `$$` as SQL to find comments in function bodies.
+
+A reader is measured against the language's own lexer. Fix a reader where it differs from that lexer on real files or in a form that code commonly uses, where it panics, and where its time grows faster than the size of the text.
+
+Where it differs only on texts made for the purpose, and the difference only leaves a comment out or takes part of a literal as a comment, describe the difference under the language in [Rules of each language](#rules-of-each-language) instead of adding to the reader.
+
+The thread that handles requests waits while the comments of a document are read, so a reader must take time in proportion to the size of the text, whatever the text holds.
+
+The reading runs on a thread with a stack of 256 MiB because Oxc uses recursion with no limit of its own on the depth. Only the part of the stack in use takes memory. Code nested more than about 100,000 levels deep can still overflow the stack. [oxc#21953](https://github.com/oxc-project/oxc/issues/21953)
+
+The PowerShell and TOML readers replaced the lexers of `pwsh-parser` and `toml_parser`, which took time in proportion to the square of the size on some texts.
+
+The server's own readers read each part once, without restarting from an earlier place or using recursion. The readers below keep open constructs on their own stacks, so available memory alone limits nesting depth.
+
+| Readers with their own stack |
+| --- |
+| Shell scripts, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, PHP, HCL, Nix |
+
+The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
+
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 33 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -171,6 +199,32 @@ Where Dart reports an error, the server does not follow how Dart reads on. A str
 Elixir supports `#` comments. Text inside strings, charlists such as `'...'`, heredocs `"""..."""` and `'''...'''`, sigils such as `~r/#\d+/` and `~S(...)`, character literals such as `?#` and `?"`, and quoted atoms and keys such as `:"a#"` and `"a#": 1` is not treated as a comment. A comment inside `#{ ... }` of a string, a charlist, a heredoc, a quoted atom or key, or a sigil with a lowercase name is a comment. A `#!` line at the start of the file is skipped. An unclosed string, charlist, heredoc, quoted atom, or sigil hides everything after it.
 
 The string, heredoc, or sigil `~S` or `~s` given to `@moduledoc`, `@doc`, or `@typedoc` is translated as a docstring, also in parentheses, as in `@doc("...")`. Its text is sent as written, escapes and `#{ ... }` included; a comment inside its `#{ ... }` is not translated on its own. When an operator follows, as in `@doc "a" <> "b"`, the first string is the doc. `@doc false`, `@shortdoc`, a charlist, another sigil, and a string on the line after `@doc` are not docs. An unclosed doc is not translated. A quoted key right after one of the attributes, as in `@doc "a": 1`, is not a doc, but a comment inside its `#{ ... }` is left out.
+
+### Terraform and HCL
+
+Terraform, Terraform Vars, and HCL share a reader. Line comments start with `#` or `//` and end at LF or CRLF. A bare CR stays in the comment. A block comment starts at `/*` and ends at the first `*/`. An unclosed block hides everything after it.
+
+Literal text in double-quoted strings and heredocs is skipped. `${ ... }` and `%{ ... }` contain code, so comments inside those expressions are read. `$${` and `%%{` stay literal. A backslash in a double-quoted string escapes the next character. A single quote starts no string.
+
+A heredoc opens with `<<` or `<<-`, a name, and a line ending immediately after the name. Its closing line contains the same name with optional whitespace on either side. When a template expression ends partway through a line, that line cannot close the heredoc.
+
+An unfinished quoted string or heredoc keeps its literal text hidden. Within it, comments in template expressions still count.
+
+Heredoc names use the Unicode identifier classes available in the Rust lexer. In rare cases, HCL accepts a name that those classes reject, such as `ͺ` (U+037A). In that case, a line in the heredoc body can be taken for a comment. A double quote in the body can also open a string that hides comments after the heredoc.
+
+Compare the reader with the `hclsyntax` lexer from hashicorp/hcl. Its line comment tokens include the trailing LF or CRLF, so remove that ending before comparing ranges. The lexer continues past an unclosed `/*` without treating it as a comment. Skip those inputs when comparing ranges.
+
+### Nix
+
+Line comments start with `#` and end at CR or LF. Block comments run from `/*` to the first `*/`. `/**` opens a documentation comment unless the next character is `/` or `*`. The text sent for translation leaves out the opening and closing marks. An unclosed block hides everything after it.
+
+Literal text in double-quoted strings and indented strings (`'' ... ''`) is skipped. Comments inside `${ ... }` are read. In both kinds of string, `$${` stays literal. In an indented string, `'''`, `''$`, and `''\` with the next character are escapes.
+
+`//` is the update operator. Apostrophes and hyphens can be part of a name, as in `x'` and `a-b`. URIs can contain `/*` without starting a comment, as in `x:/*c*/x`. Their tokens end before `#`, as in `http://a/b#c`. Paths such as `./a` can contain interpolation, where comments are read as in strings.
+
+When an indented string immediately follows a decimal number with an exponent, as in `[ 1.2e3''# literal'' ]`, the reader takes the text from the `#` inside the string to the end of the line as one comment.
+
+The reader follows Nix's `lexer.l`. When comparing with rnix, account for the fact that rnix ends a `#` comment only at LF. Use LF for bare CR in the comparison input and trim the trailing CR from CRLF comment ranges. An unclosed `/*` starts no comment in `lexer.l` and causes a lexer error in rnix.
 
 ### JSON, YAML, and TOML
 

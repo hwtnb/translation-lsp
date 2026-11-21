@@ -37,6 +37,8 @@ Hover translates the comments of the following languages.
 | Scala | `//` and `/* ... */`, including Scaladoc comments |
 | Dart | `//` and `/* ... */`, and the documentation comments `///` and `/** ... */` |
 | Elixir | `#` comments, and the strings given to `@moduledoc`, `@doc`, and `@typedoc` |
+| Terraform, Terraform Vars, HCL | `#` and `//` comments, and `/* ... */`, outside the literal text of strings and heredocs |
+| Nix | `#` comments, `/* ... */`, and `/** ... */` documentation comments, outside the literal text of strings |
 | JSON, JSONC | `//` and `/* ... */` |
 | YAML, TOML | `#` comments |
 | Shell scripts | `#` comments in sh, Bash, and zsh scripts |
@@ -113,6 +115,10 @@ If your settings list the language servers of a language explicitly, add `"trans
 | Scala | `Scala` | [Scala extension](https://github.com/scalameta/metals-zed) |
 | Dart | `Dart` | [Dart extension](https://github.com/zed-extensions/dart) |
 | Elixir | `Elixir` | [Elixir extension](https://github.com/zed-extensions/elixir) |
+| Terraform | `Terraform` | [Terraform extension](https://github.com/zed-extensions/terraform) |
+| Terraform Vars | `Terraform Vars` | [Terraform extension](https://github.com/zed-extensions/terraform) |
+| HCL | `HCL` | [Terraform extension](https://github.com/zed-extensions/terraform) |
+| Nix | `Nix` | [Nix extension](https://github.com/zed-extensions/nix) |
 | JSON | `JSON` | Built in |
 | JSONC | `JSONC` | Built in |
 | YAML | `YAML` | Built in |

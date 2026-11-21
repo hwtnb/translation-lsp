@@ -2644,6 +2644,14 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "elixir",
             "s = \"# string #{\"# string\"}\" <> ~S(# string) <> ?#",
         ),
+        ("file:///general.tf", "terraform", "s = \"# string\""),
+        (
+            "file:///general.tfvars",
+            "terraform-vars",
+            "s = \"# string\"",
+        ),
+        ("file:///general.hcl", "hcl", "s = \"# string\""),
+        ("file:///general.nix", "nix", "\"# string\""),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2663,7 +2671,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
     ] {
         let marker = match language {
             "ruby" | "yaml" | "toml" | "shellscript" | "powershell" | "dockerfile"
-            | "dockercompose" | "graphql" | "makefile" | "elixir" => "#",
+            | "dockercompose" | "graphql" | "makefile" | "elixir" | "terraform"
+            | "terraform-vars" | "hcl" | "nix" => "#",
             "sql" | "lua" | "haskell" => "--",
             "clojure" => ";",
             _ => "//",
@@ -2718,6 +2727,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "scala" => format!("val t = \"\"\"{comment}\"\"\""),
             "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
             "elixir" => format!("t = \"{comment}\""),
+            "terraform" | "terraform-vars" | "hcl" => format!("t = <<EOF\n{comment}\nEOF\n"),
+            "nix" => format!("''\n{comment}\n''"),
             // The body of `define` is a value.
             "makefile" => format!("define T\n{comment}\nendef"),
             "ruby" => format!("t = \"{comment}\""),
@@ -3820,10 +3831,20 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         ("file:///comment.scala", "scala", sample!("comment.scala")),
         ("file:///comment.dart", "dart", sample!("comment.dart")),
         ("file:///comment.ex", "elixir", sample!("comment.ex")),
+        ("file:///comment.tf", "terraform", sample!("comment.tf")),
+        (
+            "file:///comment.tfvars",
+            "terraform-vars",
+            sample!("comment.tfvars"),
+        ),
+        ("file:///comment.hcl", "hcl", sample!("comment.hcl")),
+        ("file:///comment.nix", "nix", sample!("comment.nix")),
     ] {
-        // Zig, Make, and Haskell end lines at LF only, and an Elixir heredoc
-        // opens only before LF or CRLF.
-        let endings: &[&str] = if matches!(language, "zig" | "makefile" | "haskell" | "elixir") {
+        // Zig, Make, Haskell, and HCL need LF in line endings. Elixir heredocs do too.
+        let endings: &[&str] = if matches!(
+            language,
+            "zig" | "makefile" | "haskell" | "elixir" | "terraform" | "terraform-vars" | "hcl"
+        ) {
             &["\n", "\r\n"]
         } else {
             &["\n", "\r\n", "\r"]
@@ -3833,6 +3854,18 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
             "clojure" => (&[';'], "failure."),
             "ocaml" | "ocaml.interface" => (&['('], "failure. *)"),
             _ => (&['/', '#', '-'], "failure."),
+        };
+        let comment_starts: &[&str] = match language {
+            "terraform" => &[
+                "# Retry",
+                "// Keep",
+                "/*\n   * Show",
+                "# The shell script ends",
+            ],
+            "terraform-vars" => &["# Retry"],
+            "hcl" => &["# Retry", "/* Keep"],
+            "nix" => &["# Retry", "/*\n   * Keep", "/** The shell script"],
+            _ => &[],
         };
         for ending in endings {
             let source = source.replace('\n', ending);
@@ -3844,6 +3877,22 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 &original.replace(ending, "\n"),
             );
             client.open(uri, language, &source, 1);
+            if !comment_starts.is_empty() {
+                let expected: Vec<_> = comment_starts
+                    .iter()
+                    .map(|marker| {
+                        let marker = marker.replace('\n', ending);
+                        let start = source.find(&marker).unwrap();
+                        position(&source[..start].replace(ending, "\n"))
+                    })
+                    .collect();
+                let found: Vec<_> = lenses(&mut client, uri)
+                    .into_iter()
+                    .filter(|lens| lens["command"]["command"] == "translation-lsp.translate-lens")
+                    .map(|lens| lens["range"]["start"].clone())
+                    .collect();
+                assert_eq!(found, expected, "{language} with {ending:?}");
+            }
             for point in ["start", "end"] {
                 assert_preview(
                     &client.hover(uri, range[point].clone()),
@@ -3858,6 +3907,17 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                     .hover(uri, position(&source[..key].replace(ending, "\n")))
                     .is_null()
             );
+            for marker in match language {
+                "terraform" => &["# and //", "# This line is part"][..],
+                "terraform-vars" => &["# sign"],
+                "hcl" => &["// sign"],
+                "nix" => &["# status", "# This line is part", "#retry"],
+                _ => &[],
+            } {
+                let start = source.find(marker).unwrap();
+                let at = position(&source[..start].replace(ending, "\n"));
+                assert!(client.hover(uri, at).is_null(), "{marker}");
+            }
             client.close(uri);
         }
     }
@@ -4373,8 +4433,9 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
             "features.languages keys must be one of rust, javascript, typescript, \
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
-             ocaml, ocaml.interface, scala, dart, elixir, json, jsonc, yaml, toml, shellscript, \
-             powershell, dockerfile, dockercompose, makefile, markdown, plaintext",
+             ocaml, ocaml.interface, scala, dart, elixir, terraform, terraform-vars, hcl, nix, \
+             json, jsonc, yaml, toml, shellscript, powershell, dockerfile, dockercompose, \
+             makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),

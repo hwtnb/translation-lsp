@@ -37,6 +37,8 @@
 | Scala | `//` と `/* ... */`。Scaladocのコメントも含みます |
 | Dart | `//` と `/* ... */`、ドキュメントコメントの `///` と `/** ... */` |
 | Elixir | `#` のコメントと、`@moduledoc`、`@doc`、`@typedoc` に渡した文字列 |
+| Terraform、Terraform Vars、HCL | `#` と `//` のコメント、`/* ... */`（文字列とヒアドキュメントの本文を除く） |
+| Nix | `#` のコメント、`/* ... */`、ドキュメントコメントの `/** ... */`（文字列の本文を除く） |
 | JSON、JSONC | `//` と `/* ... */` |
 | YAML、TOML | `#` のコメント |
 | シェルスクリプト | sh、Bash、zshのスクリプトの `#` のコメント |
@@ -113,6 +115,10 @@ JavaScriptとTypeScriptでは、約10万段を超える入れ子（`[` を10万�
 | Scala | `Scala` | [Scala拡張](https://github.com/scalameta/metals-zed) |
 | Dart | `Dart` | [Dart拡張](https://github.com/zed-extensions/dart) |
 | Elixir | `Elixir` | [Elixir拡張](https://github.com/zed-extensions/elixir) |
+| Terraform | `Terraform` | [Terraform拡張](https://github.com/zed-extensions/terraform) |
+| Terraform Vars | `Terraform Vars` | [Terraform拡張](https://github.com/zed-extensions/terraform) |
+| HCL | `HCL` | [Terraform拡張](https://github.com/zed-extensions/terraform) |
+| Nix | `Nix` | [Nix拡張](https://github.com/zed-extensions/nix) |
 | JSON | `JSON` | 組み込み |
 | JSONC | `JSONC` | 組み込み |
 | YAML | `YAML` | 組み込み |

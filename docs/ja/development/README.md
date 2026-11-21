@@ -49,6 +49,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 | OCaml | [samples/comment.ml](../../../samples/comment.ml)、[samples/comment.mli](../../../samples/comment.mli) |
 | Scala、Dart | [samples/comment.scala](../../../samples/comment.scala)、[samples/comment.dart](../../../samples/comment.dart) |
 | Elixir | [samples/comment.ex](../../../samples/comment.ex)。コメントとドキュメント |
+| Terraform、Terraform Vars、HCL | [samples/comment.tf](../../../samples/comment.tf)、[samples/comment.tfvars](../../../samples/comment.tfvars)、[samples/comment.hcl](../../../samples/comment.hcl) |
+| Nix | [samples/comment.nix](../../../samples/comment.nix) |
 | JSON、JSONC | [samples/comment.json](../../../samples/comment.json)、[samples/comment.jsonc](../../../samples/comment.jsonc)。`comment.json` のコメントは、ZedのJSONの言語サーバーが問題として報告しますが、ホバーは同じように翻訳します。 |
 | YAML、TOML | [samples/comment.yaml](../../../samples/comment.yaml)、[samples/comment.toml](../../../samples/comment.toml) |
 | シェルスクリプト、PowerShell | [samples/comment.sh](../../../samples/comment.sh)、[samples/comment.ps1](../../../samples/comment.ps1) |

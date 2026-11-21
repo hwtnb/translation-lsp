@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Translation LSPは、Zedでコードのコメントと、Markdownの文章を翻訳し、ホバー表示（テキスト上で開く情報表示）に訳文を出します。原文は変わりません。Rust、TypeScript、Python、Go、シェルスクリプトなど、40の言語と形式のコメントを読めます。言語の一覧は[対応言語](docs/ja/languages.md)にあります。
+Translation LSPは、Zedでコードのコメントと、Markdownの文章を翻訳し、ホバー表示（テキスト上で開く情報表示）に訳文を出します。原文は変わりません。Rust、TypeScript、Python、Go、シェルスクリプトなど、40を超える言語と形式のコメントを読めます。言語の一覧は[対応言語](docs/ja/languages.md)にあります。
 
 翻訳には、ChatGPT（本人のプラン）、Anthropic API、OpenAI API、OllamaなどのOpenAI互換のサービスを使えます。翻訳サービスのDeepL APIとGoogle Cloud Translationも使えます。プロバイダーを選ぶまでは、文章を外部へ送りません。
 

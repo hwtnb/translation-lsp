@@ -2,7 +2,7 @@
 
 [日本語](README.ja.md)
 
-Translation LSP translates code comments and Markdown in Zed and shows the translation in Hover; the source stays unchanged. It reads comments in 40 languages and file formats, including Rust, TypeScript, Python, Go, and shell scripts. The full list is under [Languages](docs/languages.md).
+Translation LSP translates code comments and Markdown in Zed and shows the translation in Hover; the source stays unchanged. It reads comments in more than 40 languages and file formats, including Rust, TypeScript, Python, Go, and shell scripts. The full list is under [Languages](docs/languages.md).
 
 You can translate with ChatGPT using your plan, the Anthropic API, the OpenAI API, or an OpenAI-compatible service such as Ollama. Two translation services, the DeepL API and Google Cloud Translation, also work. Until you select a provider, the extension sends no text to an external service.
 

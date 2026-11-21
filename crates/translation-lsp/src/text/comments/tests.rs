@@ -1809,6 +1809,12 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "@doc \"\"\"\n",
         "@doc(",
         ":\"",
+        "a+a+",
+        "a:/*",
+        "./${",
+        "%{",
+        "$${",
+        "<<-ÉOT\r\n",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1845,6 +1851,8 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "scala",
         "dart",
         "elixir",
+        "hcl",
+        "nix",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2081,6 +2089,12 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "'''\n",
         "~s(",
         "~S\"\"\"\n",
+        "a+a+",
+        "a:/*",
+        "./${",
+        "%{",
+        "$${",
+        "<<-ÉOT\r\n",
         "?\"",
         "@doc \"",
         "@doc \"\"\"\n",
@@ -2128,6 +2142,8 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "scala",
         "dart",
         "elixir",
+        "hcl",
+        "nix",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -3976,4 +3992,125 @@ fn make_comments_exclude_references_definitions_and_shell_text() {
         ]
     );
     assert_eq!(bodies("makefile", "# One\n# two\nall:\n"), ["One\ntwo"]);
+}
+
+#[test]
+fn hcl_comments_respect_line_endings_and_use_the_existing_groups() {
+    let source = concat!(
+        "\u{feff}# First\rinside\r\n",
+        "# second\r\n",
+        "// Third\n",
+        "// fourth\n",
+        "/* block /* first end */ ignored */\n",
+        "/* unclosed\n# hidden",
+    );
+    for language in ["terraform", "terraform-vars", "hcl"] {
+        assert_eq!(
+            sources(language, "untitled:comment", source),
+            [
+                "# First\rinside",
+                "# second",
+                "// Third",
+                "// fourth",
+                "/* block /* first end */",
+            ]
+        );
+        assert_eq!(
+            bodies(language, "# First\r\n# second\r\n// Third\n// fourth"),
+            ["First\r\nsecond", "Third\nfourth"]
+        );
+    }
+}
+
+#[test]
+fn hcl_templates_only_read_comments_in_their_expressions() {
+    let source = concat!(
+        r##"x = "# hidden \" // hidden $${ # hidden } %%{ # hidden } "##,
+        "${~ { y = \"} # hidden\" /* object */ }.y ~} ",
+        "%{ if true /* condition */ }# hidden%{ endif }\" # quoted\n",
+        "x = <<-ÉOT\r\n",
+        "  # hidden\r\n",
+        "  ÉOT # not a closing line\r\n",
+        "  ${<<INNER\n# inner hidden\nINNER\n} ÉOT\r\n",
+        "  ${ \"value\" /* heredoc expression */ }\n",
+        "  ÉOT\t\r\n",
+        "# after heredoc\n",
+        "x = <<EOT # not an opening line\n",
+        "' # not a string\n",
+        "x = <<OPEN\n# hidden",
+    );
+    assert_eq!(
+        sources("hcl", "untitled:comment", source),
+        [
+            "/* object */",
+            "/* condition */",
+            "# quoted",
+            "/* heredoc expression */",
+            "# after heredoc",
+            "# not an opening line",
+            "# not a string",
+        ]
+    );
+}
+
+#[test]
+fn hcl_heredoc_can_follow_a_less_than_operator_without_a_space() {
+    for opening in ["x = 1 <<<EOT", "x = 1 < <<EOT"] {
+        let source = format!("{opening}\n# in\nEOT\n# out\n");
+        assert_eq!(sources("hcl", "untitled:comment", &source), ["# out"]);
+    }
+}
+
+#[test]
+fn nix_comments_respect_line_endings_and_documentation_markers() {
+    let source = "# first\r# second\r\n/**/ /** docs */ /*** ordinary */ /* nested /* first */";
+    assert_eq!(
+        sources("nix", "untitled:comment", source),
+        [
+            "# first",
+            "# second",
+            "/**/",
+            "/** docs */",
+            "/*** ordinary */",
+            "/* nested /* first */",
+        ]
+    );
+    assert_eq!(
+        body_at("nix", "/**\n * First\n * second\n */", "First").1,
+        "First\nsecond"
+    );
+    assert_eq!(body_at("nix", "/** docs*/", "docs").1, "docs");
+    assert_eq!(body_at("nix", "/*** keep*/", "keep").1, "** keep");
+}
+
+#[test]
+fn nix_templates_only_read_comments_in_their_expressions() {
+    let source = concat!(
+        r##""# hidden \" # hidden \${ # hidden } $${ # hidden } "##,
+        r#"${{ a = "${./path /* path expression */} # hidden"; } /* object */}""#,
+        "\n",
+        "''# hidden '''# hidden ''${ # hidden } $${ # hidden } ",
+        "''\\'# hidden ${1 /* indented */}'' # after string\n",
+        "x' // a-b# after identifier\n",
+        "x:/*uri*/x # after URI\n",
+        "http://a/b# after URL\n",
+        "<nixpkgs/a> ~/a ./a/b:${1} /* after paths */\n",
+        "./${1 /* interpolation in path */}/a # after path\n",
+        "/* unclosed\n# hidden",
+    );
+    assert_eq!(
+        sources("nix", "untitled:comment", source),
+        [
+            "/* path expression */",
+            "/* object */",
+            "/* indented */",
+            "# after string",
+            "# after identifier",
+            "# after URI",
+            "# after URL",
+            "/* after paths */",
+            "/* interpolation in path */",
+            "# after path",
+        ]
+    );
 }

@@ -36,6 +36,10 @@ pub(crate) enum Language {
     Scala,
     Dart,
     Elixir,
+    Terraform,
+    TerraformVars,
+    Hcl,
+    Nix,
     Json,
     Jsonc,
     Yaml,
@@ -51,7 +55,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 44] = [
+    pub const ALL: [Self; 48] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -85,6 +89,10 @@ impl Language {
         Self::Scala,
         Self::Dart,
         Self::Elixir,
+        Self::Terraform,
+        Self::TerraformVars,
+        Self::Hcl,
+        Self::Nix,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -134,6 +142,10 @@ impl Language {
             Self::Scala => "scala",
             Self::Dart => "dart",
             Self::Elixir => "elixir",
+            Self::Terraform => "terraform",
+            Self::TerraformVars => "terraform-vars",
+            Self::Hcl => "hcl",
+            Self::Nix => "nix",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

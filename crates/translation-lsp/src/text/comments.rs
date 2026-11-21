@@ -29,11 +29,13 @@ mod elixir;
 mod go;
 mod graphql;
 mod haskell;
+mod hcl;
 mod html;
 mod java;
 mod kotlin;
 mod lua;
 mod make;
+mod nix;
 mod ocaml;
 mod php;
 mod powershell;
@@ -195,6 +197,8 @@ impl Comments {
             Language::Scala => Some(scala::parse(text)),
             Language::Dart => Some(dart::parse(text)),
             Language::Elixir => Some(elixir::parse(text)),
+            Language::Terraform | Language::TerraformVars | Language::Hcl => Some(hcl::parse(text)),
+            Language::Nix => Some(nix::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),

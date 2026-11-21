@@ -107,7 +107,7 @@ mod tests {
         *,
     };
 
-    const LANGUAGE_IDS: [&str; 44] = [
+    const LANGUAGE_IDS: [&str; 48] = [
         "rust",
         "javascript",
         "typescript",
@@ -141,6 +141,10 @@ mod tests {
         "scala",
         "dart",
         "elixir",
+        "terraform",
+        "terraform-vars",
+        "hcl",
+        "nix",
         "json",
         "jsonc",
         "yaml",
@@ -335,8 +339,8 @@ mod tests {
                      typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, \
                      php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, \
                      graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-                     json, jsonc, yaml, toml, shellscript, powershell, dockerfile, \
-                     dockercompose, makefile, markdown, plaintext"
+                     terraform, terraform-vars, hcl, nix, json, jsonc, yaml, toml, shellscript, \
+                     powershell, dockerfile, dockercompose, makefile, markdown, plaintext"
                 );
                 assert_eq!(format!("{error:?}"), error.to_string());
             }
@@ -408,8 +412,9 @@ mod tests {
             "features.languages.markdown.comment_hover is not available; comment_hover applies \
              to rust, javascript, typescript, typescriptreact, csharp, c, cpp, python, go, java, \
              kotlin, swift, ruby, php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, \
-             proto, graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, json, \
-             jsonc, yaml, toml, shellscript, powershell, dockerfile, dockercompose, makefile"
+             proto, graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
+             terraform, terraform-vars, hcl, nix, json, jsonc, yaml, toml, shellscript, \
+             powershell, dockerfile, dockercompose, makefile"
         );
     }
 
