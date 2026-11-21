@@ -107,7 +107,7 @@ mod tests {
         *,
     };
 
-    const LANGUAGE_IDS: [&str; 50] = [
+    const LANGUAGE_IDS: [&str; 51] = [
         "rust",
         "javascript",
         "typescript",
@@ -147,6 +147,7 @@ mod tests {
         "nix",
         "prisma",
         "gleam",
+        "erlang",
         "json",
         "jsonc",
         "yaml",
@@ -341,8 +342,8 @@ mod tests {
                      typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, \
                      php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, \
                      graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-                     terraform, terraform-vars, hcl, nix, prisma, gleam, json, jsonc, yaml, toml, \
-                     shellscript, powershell, dockerfile, dockercompose, makefile, \
+                     terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, json, jsonc, \
+                     yaml, toml, shellscript, powershell, dockerfile, dockercompose, makefile, \
                      markdown, plaintext"
                 );
                 assert_eq!(format!("{error:?}"), error.to_string());
@@ -350,7 +351,7 @@ mod tests {
         }
         // The named check reports before the generic error.
         let error = Settings::from_options(Some(json!({
-            "features": {"languages": {"erlang": {}}, "unknown": true},
+            "features": {"languages": {"tsx": {}}, "unknown": true},
             "translation_limits": []
         })))
         .err()
@@ -416,7 +417,7 @@ mod tests {
              to rust, javascript, typescript, typescriptreact, csharp, c, cpp, python, go, java, \
              kotlin, swift, ruby, php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, \
              proto, graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-             terraform, terraform-vars, hcl, nix, prisma, gleam, json, jsonc, yaml, toml, \
+             terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, json, jsonc, yaml, toml, \
              shellscript, powershell, dockerfile, dockercompose, makefile"
         );
     }

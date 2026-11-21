@@ -41,6 +41,7 @@ Hover translates the comments of the following languages.
 | Nix | `#` comments, `/* ... */`, and `/** ... */` documentation comments, outside the literal text of strings |
 | Prisma | `//` and `/* ... */` comments, including `///` documentation comments |
 | Gleam | `//` comments, including `///` and `////` documentation comments |
+| Erlang | `%` comments, and the strings given to `-moduledoc` and `-doc` |
 | JSON, JSONC | `//` and `/* ... */` |
 | YAML, TOML | `#` comments |
 | Shell scripts | `#` comments in sh, Bash, and zsh scripts |
@@ -123,6 +124,7 @@ If your settings list the language servers of a language explicitly, add `"trans
 | Nix | `Nix` | [Nix extension](https://github.com/zed-extensions/nix) |
 | Prisma | `Prisma` | [Prisma extension](https://github.com/zed-extensions/prisma) |
 | Gleam | `Gleam` | [Gleam extension](https://github.com/gleam-lang/zed-gleam) |
+| Erlang | `Erlang` | [Erlang extension](https://github.com/zed-extensions/erlang) |
 | JSON | `JSON` | Built in |
 | JSONC | `JSONC` | Built in |
 | YAML | `YAML` | Built in |

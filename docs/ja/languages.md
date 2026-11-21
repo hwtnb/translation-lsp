@@ -41,6 +41,7 @@
 | Nix | `#` のコメント、`/* ... */`、ドキュメントコメントの `/** ... */`（文字列の本文を除く） |
 | Prisma | `//` のコメント、`/* ... */`、ドキュメントコメントの `///` |
 | Gleam | `//` のコメント、ドキュメントコメントの `///` と `////` |
+| Erlang | `%` のコメントと、`-moduledoc` と `-doc` に渡した文字列 |
 | JSON、JSONC | `//` と `/* ... */` |
 | YAML、TOML | `#` のコメント |
 | シェルスクリプト | sh、Bash、zshのスクリプトの `#` のコメント |
@@ -123,6 +124,7 @@ JavaScriptとTypeScriptでは、約10万段を超える入れ子（`[` を10万�
 | Nix | `Nix` | [Nix拡張](https://github.com/zed-extensions/nix) |
 | Prisma | `Prisma` | [Prisma拡張](https://github.com/zed-extensions/prisma) |
 | Gleam | `Gleam` | [Gleam拡張](https://github.com/gleam-lang/zed-gleam) |
+| Erlang | `Erlang` | [Erlang拡張](https://github.com/zed-extensions/erlang) |
 | JSON | `JSON` | 組み込み |
 | JSONC | `JSONC` | 組み込み |
 | YAML | `YAML` | 組み込み |

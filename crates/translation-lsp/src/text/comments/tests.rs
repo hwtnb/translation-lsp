@@ -1815,6 +1815,10 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "%{",
         "$${",
         "<<-ÉOT\r\n",
+        "~",
+        ".",
+        "-doc",
+        ". -doc \"text\"",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1855,6 +1859,7 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "nix",
         "prisma",
         "gleam",
+        "erlang",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2100,6 +2105,10 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "?\"",
         "@doc \"",
         "@doc \"\"\"\n",
+        "~",
+        ".",
+        "-doc",
+        ". -doc \"text\"",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2148,6 +2157,7 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "nix",
         "prisma",
         "gleam",
+        "erlang",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -4168,6 +4178,128 @@ fn gleam_groups_comments_by_opening_and_skips_multiline_strings() {
             "Ordinary\rMore",
             "é🙂",
             "trailing",
+        ]
+    );
+}
+
+#[test]
+fn erlang_groups_percent_comments_and_ends_them_at_lf() {
+    let source = concat!(
+        "#! /usr/bin/env escript % skip\r\n",
+        "%%% Module\r\n",
+        "%%% More\n",
+        "%% Note\rcontinued\n",
+        "% End\r",
+    );
+    assert_eq!(
+        sources("erlang", "untitled:comment", source),
+        ["%%% Module", "%%% More", "%% Note\rcontinued", "% End\r"]
+    );
+    assert_eq!(
+        bodies("erlang", source),
+        ["Module\r\nMore", "Note\rcontinued", "End\r"]
+    );
+    let long = "%".repeat(300);
+    assert_eq!(
+        bodies("erlang", &format!("{long} body")),
+        [format!("{} body", "%".repeat(45))]
+    );
+}
+
+#[test]
+fn erlang_skips_literals_including_sigil_and_character_escapes() {
+    let source = concat!(
+        r#"[$%, $", $', $\", $\^A, $\x{25}, $\x25, $\045, $日]. % chars"#,
+        "\n",
+        "\"A % string\n",
+        r#"\" % still a string", 'an \' atom % too'. % quoted"#,
+        "\n",
+        r#"~s(a % \) b), ~S(a % \), ~b[a % \] b], ~B[a % \], ~s{a % \} b}."#,
+        " % delimiters\n",
+        r#"~R<a % \>, ~s/a % \/ b/, ~|a % \| b|, ~B#a % \#, ~s'a % \' b'."#,
+        " % more delimiters\n",
+        r"~s`a % \` b`. % backtick",
+        "\n",
+        "~name % missing delimiter\n",
+        "\"\"\"ordinary % text\"\"\". % fallback\n",
+    );
+    assert_eq!(
+        sources("erlang", "untitled:comment", source),
+        [
+            "% chars",
+            "% quoted",
+            "% delimiters",
+            "% more delimiters",
+            "% backtick",
+            "% missing delimiter",
+            "% fallback",
+        ]
+    );
+    for opening in ["\"", "'", "~S[", "\"\"\"\n", "~s\"\"\"\"\n"] {
+        let text = format!("{opening}literal\n% still inside");
+        assert!(bodies("erlang", &text).is_empty(), "{opening:?}");
+    }
+}
+
+#[test]
+fn erlang_reads_only_the_first_documentation_string_at_a_form_start() {
+    let source = concat!(
+        "-\nmoduledoc (\r\n\"a \\\" % b\" \"second\").% Between forms\n",
+        "-doc ~B[first % sigil]suffix.\n",
+        "-doc ~\"vanilla\".\n",
+        "-doc ~s'escaped \\' quote'.\n",
+        "-doc ~R\"other sigil\".\n",
+        "-doc false.\n-doc hidden.\n-doc #{since => <<\"1.0\">>}.\n",
+        "-doc {file, \"doc.md\"}.\n-doc ?NAME.\n-doc ((\"twice\")).\n",
+        "a -doc \"inside form\". #record.field -doc \"after field\".\n",
+        "a .. -doc \"after two dots\". 1.0 ... -doc \"after three dots\".\n",
+        "-doc@name \"other attribute\". -docé \"longer name\".\n",
+        "-doc \"unfinished\n% not a comment",
+    );
+    assert_eq!(
+        sources("erlang", "untitled:comment", source),
+        [
+            "\"a \\\" % b\"",
+            "% Between forms",
+            "[first % sigil]",
+            "\"vanilla\"",
+            "'escaped \\' quote'",
+        ]
+    );
+    assert_eq!(
+        bodies("erlang", source),
+        [
+            "a \\\" % b",
+            "Between forms",
+            "first % sigil",
+            "vanilla",
+            "escaped \\' quote",
+        ]
+    );
+}
+
+#[test]
+fn erlang_triple_quoted_docs_keep_source_escapes_and_remove_the_common_margin() {
+    let source = concat!(
+        "-doc \"\"\"\"\r\n",
+        "    The string contains quotes:\r\n",
+        "\r\n",
+        "        \"\"\" and % stay in the body.\r\n",
+        "    \"\"\"\". % trailing\r\n",
+        "-doc ~s\"\"\"\n",
+        "    \\\"\"\" is still inside.\n",
+        "    \"\"\".\n",
+        "-doc ~s/*\n",
+        "    * The asterisk belongs to the text.\n",
+        "/.\n",
+    );
+    assert_eq!(
+        bodies("erlang", source),
+        [
+            "The string contains quotes:\r\n\r\n    \"\"\" and % stay in the body.",
+            "trailing",
+            "\\\"\"\" is still inside.",
+            "*\n* The asterisk belongs to the text.",
         ]
     );
 }

@@ -26,6 +26,7 @@ mod dart;
 mod data;
 mod dockerfile;
 mod elixir;
+mod erlang;
 mod gleam;
 mod go;
 mod graphql;
@@ -203,6 +204,7 @@ impl Comments {
             Language::Nix => Some(nix::parse(text)),
             Language::Prisma => Some(prisma::parse(text)),
             Language::Gleam => Some(gleam::parse(text)),
+            Language::Erlang => Some(erlang::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),
@@ -287,9 +289,10 @@ impl Comments {
         let comment = &self.0[group.start];
         match comment.kind {
             // Only line comments make groups of more than one.
-            Kind::Block { .. } | Kind::Contents(_) => {
+            Kind::Block { .. } => {
                 without_margin(&body, text[comment.range.start..].starts_with("/*"))
             }
+            Kind::Contents(_) => without_margin(&body, false),
             _ => body,
         }
     }

@@ -42,6 +42,7 @@ pub(crate) enum Language {
     Nix,
     Prisma,
     Gleam,
+    Erlang,
     Json,
     Jsonc,
     Yaml,
@@ -57,7 +58,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 50] = [
+    pub const ALL: [Self; 51] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -97,6 +98,7 @@ impl Language {
         Self::Nix,
         Self::Prisma,
         Self::Gleam,
+        Self::Erlang,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -152,6 +154,7 @@ impl Language {
             Self::Nix => "nix",
             Self::Prisma => "prisma",
             Self::Gleam => "gleam",
+            Self::Erlang => "erlang",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

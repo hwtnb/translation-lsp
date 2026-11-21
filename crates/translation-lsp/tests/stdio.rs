@@ -2654,6 +2654,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         ("file:///general.nix", "nix", "\"# string\""),
         ("file:///general.prisma", "prisma", "s = \"// string\""),
         ("file:///general.gleam", "gleam", "let s = \"// string\""),
+        ("file:///general.erl", "erlang", "text() -> \"% string\"."),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2677,6 +2678,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             | "terraform-vars" | "hcl" | "nix" => "#",
             "sql" | "lua" | "haskell" => "--",
             "clojure" => ";",
+            "erlang" => "%",
             _ => "//",
         };
         let comment = COMMENT.replace("//", marker);
@@ -2730,6 +2732,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "scala" => format!("val t = \"\"\"{comment}\"\"\""),
             "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
             "elixir" => format!("t = \"{comment}\""),
+            "erlang" => format!("text() -> \"{comment}\"."),
             "terraform" | "terraform-vars" | "hcl" => format!("t = <<EOF\n{comment}\nEOF\n"),
             "nix" => format!("''\n{comment}\n''"),
             "gleam" => format!("let s = \"{comment}\""),
@@ -3849,21 +3852,24 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
             sample!("comment.prisma"),
         ),
         ("file:///comment.gleam", "gleam", sample!("comment.gleam")),
+        ("file:///comment.erl", "erlang", sample!("comment.erl")),
     ] {
-        // Zig, Make, Haskell, and HCL need LF in line endings. Elixir heredocs do too.
+        // Zig, Make, Haskell, HCL, and Erlang need LF in line endings.
+        // Elixir heredocs do too.
         let endings: &[&str] = if matches!(
             language,
-            "zig" | "makefile" | "haskell" | "elixir" | "terraform" | "terraform-vars" | "hcl"
+            "zig"
+                | "makefile"
+                | "haskell"
+                | "elixir"
+                | "terraform"
+                | "terraform-vars"
+                | "hcl"
+                | "erlang"
         ) {
             &["\n", "\r\n"]
         } else {
             &["\n", "\r\n", "\r"]
-        };
-        // A `;` comes before the comment in the Protocol Buffers sample.
-        let (openings, closing): (&[char], _) = match language {
-            "clojure" => (&[';'], "failure."),
-            "ocaml" | "ocaml.interface" => (&['('], "failure. *)"),
-            _ => (&['/', '#', '-'], "failure."),
         };
         let comment_starts: &[&str] = match language {
             "terraform" => &[
@@ -3894,8 +3900,15 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         };
         for ending in endings {
             let source = source.replace('\n', ending);
-            let start = source.find(openings).unwrap();
-            let end = source.find(closing).unwrap() + closing.len();
+            // The Erlang sample has module comments and a doc before the retry comments.
+            let (start, closing) = match language {
+                "clojure" => (source.find(';'), "failure."),
+                "ocaml" | "ocaml.interface" => (source.find('('), "failure. *)"),
+                "erlang" => (source.find("%% Retry"), "failure."),
+                _ => (source.find(['/', '#', '-']), "failure."),
+            };
+            let start = start.unwrap();
+            let end = start + source[start..].find(closing).unwrap() + closing.len();
             let original = &source[start..end];
             let range = range_for(
                 &source.replace(ending, "\n"),
@@ -4256,6 +4269,75 @@ fn elixir_sample_translates_its_comments_and_docs() {
 }
 
 #[test]
+fn erlang_sample_translates_its_comments_and_docs() {
+    let mut client = Client::new(&[]);
+    let uri = "file:///comment.erl";
+    let source = sample!("comment.erl");
+    let doc = concat!(
+        "\"\"\"\n",
+        "    Retry only if the remote service\n",
+        "    reports a temporary failure.\n",
+        "    \"\"\""
+    );
+    let comment = "%% Retry only if the remote service\n%% reports a temporary failure.";
+    let expected: Vec<_> = [
+        "%%% A service",
+        doc,
+        comment,
+        "\"\"\"\n    Returns the number",
+        "% Keep this limit",
+        "\"Returns three ways",
+    ]
+    .into_iter()
+    .map(|marker| position(&source[..source.find(marker).unwrap()]))
+    .collect();
+
+    for ending in ["\n", "\r\n"] {
+        client.open(uri, "erlang", &source.replace('\n', ending), 1);
+        let found: Vec<_> = lenses(&mut client, uri)
+            .into_iter()
+            .filter(|lens| lens["command"]["command"] == "translation-lsp.translate-lens")
+            .map(|lens| lens["range"]["start"].clone())
+            .collect();
+        assert_eq!(found, expected, "{ending:?}");
+
+        let doc_range = range_for(source, doc);
+        assert_preview(
+            &client.hover(uri, doc_range["start"].clone()),
+            doc,
+            COMMENT_JA,
+            &doc_range,
+        );
+        let comment_range = range_for(source, comment);
+        for point in ["start", "end"] {
+            assert_preview(
+                &client.hover(uri, comment_range[point].clone()),
+                comment,
+                COMMENT_JA,
+                &comment_range,
+            );
+        }
+
+        // The mock refuses text outside its fixtures with a translation error.
+        for marker in [
+            "Returns the number",
+            "Returns three ways",
+            "Keep this limit",
+        ] {
+            let at = position(&source[..source.find(marker).unwrap()]);
+            let hover = client.request_hover(uri, at);
+            assert_error(client.receive(hover, TIMEOUT), -32803);
+        }
+        for marker in ["% inside a string", "$%", "%atom", "false.", "\"1.0\""] {
+            let at = position(&source[..source.find(marker).unwrap() + 1]);
+            assert!(client.hover(uri, at).is_null(), "{marker}");
+        }
+        client.close(uri);
+    }
+    client.finish(true);
+}
+
+#[test]
 fn shell_hover_ranges_count_utf16_units_after_japanese_and_emoji() {
     let mut client = Client::new(&[]);
     let uri = "file:///utf16.sh";
@@ -4461,8 +4543,8 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
              ocaml, ocaml.interface, scala, dart, elixir, terraform, terraform-vars, hcl, nix, \
-             prisma, gleam, json, jsonc, yaml, toml, shellscript, powershell, dockerfile, \
-             dockercompose, makefile, markdown, plaintext",
+             prisma, gleam, erlang, json, jsonc, yaml, toml, shellscript, powershell, \
+             dockerfile, dockercompose, makefile, markdown, plaintext",
         ),
         (
             json!({"features": {"languages": {"rust": {"document_action": false}}}}),

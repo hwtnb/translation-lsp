@@ -12,7 +12,7 @@ This page describes how the server reads the comments of each language, and the 
 | Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
 | Tree-sitter grammars | C, C++, C#, Python |
 | `granit-parser` scanner | YAML, including Docker Compose |
-| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
 When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
@@ -40,7 +40,7 @@ The server's own readers read each part once, without restarting from an earlier
 
 The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
 
-The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 35 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 36 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -241,6 +241,20 @@ Exclude files with an unrecognized block (`arbitrary_block`), whose body the gra
 Line comments begin with `//`, `///` for documentation, or `////` for module documentation. Any slashes after the fourth belong to the body. Adjacent lines can form a group when their opening markers have the same length. Comments end at CR, LF, or the end of the text.
 
 Double-quoted strings can span lines, and a backslash escapes the next character. An unfinished string hides the rest of the document. Compare byte ranges with the Gleam lexer, starting each range at the first slash of the comment.
+
+### Erlang
+
+Line comments start at `%` and end before LF or CRLF. A bare CR stays in the comment. Adjacent standalone comments can form a group when they have the same indentation and the same number of opening percent signs. The reader treats up to 255 percent signs as the opening and keeps any more in the body. A shebang on the first line is skipped.
+
+Percent signs inside strings, quoted atoms, character literals such as `$%`, and sigils are part of those literals. A sigil with a one-character delimiter closes at its first unescaped closing delimiter without nesting. With these delimiters, ordinary strings, quoted atoms, and the sigils `~`, `~s`, and `~b` process escapes. An unfinished literal hides the rest of the file. A tilde without a sigil delimiter is skipped.
+
+A multiline string opens with at least three double quotes followed by whitespace up to LF. It closes at the same number of quotes after optional whitespace at the start of a line. Only `~s` and `~b` process escapes inside a multiline string. When non-whitespace follows the opening quotes on the same line, the reader treats them as ordinary string delimiters.
+
+At the start of a form, the first string given to `-doc` or `-moduledoc` is translated, with or without one opening parenthesis. A form starts at the beginning of the file or after a single period followed by whitespace, a comment, or EOF. The documentation can use an ordinary or multiline string, or a sigil named `~`, `~s`, `~S`, `~b`, or `~B`.
+
+The documentation range covers the delimiters and excludes the sigil prefix and suffix. Its body keeps source escapes and shares the indentation trimming used by Elixir documentation. Atoms, maps, macros, and file references used as documentation values are skipped. The reader also skips documentation attributes with quoted names such as `-'doc'`.
+
+Compare comment and documentation byte ranges with `erl_scan` using the `return_comments` and `text` options. For CRLF comments, remove the final CR from the scanner's range before comparing. Before scanning, replace the shebang line up to its line ending with one space per byte. The reader treats `.xrl` files as Erlang, so quotes or percent signs in leex regular expressions may affect comment detection.
 
 ### JSON, YAML, and TOML
 
