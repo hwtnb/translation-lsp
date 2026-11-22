@@ -11,7 +11,7 @@ Hover over a supported code comment, or place the cursor in it and run Zed's `ed
 A block comment or a docstring of more than one line is also sent without its margin:
 
 - after `/*`, a first line of only `*` and `!`, such as the rest of `/**` or `/*!`
-- a `*` that starts every following line that is not blank, with one space or tab after it
+- in a comment that starts with `/*`, the indentation, leading `*`, and up to one following space or tab on each nonblank line after the first. This applies if every such line starts, after any indentation, with `*` followed by a space, a tab, or the end of the line
 - the indentation that the following lines share, and the spaces and tabs at the start of the first line
 - blank lines at the start and end, and spaces and tabs at the end of the last line
 

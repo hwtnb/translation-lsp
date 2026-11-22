@@ -278,7 +278,7 @@ Compare byte ranges with glslang's preprocessor on files it accepts. Compare onl
 
 Line comments begin with `//`, `///` for XML documentation, or `////`, and end at CR, LF, or EOF. Adjacent lines group only when their opening lengths match, with four or more slashes sharing length 4. Because F# reads operator characters as one token, `//` immediately after an operator character, as in `x +// y`, starts no comment. A leading `#!` line is skipped.
 
-Block comments run from `(*` to matching `*)` and nest. `(*)` is an operator and neither starts nor nests a comment. Block bodies drop leading and trailing `*` marks, as in OCaml. Inside a block comment, strings (`"..."`, `@"..."`, `"""..."""`) and simple character literals keep `*)` from closing the comment; numeric and Unicode escapes do not count as character literals there.
+Block comments run from `(*` to matching `*)` and nest. `(*)` is an operator and neither starts nor nests a comment. As in OCaml, the body excludes the opening and closing delimiters and any extra `*` characters attached to them. Inside a block comment, strings (`"..."`, `@"..."`, `"""..."""`) and simple character literals keep `*)` from closing the comment; numeric and Unicode escapes do not count as character literals there.
 
 Outside comments, the reader skips strings, character literals (including numeric and Unicode escapes), identifiers containing `'`, and backtick identifiers. An unclosed comment or string, including an unclosed interpolated string, hides the rest of the file.
 

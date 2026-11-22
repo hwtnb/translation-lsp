@@ -70,16 +70,20 @@ relative to the repository root.
 
 - Translation previews leave the source document unchanged. Send the selected
   text or comment body as prose and display the completed translation directly.
-  A block comment or docstring of more than one line is sent without its
-  margin: `*` decorations, shared indentation, and blank lines around it
-  (`text/comments.rs`). Except for dictionary entries and
-  `hover.format: "text"`, Hover shows it through `lsp/preview/markdown.rs`:
+  A block comment or docstring of more than one line is sent without shared
+  indentation or surrounding blank lines. Multiline comments that start with
+  `/*` also lose their decorative leading `*` (`text/comments.rs`).
+
+  Except for dictionary entries and `hover.format: "text"`, Hover shows the
+  translation through `lsp/preview/markdown.rs`:
   the formatting the translation means
   stays and every other character shows as written, and the translation of a
   Markdown document keeps its Markdown. Links in Hover, except in dictionary
   entries, open only URLs of the original. Prompt the model to preserve code,
-  identifiers, URLs, and meaning. Do not require JSON translation segments or
-  enforce Markdown structure or byte equality on the generated translation.
+  identifiers, URLs, and meaning.
+
+  Do not require JSON translation segments or enforce Markdown structure or
+  byte equality on the generated translation.
   Markdown parsing determines input eligibility and the formatting Hover keeps;
   it never rejects a translation. A
   provider that takes no prompt, such as DeepL or Google Cloud Translation, is
