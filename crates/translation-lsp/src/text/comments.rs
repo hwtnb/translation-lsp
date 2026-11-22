@@ -28,6 +28,7 @@ mod data;
 mod dockerfile;
 mod elixir;
 mod erlang;
+mod fsharp;
 mod gleam;
 mod glsl;
 mod go;
@@ -209,6 +210,7 @@ impl Comments {
             Language::Erlang => Some(erlang::parse(text)),
             Language::CMake => Some(cmake::parse(text)),
             Language::Glsl => Some(glsl::parse(text)),
+            Language::FSharp => Some(fsharp::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),

@@ -56,6 +56,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 | Erlang | [samples/comment.erl](../../../samples/comment.erl) |
 | CMake | [samples/comment.cmake](../../../samples/comment.cmake) |
 | GLSL | [samples/comment.frag](../../../samples/comment.frag) |
+| F# | [samples/comment.fsx](../../../samples/comment.fsx) |
 | JSON、JSONC | [samples/comment.json](../../../samples/comment.json)、[samples/comment.jsonc](../../../samples/comment.jsonc)。`comment.json` のコメントは、ZedのJSONの言語サーバーが問題として報告しますが、ホバーは同じように翻訳します。 |
 | YAML、TOML | [samples/comment.yaml](../../../samples/comment.yaml)、[samples/comment.toml](../../../samples/comment.toml) |
 | シェルスクリプト、PowerShell | [samples/comment.sh](../../../samples/comment.sh)、[samples/comment.ps1](../../../samples/comment.ps1) |

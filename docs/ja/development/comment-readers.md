@@ -12,7 +12,7 @@
 | Oxcの構文解析器 | JavaScript、TypeScript（HTML文書とコンポーネントファイル内のスクリプトを含む） |
 | Tree-sitterの文法 | C、C++、C#、Python |
 | `granit-parser` のスキャナー | YAML（Docker Composeを含む） |
-| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、Prisma、Gleam、Erlang、CMake、GLSL、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
+| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、Prisma、Gleam、Erlang、CMake、GLSL、F#、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
 
 新しいコード言語には専用の読み取りを書きます。実際のファイルと生成したテキストを使い、見つけたコメントをその言語の字句解析器の結果と比べます。Tree-sitterの文法も候補にする場合は、同じ方法でコメントと読み取り時間を比べます。Rustは既存の字句解析器を、JavaScriptとTypeScriptはOxcを引き続き使います。
 
@@ -36,11 +36,11 @@ PowerShellとTOMLの読み取りは、`pwsh-parser` と `toml_parser` の字句�
 
 | 専用のスタックを持つ読み取り |
 | --- |
-| シェルスクリプト、Dockerfile、Kotlin、Swift、Scala、Dart、Elixir、Ruby、PHP、HCL、Nix |
+| シェルスクリプト、Dockerfile、Kotlin、Swift、Scala、Dart、Elixir、Ruby、PHP、HCL、Nix、F# |
 
 Rubyの読み取りは、語がローカル変数かどうかを、スコープの深さにかかわらず1つの集合で調べます。
 
-テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む38の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
+テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む39の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
 
 ## 言語ごとの規則
 
@@ -273,6 +273,22 @@ Terraform、Terraform Vars、HCLは同じ読み取りを使います。行コメ
 読み取りは、GLSLのバージョンにかかわらず行をつなげます。古いプロファイルでは、glslangが `//` のコメントをバックスラッシュ直後の改行で終える場合があります。コメントの開始記号の2文字の間に行継続が入る形は扱いません。ブロックコメントの終了記号は行継続をまたげます。`#include` の山かっこ内にある `//` は、コメントとして拾う場合があります。
 
 glslangのプリプロセッサーが受理したファイルでバイト範囲を比較します。`#line` によって表示上のファイル名が変わっても、主ファイルのコメントだけを比べます。glslangは先頭のUTF-8のバイト順マークの次のバイトから位置を数えます。行末とファイル末尾の位置を決めてから、マークのバイト数を足します。古いプロファイルで行コメントが早く終わる場合と、上に挙げた開始記号や山かっこの制限による差をそろえてから比べます。
+
+### F#
+
+行コメントは `//`、XMLドキュメントコメントの `///`、または `////` で始まり、CR、LF、またはファイル末尾で終わります。隣り合う行は開始記号の長さが同じ場合だけまとめ、4個以上のスラッシュは長さ4としてそろえます。F#は演算子の文字をまとめて読むため、`x +// y` のように演算子の文字の直後にある `//` はコメントを始めません。先頭行の `#!` は読み飛ばします。
+
+ブロックコメントは `(*` から対応する `*)` までで、入れ子になります。`(*)` は演算子であり、コメントを始めず入れ子にもなりません。ブロック本文はOCamlと同様に先頭と末尾の `*` を除きます。ブロックコメントの中では、文字列（`"..."`、`@"..."`、`"""..."""`）と単純な文字リテラルの中にある `*)` はコメントを閉じず、数値やUnicodeのエスケープは文字リテラルになりません。
+
+コメントの外では、文字列、数値やUnicodeのエスケープを含む文字リテラル、`'` を含む名前、バッククォートの名前を読み飛ばします。閉じていないコメントと文字列（閉じていない補間文字列を含む）はファイルの残りを隠します。
+
+補間文字列（`$"..."`、`$@"..."`、`@$"..."`、`$"""..."""`、`$$"""..."""` などの複数 `$` 形式）では、補間の穴の中のコメントをコードとして読みます。複数 `$` の補間文字列では、`$` と同じ数以上の `{` で穴が開き、同じ数の `}` で閉じます。
+
+`#if`、`#else`、`#endif`、`#nowarn` などのプリプロセッサー行は `#` の後ろをコードとして読むため、行末や各分岐のコメントも読み取ります。`#:` で始まる行は行末まで読み飛ばします。
+
+先頭以外の行にある `#!` は行コメントではなく通常の文字として読みます。`#if` のすべての分岐をコードとして読むため、無効な分岐に閉じていない文字列やブロックコメントがあると、ファイルの残りを隠します。ASCII以外の文字が名前に含まれるかの判定にはRustのUnicode文字・数字判定を使うため、結合文字や書式文字でF#と異なる場合があります。`@` のない `#line` のパスが `\"` で終わると、文字列が閉じない扱いになります。
+
+ファイル末尾での字句エラーがないファイルで、`FSharp.Compiler.Service` が構文木に記録するコメントのバイト範囲と比較します。構文解析の前に `///` を `//!` に、単独のCRをLFに置き換え、ドキュメントコメントとCRで終わるコメントが記録されるようにします。`#nowarn`、`#warnon`、および条件付きコンパイル指令の行の `#` をなくなるまで空白に置き換え、全分岐と指令行末のコメントを対象にします。先頭行の `#!` は比較から除き、UTF-8のバイト順マークを含めて先頭からのバイト位置を数えます。
 
 ### JSON、YAML、TOML
 

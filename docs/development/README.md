@@ -56,6 +56,7 @@ Hover over the comments in these samples.
 | Erlang | [samples/comment.erl](../../samples/comment.erl) |
 | CMake | [samples/comment.cmake](../../samples/comment.cmake) |
 | GLSL | [samples/comment.frag](../../samples/comment.frag) |
+| F# | [samples/comment.fsx](../../samples/comment.fsx) |
 | JSON, JSONC | [samples/comment.json](../../samples/comment.json) and [samples/comment.jsonc](../../samples/comment.jsonc). Zed's JSON language server reports the comments in `comment.json`, and Hover translates them all the same. |
 | YAML, TOML | [samples/comment.yaml](../../samples/comment.yaml) and [samples/comment.toml](../../samples/comment.toml) |
 | Shell script, PowerShell | [samples/comment.sh](../../samples/comment.sh) and [samples/comment.ps1](../../samples/comment.ps1) |

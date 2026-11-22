@@ -12,7 +12,7 @@ This page describes how the server reads the comments of each language, and the 
 | Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
 | Tree-sitter grammars | C, C++, C#, Python |
 | `granit-parser` scanner | YAML, including Docker Compose |
-| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, CMake, GLSL, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, CMake, GLSL, F#, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
 When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
@@ -36,11 +36,11 @@ The server's own readers read each part once, without restarting from an earlier
 
 | Readers with their own stack |
 | --- |
-| Shell scripts, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, PHP, HCL, Nix |
+| Shell scripts, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, PHP, HCL, Nix, F# |
 
 The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
 
-The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 38 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 39 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -273,6 +273,22 @@ Double quotes start a string. Within it, a backslash escapes the following chara
 The reader joins lines in every version. In older GLSL profiles, glslang may end a `//` comment at a line break even after a backslash. A line splice between the two characters of an opening comment mark is unsupported. A block comment can close across a splice. In an angle-bracket `#include` path, `//` can be read as a comment.
 
 Compare byte ranges with glslang's preprocessor on files it accepts. Compare only comments from the main source, even when `#line` changes the reported name. glslang counts offsets from the byte after a leading UTF-8 byte order mark. Determine line and file ends before adding the mark's length to the offsets. Before comparing, account for line comments that glslang ends early in older profiles and for the unsupported opening and include forms above.
+
+### F#
+
+Line comments begin with `//`, `///` for XML documentation, or `////`, and end at CR, LF, or EOF. Adjacent lines group only when their opening lengths match, with four or more slashes sharing length 4. Because F# reads operator characters as one token, `//` immediately after an operator character, as in `x +// y`, starts no comment. A leading `#!` line is skipped.
+
+Block comments run from `(*` to matching `*)` and nest. `(*)` is an operator and neither starts nor nests a comment. Block bodies drop leading and trailing `*` marks, as in OCaml. Inside a block comment, strings (`"..."`, `@"..."`, `"""..."""`) and simple character literals keep `*)` from closing the comment; numeric and Unicode escapes do not count as character literals there.
+
+Outside comments, the reader skips strings, character literals (including numeric and Unicode escapes), identifiers containing `'`, and backtick identifiers. An unclosed comment or string, including an unclosed interpolated string, hides the rest of the file.
+
+In interpolated strings (`$"..."`, `$@"..."`, `@$"..."`, `$"""..."""`, and multi-`$` forms such as `$$"""..."""`), comments inside interpolation holes are read as code. In a multi-`$` string, a hole opens with at least as many `{` as `$` and closes with that many `}`.
+
+Preprocessor lines such as `#if`, `#else`, `#endif`, and `#nowarn` are read as code after `#`, so comments on those lines and in every branch are read. Lines starting with `#:` are skipped to the end of the line.
+
+A `#!` outside the first line is read as ordinary characters rather than a line comment. Because every `#if` branch is read as code, an unclosed string or block comment in an inactive branch hides the rest of the file. Non-ASCII identifier membership uses Rust's Unicode letter and digit checks, which can differ from F# on combining or formatting characters. A `#line` path ending in `\"` without `@` leaves a string unclosed.
+
+Compare byte ranges against comment trivia from `FSharp.Compiler.Service` on files without end-of-file lexical errors. Before parsing, replace `///` with `//!` and bare CR with LF so documentation and CR-ended comments are recorded. Replace `#` with a space on `#nowarn`, `#warnon`, and conditional directive lines until none remain, exposing every branch and trailing comment. Skip a leading `#!` line and count offsets from byte 0, including any UTF-8 byte order mark.
 
 ### JSON, YAML, and TOML
 

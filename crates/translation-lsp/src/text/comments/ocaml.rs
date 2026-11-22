@@ -82,9 +82,10 @@ fn comment_end(bytes: &[u8], from: usize) -> Option<usize> {
     None
 }
 
-/// A comment over `range`, whose text leaves out its `(` and the `*` after
-/// it, its `)` and the `*` before it, and one space after the opening.
-fn comment(bytes: &[u8], range: Range<usize>) -> Comment {
+/// A block comment over `range`, as used by OCaml and F#, whose text leaves
+/// out its `(` and the `*` after it, its `)` and the `*` before it, and one
+/// space after the opening.
+pub(super) fn comment(bytes: &[u8], range: Range<usize>) -> Comment {
     let inner = &bytes[range.start + 1..range.end - 1];
     let opening = inner.iter().take_while(|byte| **byte == b'*').count();
     let closing = inner[opening..]

@@ -1822,6 +1822,9 @@ fn readers_finish_repeated_pieces_in_seconds() {
         ".",
         "-doc",
         ". -doc \"text\"",
+        "$\"{",
+        "$$\"\"\"{{",
+        "``",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1865,6 +1868,7 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "erlang",
         "cmake",
         "glsl",
+        "fsharp",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2126,6 +2130,9 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         ".",
         "-doc",
         ". -doc \"text\"",
+        "$\"{",
+        "$$\"\"\"{{",
+        "``",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2177,6 +2184,7 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "erlang",
         "cmake",
         "glsl",
+        "fsharp",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -4438,5 +4446,171 @@ fn glsl_skips_quoted_strings_and_resumes_after_an_unclosed_quote() {
             "Split close\nand common margin",
             "Tail"
         ]
+    );
+}
+
+#[test]
+fn fsharp_reads_line_doc_and_nested_block_comments() {
+    let source = concat!(
+        "\u{feff}#!/usr/bin/env dotnet fsi // shebang\n",
+        "// First\r\n// Second\r/// <summary>Doc</summary>\n",
+        "/// More\n//// Four\n///// Five\n",
+        "let mul = (*) 2 3 // After operator\n",
+        "let empty = (**) // Empty block\n",
+        "(* outer (* nested *) \"*)\" @\"*)\" \"\"\"*)\"\"\" '\"' (*)*) // After block\n",
+        "(* a'\"' *) // Name before quote inside comment\n",
+        "let trailing = 1 //",
+    );
+    assert_eq!(
+        sources("fsharp", "untitled:comment", source),
+        [
+            "// First",
+            "// Second",
+            "/// <summary>Doc</summary>",
+            "/// More",
+            "//// Four",
+            "///// Five",
+            "// After operator",
+            "(**)",
+            "// Empty block",
+            "(* outer (* nested *) \"*)\" @\"*)\" \"\"\"*)\"\"\" '\"' (*)*)",
+            "// After block",
+            "(* a'\"' *)",
+            "// Name before quote inside comment",
+            "//",
+        ]
+    );
+    assert_eq!(
+        bodies("fsharp", source),
+        [
+            "First\r\nSecond",
+            "<summary>Doc</summary>\nMore",
+            "Four\n/ Five",
+            "After operator",
+            "",
+            "Empty block",
+            "outer (* nested *) \"*)\" @\"*)\" \"\"\"*)\"\"\" '\"' (*)",
+            "After block",
+            "a'\"' ",
+            "Name before quote inside comment",
+            "",
+        ]
+    );
+    // Inside a block comment, trigraph escapes such as `'\065'` are not
+    // character literals, so the quote before `"` leaves a string unclosed.
+    assert!(
+        sources(
+            "fsharp",
+            "untitled:comment",
+            "(* '\\n' '\\065' '\"' *) // hidden"
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn fsharp_block_comment_bodies_keep_relative_indentation() {
+    for ending in ["\n", "\r\n"] {
+        let source = format!("(*{ending}  Example:{ending}      let x = 1{ending}*)");
+        let expected = format!("Example:{ending}    let x = 1");
+        assert_eq!(bodies("fsharp", &source), [expected]);
+        let source = format!("(*{ending}    text  *)");
+        assert_eq!(bodies("fsharp", &source), ["text"]);
+    }
+    assert_eq!(
+        bodies(
+            "fsharp",
+            "(* One *)\n(** Two *)\n(*** Three **)\n(**********)"
+        ),
+        ["One ", "Two ", "Three ", ""]
+    );
+}
+
+#[test]
+fn fsharp_skips_strings_interpolations_chars_backticks_and_reads_all_ifdef_branches() {
+    let source = concat!(
+        "let s = \"// no \\\" (* no\" + @\"\"\"// no\" + \"\"\"\"x\"\"\"\" // hidden \" // after triple\n",
+        "let i = $\"{{ // no }} { (* in hole *) 1 + {| A = 1 |} }\" // after interp\n",
+        "let v = $@\"\"\"// no\" + @$\"{ // line in hole\n 1 }\" // after verbatim interp\n",
+        "let e = $$ \"\"\"{{ // not interp }}\"\"\" + $$\"\"\"{{ { // in extended\n 1 } }}\"\"\" // after ext\n",
+        "let c = '\"' + ''' + '\\065' + '\\x41' + '\\u0041' + '\\U00000041' + 'a'B // after chars\n",
+        "let f' = f'\"// in string\" // after prime ident\n",
+        "let ``a // b`` = 1 // after backticks\n",
+        "let ``unclosed // hidden\n",
+        "#if A // if comment\n",
+        "let x = 1 // active\n",
+        "#else // else comment\n",
+        "let x = 2 // inactive\n",
+        "#endif // endif comment\n",
+        "#nowarn \"40\" // nowarn comment\n",
+    );
+    assert_eq!(
+        bodies("fsharp", source),
+        [
+            "after triple",
+            "in hole ",
+            "after interp",
+            "line in hole",
+            "after verbatim interp",
+            "in extended",
+            "after ext",
+            "after chars",
+            "after prime ident",
+            "after backticks",
+            "if comment",
+            "active",
+            "else comment",
+            "inactive",
+            "endif comment",
+            "nowarn comment",
+        ]
+    );
+    for unclosed in [
+        "(* unclosed",
+        "let s = \"unclosed",
+        "let t = $\"unclosed { 1 }",
+    ] {
+        let text = format!("// before\n{unclosed}\n// hidden");
+        assert_eq!(bodies("fsharp", &text), ["before"]);
+    }
+}
+
+#[test]
+fn fsharp_reads_array_and_attribute_openers_and_hides_unclosed_interpolations() {
+    let source = concat!(
+        "let paths = [|@\"C:\\\"; \"// literal\"|] // actual\n",
+        "let values = [|// items\n",
+        "let texts = [|$\"v = {1 (* hole *)}\"|]\n",
+        "[<// attr\n",
+        "let close = $\"a {[|}\" // after hole\n",
+    );
+    assert_eq!(
+        sources("fsharp", "untitled:comment", source),
+        [
+            "// actual",
+            "// items",
+            "(* hole *)",
+            "// attr",
+            "// after hole",
+        ]
+    );
+    assert_eq!(
+        bodies("fsharp", "// before\nlet s = $\"{1 (* inside *)}"),
+        ["before"]
+    );
+    assert_eq!(
+        bodies("fsharp", "// before\nlet s = $\"{1 (* inside *)}\""),
+        ["before", "inside "]
+    );
+    assert_eq!(
+        bodies("fsharp", "// before\nlet s = $\"{1 (* inside *)\n// hidden"),
+        ["before"]
+    );
+    assert_eq!(
+        bodies(
+            "fsharp",
+            "// before\nlet s = $\"{ $\"{(* inner *)}\" (* outer *)}"
+        ),
+        ["before"]
     );
 }

@@ -44,6 +44,7 @@ Hover translates the comments of the following languages.
 | Erlang | `%` comments, and the strings given to `-moduledoc` and `-doc` |
 | CMake | `#` comments and bracket comments such as `#[[ ... ]]` |
 | GLSL | `//` and `/* ... */` |
+| F# | `//` comments, including `///` documentation comments, and `(* ... *)` comments |
 | JSON, JSONC | `//` and `/* ... */` |
 | YAML, TOML | `#` comments |
 | Shell scripts | `#` comments in sh, Bash, and zsh scripts |
@@ -129,6 +130,7 @@ If your settings list the language servers of a language explicitly, add `"trans
 | Erlang | `Erlang` | [Erlang extension](https://github.com/zed-extensions/erlang) |
 | CMake | `CMake` | [neocmake extension](https://github.com/k0tran/zed_neocmake) |
 | GLSL | `GLSL` | [GLSL extension](https://github.com/zed-industries/zed/tree/main/extensions/glsl) |
+| F# | `FSharp` | [F# extension](https://github.com/nathanjcollins/zed-fsharp) |
 | JSON | `JSON` | Built in |
 | JSONC | `JSONC` | Built in |
 | YAML | `YAML` | Built in |
