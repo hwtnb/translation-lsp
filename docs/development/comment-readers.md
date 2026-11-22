@@ -64,7 +64,9 @@ C/C++ supports ordinary and Doxygen comments (`///`, `//!`, `/**`, `/*!`, includ
 
 ### Python
 
-Python supports `#` comments and docstrings at the beginning of a module, class, or function body. Ordinary, raw, Unicode, parenthesized, and implicitly concatenated string docstrings are supported; assigned strings, f-strings, and bytes are not automatic targets. Quotes and string prefixes are removed from docstrings; source escapes and indentation are passed through without evaluating Python. Shebangs are skipped. Syntax-error regions are skipped. If an error region contains a quote, extraction stops there to avoid translating apparent comments inside unfinished strings.
+Python supports `#` comments and docstrings at the beginning of a module, class, or function body. Ordinary, raw, Unicode, parenthesized, and implicitly concatenated string docstrings are supported; assigned strings, f-strings, and bytes are not automatic targets. Quotes and string prefixes are removed from docstrings. Escapes are sent as written, without evaluating Python. A docstring of more than one line is sent without its margin, like a block comment.
+
+Shebangs are skipped. Syntax-error regions are skipped. If an error region contains a quote, extraction stops there to avoid translating apparent comments inside unfinished strings.
 
 ### Go
 
@@ -198,7 +200,9 @@ Where Dart reports an error, the server does not follow how Dart reads on. A str
 
 Elixir supports `#` comments. Text inside strings, charlists such as `'...'`, heredocs `"""..."""` and `'''...'''`, sigils such as `~r/#\d+/` and `~S(...)`, character literals such as `?#` and `?"`, and quoted atoms and keys such as `:"a#"` and `"a#": 1` is not treated as a comment. A comment inside `#{ ... }` of a string, a charlist, a heredoc, a quoted atom or key, or a sigil with a lowercase name is a comment. A `#!` line at the start of the file is skipped. An unclosed string, charlist, heredoc, quoted atom, or sigil hides everything after it.
 
-The string, heredoc, or sigil `~S` or `~s` given to `@moduledoc`, `@doc`, or `@typedoc` is translated as a docstring, also in parentheses, as in `@doc("...")`. Its text is sent as written, escapes and `#{ ... }` included; a comment inside its `#{ ... }` is not translated on its own. When an operator follows, as in `@doc "a" <> "b"`, the first string is the doc. `@doc false`, `@shortdoc`, a charlist, another sigil, and a string on the line after `@doc` are not docs. An unclosed doc is not translated. A quoted key right after one of the attributes, as in `@doc "a": 1`, is not a doc, but a comment inside its `#{ ... }` is left out.
+The string, heredoc, or sigil `~S` or `~s` given to `@moduledoc`, `@doc`, or `@typedoc` is translated as a docstring, also in parentheses, as in `@doc("...")`. Its escapes and `#{ ... }` are sent as written, not evaluated. A doc of more than one line is sent without its margin, like a block comment. A comment inside its `#{ ... }` is not translated on its own.
+
+When an operator follows, as in `@doc "a" <> "b"`, the first string is the doc. `@doc false`, `@shortdoc`, a charlist, another sigil, and a string on the line after `@doc` are not docs. An unclosed doc is not translated. A quoted key right after one of the attributes, as in `@doc "a": 1`, is not a doc, but a comment inside its `#{ ... }` is left out.
 
 ### Terraform and HCL
 
