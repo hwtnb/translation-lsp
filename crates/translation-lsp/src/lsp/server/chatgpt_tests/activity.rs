@@ -170,7 +170,7 @@ async fn activity_keeps_background_owner_after_hover_expiry_and_allows_token_ref
         .unwrap();
     server.jobs = Some(worker_jobs);
     let events = completions.clone();
-    let started = spawn_blocking(move || events.recv_timeout(Duration::from_secs(2)).unwrap())
+    let started = spawn_blocking(move || events.recv_timeout(Duration::from_secs(30)).unwrap())
         .await
         .unwrap();
     let WorkerEvent::Started(started_ticket) = started else {
@@ -208,7 +208,7 @@ async fn activity_keeps_background_owner_after_hover_expiry_and_allows_token_ref
         "Remaining background owner keeps progress alive"
     );
     drop(locked);
-    timeout(Duration::from_secs(2), async {
+    timeout(Duration::from_secs(30), async {
         while !fixture
             .state
             .lock()

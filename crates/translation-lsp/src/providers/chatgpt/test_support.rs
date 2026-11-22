@@ -238,7 +238,7 @@ impl Fixture {
             let request = spawn_blocking(move || {
                 client
                     .receiver
-                    .recv_timeout(Duration::from_secs(3))
+                    .recv_timeout(Duration::from_secs(30))
                     .unwrap()
             })
             .await

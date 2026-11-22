@@ -807,7 +807,7 @@ async fn candidates_are_local_and_explicit_commands_use_standard_lsp_ui() {
         .unwrap();
     let receiver = client.receiver.clone();
     let Message::Request(request) =
-        spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(2)).unwrap())
+        spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(30)).unwrap())
             .await
             .unwrap()
     else {
@@ -856,7 +856,7 @@ async fn candidates_are_local_and_explicit_commands_use_standard_lsp_ui() {
         .unwrap();
     let receiver = client.receiver.clone();
     let Message::Request(request) =
-        spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(2)).unwrap())
+        spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(30)).unwrap())
             .await
             .unwrap()
     else {

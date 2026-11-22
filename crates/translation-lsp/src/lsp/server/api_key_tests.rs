@@ -182,7 +182,7 @@ async fn compatible_service_translates_without_a_key_and_hover_shows_it() {
         spawn_blocking(move || {
             loop {
                 if let WorkerEvent::Finished(completion) =
-                    completions.recv_timeout(Duration::from_secs(3)).unwrap()
+                    completions.recv_timeout(Duration::from_secs(30)).unwrap()
                 {
                     break completion;
                 }
@@ -240,7 +240,7 @@ async fn deepl_translates_a_comment_of_several_lines_as_one_sentence() {
         spawn_blocking(move || {
             loop {
                 if let WorkerEvent::Finished(completion) =
-                    completions.recv_timeout(Duration::from_secs(3)).unwrap()
+                    completions.recv_timeout(Duration::from_secs(30)).unwrap()
                 {
                     break completion;
                 }

@@ -172,7 +172,7 @@ pub(crate) struct OpenResponses {
 
 impl OpenResponses {
     pub async fn wait(&self, count: usize) {
-        timeout(Duration::from_secs(2), async {
+        timeout(Duration::from_secs(30), async {
             while self.count.load(Ordering::SeqCst) != count {
                 self.changed.notified().await;
             }

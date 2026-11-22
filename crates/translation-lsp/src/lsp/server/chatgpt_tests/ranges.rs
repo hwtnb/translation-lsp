@@ -63,15 +63,19 @@ async fn distinct_automatic_ranges_persist_and_range_cancel_only_removes_its_tic
     let (fixture, mut server, connection, _client, completions, uri) =
         range_server(Settings::default()).await;
     let tail = Arc::new(StreamTailGate::default());
-    fixture.state.lock().unwrap().stream_tail_gate = Some(tail.clone());
-    for line in [0, 2, 4] {
+    let canceled_tail = Arc::new(StreamTailGate::default());
+    // Observe the canceled response's drop independently of the third response's arrival.
+    for (line, gate) in [(0, &tail), (2, &canceled_tail), (4, &tail)] {
+        fixture.state.lock().unwrap().stream_tail_gate = Some(gate.clone());
         let target = range_target(&server, &uri, line);
         markdown_actions(&mut server, &uri, target.range);
         server.selection.as_mut().unwrap().start = Some(Instant::now());
         server.expire(&connection).unwrap();
+        if line != 4 {
+            wait_held(gate, 1).await;
+        }
     }
     assert_eq!(server.scheduler.translations().len(), 3);
-    wait_held(&tail, 2).await;
     markdown_actions(&mut server, &uri, Range::default());
     let canceled = server
         .range_ticket(&range_target(&server, &uri, 2))
@@ -82,6 +86,7 @@ async fn distinct_automatic_ranges_persist_and_range_cancel_only_removes_its_tic
     server
         .finish(&connection, next(&completions).await)
         .unwrap();
+    wait_held(&canceled_tail, 0).await;
     wait_held(&tail, 2).await;
     for _ in 0..2 {
         tail.release.notify_one();

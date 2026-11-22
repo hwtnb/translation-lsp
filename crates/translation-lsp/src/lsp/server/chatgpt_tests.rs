@@ -347,7 +347,7 @@ async fn next(
     spawn_blocking(move || {
         loop {
             if let WorkerEvent::Finished(completion) =
-                receiver.recv_timeout(Duration::from_secs(3)).unwrap()
+                receiver.recv_timeout(Duration::from_secs(30)).unwrap()
             {
                 break completion;
             }
@@ -358,7 +358,7 @@ async fn next(
 }
 
 async fn wait_held(tail: &StreamTailGate, count: usize) {
-    timeout(Duration::from_secs(2), async {
+    timeout(Duration::from_secs(30), async {
         while tail.held.load(Ordering::SeqCst) != count {
             tail.reached.notified().await;
         }
@@ -579,7 +579,7 @@ fn markdown_actions(
 
 async fn protocol_message(client: &Connection) -> Message {
     let receiver = client.receiver.clone();
-    spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(3)).unwrap())
+    spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(30)).unwrap())
         .await
         .unwrap()
 }

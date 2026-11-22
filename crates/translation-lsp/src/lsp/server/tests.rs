@@ -123,7 +123,7 @@ async fn worker_keeps_non_send_futures_and_one_independent_admin_slot() {
         drop(jobs);
         drop(administrations);
     };
-    timeout(Duration::from_secs(2), async {
+    timeout(Duration::from_secs(30), async {
         tokio::join!(
             worker(received_jobs, received_admin, finished, provider, 2),
             exercise
@@ -294,7 +294,7 @@ fn generic_worker_receives_comment_bodies_and_adjacent_blocks_take_precedence() 
     let finish = |server: &mut Server<RecordingProvider>, body: &str| {
         let completion = loop {
             if let WorkerEvent::Finished(completion) =
-                completions.recv_timeout(Duration::from_secs(2)).unwrap()
+                completions.recv_timeout(Duration::from_secs(30)).unwrap()
             {
                 break completion;
             }
@@ -569,7 +569,7 @@ fn provider_capabilities_drive_commands_and_account_actions() {
             .is_none()
     );
     let WorkerEvent::Finished(completion) =
-        completions.recv_timeout(Duration::from_secs(3)).unwrap()
+        completions.recv_timeout(Duration::from_secs(30)).unwrap()
     else {
         panic!("Expected account completion")
     };

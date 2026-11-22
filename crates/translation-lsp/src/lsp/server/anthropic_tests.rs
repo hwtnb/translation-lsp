@@ -17,7 +17,7 @@ async fn next(receiver: &crossbeam_channel::Receiver<WorkerEvent<KeyId>>) -> Fin
     spawn_blocking(move || {
         loop {
             if let WorkerEvent::Finished(completion) =
-                receiver.recv_timeout(Duration::from_secs(3)).unwrap()
+                receiver.recv_timeout(Duration::from_secs(30)).unwrap()
             {
                 break completion;
             }

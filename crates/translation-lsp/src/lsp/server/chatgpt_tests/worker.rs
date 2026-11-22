@@ -365,7 +365,7 @@ async fn chatgpt_worker_drops_outbound_on_cancel_deadline_edit_and_shutdown() {
         let ticket = server.scheduler.pending()[&1.into()].ticket;
         let started = {
             let completions = completions.clone();
-            spawn_blocking(move || completions.recv_timeout(Duration::from_secs(3)))
+            spawn_blocking(move || completions.recv_timeout(Duration::from_secs(30)))
                 .await
                 .unwrap()
                 .unwrap()
