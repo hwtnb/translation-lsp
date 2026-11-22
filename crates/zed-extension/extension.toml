@@ -13,7 +13,7 @@ path = ["hwtnb", "zed-translation-lsp", "releases", "download", "**"]
 
 [language_servers.translation-lsp]
 name = "Translation LSP"
-languages = ["Rust", "JavaScript", "TypeScript", "TSX", "CSharp", "C", "C++", "Python", "Go", "Java", "Kotlin", "Swift", "Ruby", "PHP", "HTML", "Vue.js", "Svelte", "Astro", "XML", "CSS", "SCSS", "SQL", "Lua", "Zig", "Proto", "GraphQL", "Clojure", "Haskell", "OCaml", "OCaml Interface", "Scala", "Dart", "Elixir", "Terraform", "Terraform Vars", "HCL", "Nix", "Prisma", "Gleam", "Erlang", "JSON", "JSONC", "YAML", "TOML", "Shell Script", "PowerShell", "Dockerfile", "Docker Compose", "Make", "Markdown", "Plain Text"]
+languages = ["Rust", "JavaScript", "TypeScript", "TSX", "CSharp", "C", "C++", "Python", "Go", "Java", "Kotlin", "Swift", "Ruby", "PHP", "HTML", "Vue.js", "Svelte", "Astro", "XML", "CSS", "SCSS", "SQL", "Lua", "Zig", "Proto", "GraphQL", "Clojure", "Haskell", "OCaml", "OCaml Interface", "Scala", "Dart", "Elixir", "Terraform", "Terraform Vars", "HCL", "Nix", "Prisma", "Gleam", "Erlang", "CMake", "GLSL", "JSON", "JSONC", "YAML", "TOML", "Shell Script", "PowerShell", "Dockerfile", "Docker Compose", "Make", "Markdown", "Plain Text"]
 
 [language_servers.translation-lsp.language_ids]
 Rust = "rust"
@@ -56,6 +56,8 @@ Nix = "nix"
 Prisma = "prisma"
 Gleam = "gleam"
 Erlang = "erlang"
+CMake = "cmake"
+GLSL = "glsl"
 JSON = "json"
 JSONC = "jsonc"
 YAML = "yaml"

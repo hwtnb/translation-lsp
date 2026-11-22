@@ -19,6 +19,7 @@ use component::Dialect;
 
 mod c_family;
 mod clojure;
+mod cmake;
 mod component;
 mod csharp;
 mod css;
@@ -28,6 +29,7 @@ mod dockerfile;
 mod elixir;
 mod erlang;
 mod gleam;
+mod glsl;
 mod go;
 mod graphql;
 mod haskell;
@@ -205,6 +207,8 @@ impl Comments {
             Language::Prisma => Some(prisma::parse(text)),
             Language::Gleam => Some(gleam::parse(text)),
             Language::Erlang => Some(erlang::parse(text)),
+            Language::CMake => Some(cmake::parse(text)),
+            Language::Glsl => Some(glsl::parse(text)),
             Language::Xml => Some(xml::parse(text)),
             Language::Make => Some(make::parse(text)),
             Language::Ruby => Some(ruby::parse(text)),
@@ -332,12 +336,21 @@ impl Comments {
                 )
                 | Kind::Block { opening, .. } => opening,
             } as usize;
-            let closing = if matches!(comment.kind, Kind::Block { .. }) {
-                2
+            let end = if matches!(comment.kind, Kind::Block { .. }) {
+                // A GLSL block can end with a line splice between '*' and '/'.
+                let source = &text[comment.range.clone()];
+                let body = source
+                    .strip_suffix('/')
+                    .and_then(|prefix| prefix.strip_suffix(['\r', '\n']))
+                    .and_then(|prefix| {
+                        prefix
+                            .trim_end_matches(['\\', '\r', '\n'])
+                            .strip_suffix('*')
+                    });
+                comment.range.start + body.map_or(source.len() - 2, str::len)
             } else {
-                0
+                comment.range.end
             };
-            let end = comment.range.end - closing;
             let content = &text[(comment.range.start + opening).min(end)..end];
             body.push_str(content.strip_prefix(' ').unwrap_or(content));
         }

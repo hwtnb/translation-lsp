@@ -12,7 +12,7 @@ This page describes how the server reads the comments of each language, and the 
 | Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
 | Tree-sitter grammars | C, C++, C#, Python |
 | `granit-parser` scanner | YAML, including Docker Compose |
-| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, CMake, GLSL, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
 When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
@@ -40,7 +40,7 @@ The server's own readers read each part once, without restarting from an earlier
 
 The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
 
-The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 36 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 38 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -255,6 +255,24 @@ At the start of a form, the first string given to `-doc` or `-moduledoc` is tran
 The documentation range covers the delimiters and excludes the sigil prefix and suffix. Its body keeps source escapes and shares the indentation trimming used by Elixir documentation. Atoms, maps, macros, and file references used as documentation values are skipped. The reader also skips documentation attributes with quoted names such as `-'doc'`.
 
 Compare comment and documentation byte ranges with `erl_scan` using the `return_comments` and `text` options. For CRLF comments, remove the final CR from the scanner's range before comparing. Before scanning, replace the shebang line up to its line ending with one space per byte. The reader treats `.xrl` files as Erlang, so quotes or percent signs in leex regular expressions may affect comment detection.
+
+### CMake
+
+A `#` starts a comment that ends before the next LF or CRLF, or at the end of the file. A CR alone stays in the comment. A bracket comment begins with `#[[` or with equals signs between the opening brackets. It ends at the first closing bracket pair with the same number of equals signs. Code on the rest of that line is read as usual.
+
+A bracket argument starts only at a token boundary. It can contain comment marks and has no escapes. Double-quoted arguments can span lines, and a backslash escapes the following character. In unquoted arguments, a backslash can escape any character except a line break. Unclosed quoted arguments, bracket arguments, and bracket comments hide the rest of the file.
+
+Compare the byte ranges with those from `cmListFileLexer`. Keep offsets in the original bytes, including any UTF-8 byte order mark. For line comments that end at CRLF, leave the CR out of the range.
+
+### GLSL
+
+A `//` comment ends at LF, CRLF, or CR. A `/*` comment ends at the first `*/`, and an unclosed one hides the rest of the file. A backslash followed by a line break joins the lines, including inside a comment. Comments inside an inactive preprocessor branch are read as usual.
+
+Double quotes start a string. Within it, a backslash escapes the following character, and an unescaped line break ends an unfinished string. A single quote is an ordinary character.
+
+The reader joins lines in every version. In older GLSL profiles, glslang may end a `//` comment at a line break even after a backslash. A line splice between the two characters of an opening comment mark is unsupported. A block comment can close across a splice. In an angle-bracket `#include` path, `//` can be read as a comment.
+
+Compare byte ranges with glslang's preprocessor on files it accepts. Compare only comments from the main source, even when `#line` changes the reported name. glslang counts offsets from the byte after a leading UTF-8 byte order mark. Determine line and file ends before adding the mark's length to the offsets. Before comparing, account for line comments that glslang ends early in older profiles and for the unsupported opening and include forms above.
 
 ### JSON, YAML, and TOML
 

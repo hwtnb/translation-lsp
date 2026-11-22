@@ -131,11 +131,11 @@ DeepL APIとGoogle Cloud Translationは指示文を受け付けず、言語コ�
 
 | `features` 内の設定 | 切り替える機能 | 言語ID |
 | --- | --- | --- |
-| `comment_hover` | コメントのホバーで翻訳を始める。 | `rust`、`javascript`、`typescript`、`typescriptreact`、`csharp`、`c`、`cpp`、`python`、`go`、`java`、`kotlin`、`swift`、`ruby`、`php`、`html`、`vue`、`svelte`、`astro`、`xml`、`css`、`scss`、`sql`、`lua`、`zig`、`proto`、`graphql`、`clojure`、`haskell`、`ocaml`、`ocaml.interface`、`scala`、`dart`、`elixir`、`terraform`、`terraform-vars`、`hcl`、`nix`、`prisma`、`gleam`、`erlang`、`json`、`jsonc`、`yaml`、`toml`、`shellscript`、`powershell`、`dockerfile`、`dockercompose`、`makefile` |
+| `comment_hover` | コメントのホバーで翻訳を始める。 | `rust`、`javascript`、`typescript`、`typescriptreact`、`csharp`、`c`、`cpp`、`python`、`go`、`java`、`kotlin`、`swift`、`ruby`、`php`、`html`、`vue`、`svelte`、`astro`、`xml`、`css`、`scss`、`sql`、`lua`、`zig`、`proto`、`graphql`、`clojure`、`haskell`、`ocaml`、`ocaml.interface`、`scala`、`dart`、`elixir`、`terraform`、`terraform-vars`、`hcl`、`nix`、`prisma`、`gleam`、`erlang`、`cmake`、`glsl`、`json`、`jsonc`、`yaml`、`toml`、`shellscript`、`powershell`、`dockerfile`、`dockercompose`、`makefile` |
 | `automatic_selection` | 安定したMarkdownの選択から翻訳を始める。 | `markdown` |
 | `selection_action` | コードアクションの `Translate selection to …`。 | 下の表のすべての言語ID |
 | `document_action` | コードアクションの `Translate selection to … and open in tab` と `Translate document to … and open in tab`。 | `markdown`、`plaintext` |
-| `comment_lens` | 訳文、失敗、翻訳中のどれもないコメントの[CodeLens](usage.md#codelens)の行。 | `rust`、`javascript`、`typescript`、`typescriptreact`、`csharp`、`c`、`cpp`、`python`、`go`、`java`、`kotlin`、`swift`、`ruby`、`php`、`html`、`vue`、`svelte`、`astro`、`xml`、`css`、`scss`、`sql`、`lua`、`zig`、`proto`、`graphql`、`clojure`、`haskell`、`ocaml`、`ocaml.interface`、`scala`、`dart`、`elixir`、`terraform`、`terraform-vars`、`hcl`、`nix`、`prisma`、`gleam`、`erlang`、`json`、`jsonc`、`yaml`、`toml`、`shellscript`、`powershell`、`dockerfile`、`dockercompose`、`makefile` |
+| `comment_lens` | 訳文、失敗、翻訳中のどれもないコメントの[CodeLens](usage.md#codelens)の行。 | `rust`、`javascript`、`typescript`、`typescriptreact`、`csharp`、`c`、`cpp`、`python`、`go`、`java`、`kotlin`、`swift`、`ruby`、`php`、`html`、`vue`、`svelte`、`astro`、`xml`、`css`、`scss`、`sql`、`lua`、`zig`、`proto`、`graphql`、`clojure`、`haskell`、`ocaml`、`ocaml.interface`、`scala`、`dart`、`elixir`、`terraform`、`terraform-vars`、`hcl`、`nix`、`prisma`、`gleam`、`erlang`、`cmake`、`glsl`、`json`、`jsonc`、`yaml`、`toml`、`shellscript`、`powershell`、`dockerfile`、`dockercompose`、`makefile` |
 
 `features`、その中の各設定、`languages`、`languages` の中の各言語、言語の中の各設定は、どれも省略できます。ある言語の機能には、`languages.<言語ID>` の値を使います。その値がなければ `features` の直下の値を使い、それもなければ有効です。
 
@@ -200,6 +200,8 @@ DeepL APIとGoogle Cloud Translationは指示文を受け付けず、言語コ�
 | Prisma | `prisma` |
 | Gleam | `gleam` |
 | Erlang | `erlang` |
+| CMake | `cmake` |
+| GLSL | `glsl` |
 | JSON | `json` |
 | JSONC | `jsonc` |
 | YAML | `yaml` |

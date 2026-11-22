@@ -43,6 +43,8 @@ pub(crate) enum Language {
     Prisma,
     Gleam,
     Erlang,
+    CMake,
+    Glsl,
     Json,
     Jsonc,
     Yaml,
@@ -58,7 +60,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 51] = [
+    pub const ALL: [Self; 53] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -99,6 +101,8 @@ impl Language {
         Self::Prisma,
         Self::Gleam,
         Self::Erlang,
+        Self::CMake,
+        Self::Glsl,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -155,6 +159,8 @@ impl Language {
             Self::Prisma => "prisma",
             Self::Gleam => "gleam",
             Self::Erlang => "erlang",
+            Self::CMake => "cmake",
+            Self::Glsl => "glsl",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

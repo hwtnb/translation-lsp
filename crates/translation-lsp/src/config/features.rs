@@ -107,7 +107,7 @@ mod tests {
         *,
     };
 
-    const LANGUAGE_IDS: [&str; 51] = [
+    const LANGUAGE_IDS: [&str; 53] = [
         "rust",
         "javascript",
         "typescript",
@@ -148,6 +148,8 @@ mod tests {
         "prisma",
         "gleam",
         "erlang",
+        "cmake",
+        "glsl",
         "json",
         "jsonc",
         "yaml",
@@ -342,7 +344,7 @@ mod tests {
                      typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, \
                      php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, \
                      graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-                     terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, json, jsonc, \
+                     terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, cmake, glsl, json, jsonc, \
                      yaml, toml, shellscript, powershell, dockerfile, dockercompose, makefile, \
                      markdown, plaintext"
                 );
@@ -417,7 +419,7 @@ mod tests {
              to rust, javascript, typescript, typescriptreact, csharp, c, cpp, python, go, java, \
              kotlin, swift, ruby, php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, \
              proto, graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-             terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, json, jsonc, yaml, toml, \
+             terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, cmake, glsl, json, jsonc, yaml, toml, \
              shellscript, powershell, dockerfile, dockercompose, makefile"
         );
     }

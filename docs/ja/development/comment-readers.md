@@ -12,7 +12,7 @@
 | Oxcの構文解析器 | JavaScript、TypeScript（HTML文書とコンポーネントファイル内のスクリプトを含む） |
 | Tree-sitterの文法 | C、C++、C#、Python |
 | `granit-parser` のスキャナー | YAML（Docker Composeを含む） |
-| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、Prisma、Gleam、Erlang、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
+| サーバー自身の読み取り | Go、Java、Kotlin、Swift、Ruby、PHP、HTML、Vue.js、Svelte、Astro、XML、CSS、SCSS、SQL、Lua、Zig、Protocol Buffers、GraphQL、Clojure、Haskell、OCaml、Scala、Dart、Elixir、Terraform、Terraform Vars、HCL、Nix、Prisma、Gleam、Erlang、CMake、GLSL、JSON、TOML、シェルスクリプト、PowerShell、Dockerfile、メイクファイル |
 
 新しいコード言語には専用の読み取りを書きます。実際のファイルと生成したテキストを使い、見つけたコメントをその言語の字句解析器の結果と比べます。Tree-sitterの文法も候補にする場合は、同じ方法でコメントと読み取り時間を比べます。Rustは既存の字句解析器を、JavaScriptとTypeScriptはOxcを引き続き使います。
 
@@ -40,7 +40,7 @@ PowerShellとTOMLの読み取りは、`pwsh-parser` と `toml_parser` の字句�
 
 Rubyの読み取りは、語がローカル変数かどうかを、スコープの深さにかかわらず1つの集合で調べます。
 
-テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む36の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
+テスト `readers_finish_repeated_pieces_in_seconds` と `readers_finish_texts_of_several_repeated_parts_in_seconds` は、短い文字列を繰り返したテキストで、それぞれYAMLを含む38の言語IDの読み取り時間を確かめます。読み取りを追加するときは、両方のテストに加えてください。テストで確かめられる入力は限られるため、読み取りを変更するときは、現在の文字より前や先を読む箇所も一つずつ確認してください。
 
 ## 言語ごとの規則
 
@@ -255,6 +255,24 @@ Terraform、Terraform Vars、HCLは同じ読み取りを使います。行コメ
 ドキュメントの範囲には区切りを含め、シジルの前置きと後置きは除きます。本文ではエスケープを原文のまま残し、Elixirのドキュメントと同じ余白処理を適用します。ドキュメントの値がアトム、マップ、マクロ、ファイル参照の場合は読み飛ばします。`-'doc'` のように属性名を一重引用符で囲んだ場合も読み飛ばします。
 
 `erl_scan` で `return_comments` と `text` を指定して、コメントとドキュメントのバイト範囲を比較します。CRLFで終わるコメントでは、字句解析器の範囲の末尾からCRを除きます。先頭行にシバンがある場合は、行末の改行より前を同じバイト数の空白に置き換えてから字句解析します。`.xrl` ファイルもErlangとして読むため、leexの正規表現にある引用符や `%` がコメントの判定に影響することがあります。
+
+### CMake
+
+`#` からLF、CRLFの直前、またはファイルの末尾までが行コメントです。単独のCRはコメントの中に残ります。かっこコメントは `#[[` または開きかっこの間に等号をはさんだ形で始まり、等号の数が同じ閉じかっこで終わります。閉じかっこの後は、同じ行の残りも通常どおり読みます。
+
+かっこ引数の開きかっこは、トークンの先頭にある場合にだけ認識します。中にコメントの印があっても無視し、エスケープは扱いません。二重引用符の引数は複数行にわたり、バックスラッシュは直後の文字をエスケープします。引用符のない引数でも直後の文字をエスケープできますが、改行は対象外です。引用符やかっこが閉じていない引数と、閉じていないかっこコメントは、ファイルの残りを隠します。
+
+コメントのバイト範囲を `cmListFileLexer` と比較します。UTF-8のバイト順マークがある場合も、位置は元のファイルのバイト数で数えます。CRLFで終わる行コメントでは、CRを範囲に含めません。
+
+### GLSL
+
+`//` のコメントはLF、CRLF、CRで終わります。`/*` のコメントは最初の `*/` で終わり、閉じていなければファイルの残りを隠します。バックスラッシュの直後の改行はコメント内でも行をつなぎます。プリプロセッサーで無効になる分岐の中も、コメントは通常どおり読みます。
+
+二重引用符は文字列を開きます。文字列内ではバックスラッシュが直後の文字をエスケープします。エスケープされていない改行では、閉じていない文字列をその行で終えます。一重引用符は通常の文字として扱います。
+
+読み取りは、GLSLのバージョンにかかわらず行をつなげます。古いプロファイルでは、glslangが `//` のコメントをバックスラッシュ直後の改行で終える場合があります。コメントの開始記号の2文字の間に行継続が入る形は扱いません。ブロックコメントの終了記号は行継続をまたげます。`#include` の山かっこ内にある `//` は、コメントとして拾う場合があります。
+
+glslangのプリプロセッサーが受理したファイルでバイト範囲を比較します。`#line` によって表示上のファイル名が変わっても、主ファイルのコメントだけを比べます。glslangは先頭のUTF-8のバイト順マークの次のバイトから位置を数えます。行末とファイル末尾の位置を決めてから、マークのバイト数を足します。古いプロファイルで行コメントが早く終わる場合と、上に挙げた開始記号や山かっこの制限による差をそろえてから比べます。
 
 ### JSON、YAML、TOML
 

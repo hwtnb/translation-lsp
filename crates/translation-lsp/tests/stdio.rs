@@ -2655,6 +2655,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         ("file:///general.prisma", "prisma", "s = \"// string\""),
         ("file:///general.gleam", "gleam", "let s = \"// string\""),
         ("file:///general.erl", "erlang", "text() -> \"% string\"."),
+        ("file:///general.cmake", "cmake", "set(s \"# string\")"),
+        ("file:///general.frag", "glsl", "#define S \"// string\""),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2675,7 +2677,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         let marker = match language {
             "ruby" | "yaml" | "toml" | "shellscript" | "powershell" | "dockerfile"
             | "dockercompose" | "graphql" | "makefile" | "elixir" | "terraform"
-            | "terraform-vars" | "hcl" | "nix" => "#",
+            | "terraform-vars" | "hcl" | "nix" | "cmake" => "#",
             "sql" | "lua" | "haskell" => "--",
             "clojure" => ";",
             "erlang" => "%",
@@ -2733,6 +2735,8 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "dart" => format!("var t = \"\"\"{comment}\"\"\";"),
             "elixir" => format!("t = \"{comment}\""),
             "erlang" => format!("text() -> \"{comment}\"."),
+            "cmake" => format!("set(s [[{comment}]])"),
+            "glsl" => format!("#define S \\\n\"{}\"", comment.replace('\n', " ")),
             "terraform" | "terraform-vars" | "hcl" => format!("t = <<EOF\n{comment}\nEOF\n"),
             "nix" => format!("''\n{comment}\n''"),
             "gleam" => format!("let s = \"{comment}\""),
@@ -3853,8 +3857,10 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         ),
         ("file:///comment.gleam", "gleam", sample!("comment.gleam")),
         ("file:///comment.erl", "erlang", sample!("comment.erl")),
+        ("file:///comment.cmake", "cmake", sample!("comment.cmake")),
+        ("file:///comment.frag", "glsl", sample!("comment.frag")),
     ] {
-        // Zig, Make, Haskell, HCL, and Erlang need LF in line endings.
+        // Zig, Make, Haskell, HCL, Erlang, and CMake need LF in line endings.
         // Elixir heredocs do too.
         let endings: &[&str] = if matches!(
             language,
@@ -3866,6 +3872,7 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 | "terraform-vars"
                 | "hcl"
                 | "erlang"
+                | "cmake"
         ) {
             &["\n", "\r\n"]
         } else {
@@ -3879,6 +3886,8 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 "# The shell script ends",
             ],
             "terraform-vars" => &["# Retry"],
+            "cmake" => &["# Retry", "# Use", "#[[", "#[==["],
+            "glsl" => &["// Retry", "// Use", "/*", "// Keep", "// Include"],
             "hcl" => &["# Retry", "/* Keep"],
             "nix" => &["# Retry", "/*\n   * Keep", "/** The shell script"],
             "prisma" => &[
@@ -3905,6 +3914,7 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 "clojure" => (source.find(';'), "failure."),
                 "ocaml" | "ocaml.interface" => (source.find('('), "failure. *)"),
                 "erlang" => (source.find("%% Retry"), "failure."),
+                "glsl" => (source.find("// Retry"), "failure."),
                 _ => (source.find(['/', '#', '-']), "failure."),
             };
             let start = start.unwrap();
@@ -3952,6 +3962,7 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 "nix" => &["# status", "# This line is part", "#retry"],
                 "prisma" => &["// queued", "//example.com"],
                 "gleam" => &["//example.com", "//retry"],
+                "cmake" => &["# literal", "# bracket text", "#escaped"],
                 _ => &[],
             } {
                 let start = source.find(marker).unwrap();
@@ -4543,7 +4554,7 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
              ocaml, ocaml.interface, scala, dart, elixir, terraform, terraform-vars, hcl, nix, \
-             prisma, gleam, erlang, json, jsonc, yaml, toml, shellscript, powershell, \
+             prisma, gleam, erlang, cmake, glsl, json, jsonc, yaml, toml, shellscript, powershell, \
              dockerfile, dockercompose, makefile, markdown, plaintext",
         ),
         (

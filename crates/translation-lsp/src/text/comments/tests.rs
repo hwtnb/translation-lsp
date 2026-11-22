@@ -1689,6 +1689,9 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "a ",
         "a = ",
         "[[",
+        "#[=",
+        "#[=[",
+        "]==",
         "\"\"\"",
         "'''",
         "<<E\n",
@@ -1860,6 +1863,8 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "prisma",
         "gleam",
         "erlang",
+        "cmake",
+        "glsl",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -1926,6 +1931,18 @@ fn swift_looks_for_the_end_of_a_raw_string_on_a_line_once() {
         // the end of the line took over five minutes.
         assert!(started.elapsed() < Duration::from_secs(5), "{piece:?}");
     }
+}
+
+#[test]
+fn cmake_finds_the_end_of_a_long_bracket_comment_in_seconds() {
+    let equals = "=".repeat(32 << 10);
+    let near_closers = "]=".repeat(256 << 10);
+    let source = format!("#[{equals}[{near_closers}]{equals}]\n# After");
+    let started = Instant::now();
+    let uri = "untitled:comment".parse().unwrap();
+    let comments = parsed("cmake", &uri, &source);
+    assert_eq!(comments.0.len(), 2);
+    assert!(started.elapsed() < Duration::from_secs(5));
 }
 
 #[test]
@@ -2158,6 +2175,8 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "prisma",
         "gleam",
         "erlang",
+        "cmake",
+        "glsl",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -4300,6 +4319,124 @@ fn erlang_triple_quoted_docs_keep_source_escapes_and_remove_the_common_margin() 
             "trailing",
             "\\\"\"\" is still inside.",
             "*\n* The asterisk belongs to the text.",
+        ]
+    );
+}
+
+#[test]
+fn cmake_reads_hash_and_matching_bracket_comments() {
+    let source = concat!(
+        "\u{feff}set(x 1) # Trailing\r\n",
+        "# Group\r\n# Second\rwithin the line\n",
+        "#[[\r\n    First\r\n    Second\r\n]] set(x 2) #[==[ A shorter ]] close ]==]\n",
+        "# [=[ Line comment ]=]\n",
+    );
+    assert_eq!(
+        sources("cmake", "untitled:comment", source),
+        [
+            "# Trailing",
+            "# Group",
+            "# Second\rwithin the line",
+            "#[[\r\n    First\r\n    Second\r\n]]",
+            "#[==[ A shorter ]] close ]==]",
+            "# [=[ Line comment ]=]",
+        ]
+    );
+    assert_eq!(
+        bodies("cmake", source),
+        [
+            "Trailing",
+            "Group\r\nSecond\rwithin the line",
+            "First\r\nSecond",
+            "A shorter ]] close",
+            "[=[ Line comment ]=]",
+        ]
+    );
+}
+
+#[test]
+fn cmake_bracket_comment_bodies_keep_relative_indentation() {
+    for ending in ["\n", "\r\n"] {
+        let source =
+            format!("#[[{ending}  Example:{ending}      message(STATUS \"hello\"){ending}]]");
+        let expected = format!("Example:{ending}    message(STATUS \"hello\")");
+        assert_eq!(bodies("cmake", &source), [expected]);
+        let source = format!("#[[{ending}    text  ]]");
+        assert_eq!(bodies("cmake", &source), ["text"]);
+    }
+    assert_eq!(bodies("cmake", "#[[ text ]]"), ["text"]);
+}
+
+#[test]
+fn cmake_skips_quoted_bracket_and_escaped_arguments() {
+    let source = concat!(
+        "set(x -Darg=\"A \\\"# still quoted\r\n# on the next line\" ",
+        "[=[# literal ]] ]=] \\#escaped a[[b# after argument\n",
+        "set(x [=x] [a]# after another argument\n",
+        "set(x a\"legacy quote\"[[b # after a legacy argument\n",
+        "set(x a\"# quoted argument\"[[# bracket after a quote]]) # after the brackets\n",
+        "set(x a$(old_make_var)[[b # after Make-style reference\n",
+    );
+    assert_eq!(
+        bodies("cmake", source),
+        [
+            "after argument",
+            "after another argument",
+            "after a legacy argument",
+            "after the brackets",
+            "after Make-style reference",
+        ]
+    );
+    for unclosed in ["#[=[", "set(x [==[", "set(x \""] {
+        let source = format!("# Before\n{unclosed}\n# Hidden");
+        assert_eq!(bodies("cmake", &source), ["Before"]);
+    }
+}
+
+#[test]
+fn glsl_reads_comments_on_logical_lines() {
+    for ending in ["\n", "\r\n", "\r"] {
+        let source = concat!(
+            "#version 330\n",
+            "// First\n// Second\n",
+            "int x; // Continued \\\nstill in the comment\n",
+            "#if 0\n/*\n * 日本語\n * /* ends here */\n#endif\n",
+            "#define QUOTE ' // Apostrophe\n",
+            "/**/ // End",
+        )
+        .replace('\n', ending);
+        let continued = format!("Continued \\{ending}still in the comment");
+        assert_eq!(
+            bodies("glsl", &source),
+            [
+                format!("First{ending}Second"),
+                continued,
+                format!("日本語{ending}/* ends here"),
+                "Apostrophe".into(),
+                "".into(),
+                "End".into(),
+            ]
+        );
+    }
+}
+
+#[test]
+fn glsl_skips_quoted_strings_and_resumes_after_an_unclosed_quote() {
+    let source = concat!(
+        "#include \"a//b.glsl\" // Header\n",
+        "#define S \"escape \\\" and /* text */ \\\n// continued string\" // Macro\n",
+        "#define T \"unclosed // hidden\r// After\r\n",
+        "/*\n * Split close\n * and common margin\n *\\\n/ // Tail\n",
+        "/* Unclosed\n// hidden",
+    );
+    assert_eq!(
+        bodies("glsl", source),
+        [
+            "Header",
+            "Macro",
+            "After",
+            "Split close\nand common margin",
+            "Tail"
         ]
     );
 }
