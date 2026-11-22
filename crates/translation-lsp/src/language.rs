@@ -46,6 +46,7 @@ pub(crate) enum Language {
     CMake,
     Glsl,
     FSharp,
+    Lean,
     Json,
     Jsonc,
     Yaml,
@@ -61,7 +62,7 @@ pub(crate) enum Language {
 
 impl Language {
     /// Every language, in the order of `extension.toml`.
-    pub const ALL: [Self; 54] = [
+    pub const ALL: [Self; 55] = [
         Self::Rust,
         Self::JavaScript,
         Self::TypeScript,
@@ -105,6 +106,7 @@ impl Language {
         Self::CMake,
         Self::Glsl,
         Self::FSharp,
+        Self::Lean,
         Self::Json,
         Self::Jsonc,
         Self::Yaml,
@@ -164,6 +166,7 @@ impl Language {
             Self::CMake => "cmake",
             Self::Glsl => "glsl",
             Self::FSharp => "fsharp",
+            Self::Lean => "lean4",
             Self::Json => "json",
             Self::Jsonc => "jsonc",
             Self::Yaml => "yaml",

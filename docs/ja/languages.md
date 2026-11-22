@@ -45,6 +45,7 @@
 | CMake | `#` のコメントと `#[[ ... ]]` 形式のコメント |
 | GLSL | `//` と `/* ... */` |
 | F# | `//` のコメント（ドキュメントコメントの `///` を含む）と `(* ... *)` のコメント |
+| Lean | Lean 4の `--` と `/- ... -/` のコメント（ドキュメントコメントの `/-- ... -/` と `/-! ... -/` を含む） |
 | JSON、JSONC | `//` と `/* ... */` |
 | YAML、TOML | `#` のコメント |
 | シェルスクリプト | sh、Bash、zshのスクリプトの `#` のコメント |
@@ -131,6 +132,7 @@ JavaScriptとTypeScriptでは、約10万段を超える入れ子（`[` を10万�
 | CMake | `CMake` | [neocmake拡張](https://github.com/k0tran/zed_neocmake) |
 | GLSL | `GLSL` | [GLSL拡張](https://github.com/zed-industries/zed/tree/main/extensions/glsl) |
 | F# | `FSharp` | [F#拡張](https://github.com/nathanjcollins/zed-fsharp) |
+| Lean | `Lean 4` | [Lean 4拡張](https://github.com/owlx56/zed-lean4) |
 | JSON | `JSON` | 組み込み |
 | JSONC | `JSONC` | 組み込み |
 | YAML | `YAML` | 組み込み |

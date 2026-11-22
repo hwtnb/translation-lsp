@@ -2658,6 +2658,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
         ("file:///general.cmake", "cmake", "set(s \"# string\")"),
         ("file:///general.frag", "glsl", "#define S \"// string\""),
         ("file:///general.fsx", "fsharp", "let s = \"// string\""),
+        ("file:///general.lean", "lean4", "def s := \"-- string\""),
         ("file:///general.rb", "ruby", "s = \"# string\""),
         ("file:///general.php", "php", "<?php $s = \"// string\";"),
         ("file:///general.cs", "csharp", "var s = @\"// string\";"),
@@ -2679,7 +2680,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "ruby" | "yaml" | "toml" | "shellscript" | "powershell" | "dockerfile"
             | "dockercompose" | "graphql" | "makefile" | "elixir" | "terraform"
             | "terraform-vars" | "hcl" | "nix" | "cmake" => "#",
-            "sql" | "lua" | "haskell" => "--",
+            "sql" | "lua" | "haskell" | "lean4" => "--",
             "clojure" => ";",
             "erlang" => "%",
             _ => "//",
@@ -2739,6 +2740,7 @@ fn general_comment_hovers_use_zed_language_ids_uri_dialects_and_new_versions() {
             "cmake" => format!("set(s [[{comment}]])"),
             "glsl" => format!("#define S \\\n\"{}\"", comment.replace('\n', " ")),
             "fsharp" => format!("let s = \"\"\"{comment}\"\"\""),
+            "lean4" => format!("def s := \"{comment}\""),
             "terraform" | "terraform-vars" | "hcl" => format!("t = <<EOF\n{comment}\nEOF\n"),
             "nix" => format!("''\n{comment}\n''"),
             "gleam" => format!("let s = \"{comment}\""),
@@ -3862,8 +3864,9 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
         ("file:///comment.cmake", "cmake", sample!("comment.cmake")),
         ("file:///comment.frag", "glsl", sample!("comment.frag")),
         ("file:///comment.fsx", "fsharp", sample!("comment.fsx")),
+        ("file:///comment.lean", "lean4", sample!("comment.lean")),
     ] {
-        // Zig, Make, Haskell, HCL, Erlang, and CMake need LF in line endings.
+        // Zig, Make, Haskell, HCL, Erlang, CMake, and Lean need LF in line endings.
         // Elixir heredocs do too.
         let endings: &[&str] = if matches!(
             language,
@@ -3876,6 +3879,7 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 | "hcl"
                 | "erlang"
                 | "cmake"
+                | "lean4"
         ) {
             &["\n", "\r\n"]
         } else {
@@ -3897,6 +3901,14 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                 "/// Compute",
                 "(*\n  Keep",
                 "(* Format",
+            ],
+            "lean4" => &[
+                "-- Retry",
+                "-- Use",
+                "/--",
+                "/-! The manual",
+                "/-\n  Keep",
+                "/- Format",
             ],
             "hcl" => &["# Retry", "/* Keep"],
             "nix" => &["# Retry", "/*\n   * Keep", "/** The shell script"],
@@ -3979,6 +3991,13 @@ fn json_yaml_and_toml_samples_translate_their_comment_groups() {
                     "// in string",
                     "// name",
                     "(*)",
+                ],
+                "lean4" => &[
+                    "-- literal",
+                    "/- raw -/",
+                    "'\"'",
+                    "-- count",
+                    "-- in string",
                 ],
                 _ => &[],
             } {
@@ -4571,7 +4590,7 @@ fn features_errors_name_the_language_or_the_feature_at_initialization() {
              typescriptreact, csharp, c, cpp, python, go, java, kotlin, swift, ruby, php, html, \
              vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, graphql, clojure, haskell, \
              ocaml, ocaml.interface, scala, dart, elixir, terraform, terraform-vars, hcl, nix, \
-             prisma, gleam, erlang, cmake, glsl, fsharp, json, jsonc, yaml, toml, shellscript, \
+             prisma, gleam, erlang, cmake, glsl, fsharp, lean4, json, jsonc, yaml, toml, shellscript, \
              powershell, dockerfile, dockercompose, makefile, markdown, plaintext",
         ),
         (

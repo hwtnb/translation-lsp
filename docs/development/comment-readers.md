@@ -12,7 +12,7 @@ This page describes how the server reads the comments of each language, and the 
 | Oxc parser | JavaScript and TypeScript, including scripts in HTML and component files |
 | Tree-sitter grammars | C, C++, C#, Python |
 | `granit-parser` scanner | YAML, including Docker Compose |
-| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, CMake, GLSL, F#, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
+| Server's own readers | Go, Java, Kotlin, Swift, Ruby, PHP, HTML, Vue.js, Svelte, Astro, XML, CSS, SCSS, SQL, Lua, Zig, Protocol Buffers, GraphQL, Clojure, Haskell, OCaml, Scala, Dart, Elixir, Terraform, Terraform Vars, HCL, Nix, Prisma, Gleam, Erlang, CMake, GLSL, F#, Lean, JSON, TOML, shell scripts, PowerShell, Dockerfile, makefiles |
 
 When adding comment extraction for a code language, write a reader and compare the comments it finds with those of the language's lexer on real files and generated texts. Where a Tree-sitter grammar is a candidate too, compare its comments and reading time in the same way. Keep the existing lexer for Rust and Oxc for JavaScript and TypeScript.
 
@@ -36,11 +36,11 @@ The server's own readers read each part once, without restarting from an earlier
 
 | Readers with their own stack |
 | --- |
-| Shell scripts, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, PHP, HCL, Nix, F# |
+| Shell scripts, Dockerfile, Kotlin, Swift, Scala, Dart, Elixir, Ruby, PHP, HCL, Nix, F#, Lean |
 
 The Ruby reader looks up whether a word is a local variable in one set, whatever the depth of the scopes.
 
-The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 39 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
+The tests `readers_finish_repeated_pieces_in_seconds` and `readers_finish_texts_of_several_repeated_parts_in_seconds` each time 40 language IDs, including YAML, on repeated pieces of text. Add a new reader to both. The tests cover a selection of inputs, so when changing a reader, check each place that reads back or ahead of the current character.
 
 ## Rules of each language
 
@@ -289,6 +289,26 @@ Preprocessor lines such as `#if`, `#else`, `#endif`, and `#nowarn` are read as c
 A `#!` outside the first line is read as ordinary characters rather than a line comment. Because every `#if` branch is read as code, an unclosed string or block comment in an inactive branch hides the rest of the file. Non-ASCII identifier membership uses Rust's Unicode letter and digit checks, which can differ from F# on combining or formatting characters. A `#line` path ending in `\"` without `@` leaves a string unclosed.
 
 Compare byte ranges against comment trivia from `FSharp.Compiler.Service` on files without end-of-file lexical errors. Before parsing, replace `///` with `//!` and bare CR with LF so documentation and CR-ended comments are recorded. Replace `#` with a space on `#nowarn`, `#warnon`, and conditional directive lines until none remain, exposing every branch and trailing comment. Skip a leading `#!` line and count offsets from byte 0, including any UTF-8 byte order mark.
+
+### Lean
+
+In Lean 4, `--` runs to EOF or the next LF. If that LF follows CR, the comment ends before the CR. In code, the reader treats tabs and isolated CR as whitespace.
+
+Block comments start with `/-`, or with the three-character documentation marks `/--` and `/-!`. The reader counts nested delimiters from the fourth character, as Lean does. From there, `/-` nests and `-/` closes even in quoted examples. The translation body keeps relative indentation between lines.
+
+Comments can start at a token boundary without preceding space. The reader takes `<...<`, `*...<`, `...<`, `<<<`, `<=<`, and `=<<` as whole tokens. It does the same for `/\`, `\/`, `//`, and `<-`. If a file or library adds a token ending in `-` or `/`, the reader may combine that last character with a following `-` to start a comment.
+
+The reader skips quoted strings, raw strings with matching hash delimiters such as `r#"..."#`, and names in `«...»`. A backslash in a quoted string escapes the next character.
+
+An apostrophe immediately after a name character continues the name, as in `x'` and `x''`. At a token boundary, an apostrophe starts a character literal if it forms a complete literal, including escapes such as `'\x41'` and `'\u0041'`. Inside a character literal, CRLF counts as one character. Non-ASCII name characters are approximated with Unicode letter and number checks.
+
+A quote immediately after a name ending in `!` starts an interpolated string. An unescaped `{` opens a hole. The reader treats holes as code and tracks their braces and nested strings on a stack. An unclosed block comment or string hides the rest of the file. An unclosed interpolation also hides comments in its holes.
+
+The rule for `!` can hide comments after an ordinary string such as `panic!"{"`. The reader skips comments in holes when the interpolation has no `!` or whitespace separates `!` from the quote, as in `s! "..."`. In these forms, a quote inside the hole can end the string early, as in `throwError "y {toString "z -- c"} w"`. The reader may then mistake literal text for a comment or miss later comments.
+
+The reader splits a `#` keyword such as `#check` or `#eval` into `#` and a name, so the apostrophe in `#check'"'` or the `r` in `#evalr"..."` continues the name and can change which text the reader treats as a comment.
+
+Compare byte ranges with comment trivia before and after syntax-tree tokens, and with the documentation comment tokens, from `Lean.Parser.parseCommand` without elaboration. Compare only files that parse without errors. Normalize CRLF to LF before parsing, then map offsets back to the original bytes, ending line comments before the CR of CRLF.
 
 ### JSON, YAML, and TOML
 

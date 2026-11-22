@@ -1825,6 +1825,9 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "$\"{",
         "$$\"\"\"{{",
         "``",
+        "/-",
+        "s!\"{",
+        "r#",
     ];
     let pieces: Vec<_> = signs.iter().map(String::as_str).chain(openings).collect();
     let size = 64 << 10;
@@ -1869,6 +1872,7 @@ fn readers_finish_repeated_pieces_in_seconds() {
         "cmake",
         "glsl",
         "fsharp",
+        "lean4",
     ] {
         // A Dockerfile reads words only in an instruction that can have a here-document.
         let heads: &[&str] = if language == "dockerfile" {
@@ -2133,6 +2137,9 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "$\"{",
         "$$\"\"\"{{",
         "``",
+        "/-",
+        "s!\"{",
+        "r#",
     ];
     // A fixed sequence, so that every run reads the same texts.
     let mut state = 0x9e37_79b9_7f4a_7c15_u64;
@@ -2185,6 +2192,7 @@ fn readers_finish_texts_of_several_repeated_parts_in_seconds() {
         "cmake",
         "glsl",
         "fsharp",
+        "lean4",
     ] {
         for _ in 0..160 {
             let size = (16 + below(49)) << 10;
@@ -4613,4 +4621,155 @@ fn fsharp_reads_array_and_attribute_openers_and_hides_unclosed_interpolations() 
         ),
         ["before"]
     );
+}
+
+#[test]
+fn lean_reads_line_and_nested_block_comments() {
+    let source = concat!(
+        "-- First\r\n--- Second\n",
+        "def α₁' := 1-- Adjacent\r\n",
+        "-- Bare CR\rdef b := 2\n",
+        "/- a \" -- /- nested -/ b -/-- After\n",
+        "/-!/ Module -/\n",
+        "/--/ Doc -/\n",
+        "/---/\n",
+        "--",
+    );
+    assert_eq!(
+        sources("lean4", "untitled:comment", source),
+        [
+            "-- First",
+            "--- Second",
+            "-- Adjacent",
+            "-- Bare CR\rdef b := 2",
+            "/- a \" -- /- nested -/ b -/",
+            "-- After",
+            "/-!/ Module -/",
+            "/--/ Doc -/",
+            "/---/",
+            "--",
+        ]
+    );
+    for opening in ["/-", "/--", "/-!"] {
+        let source = format!("{opening}\r\n  Example:\r\n      let x := 1\r\n-/");
+        assert_eq!(bodies("lean4", &source), ["Example:\r\n    let x := 1"]);
+    }
+}
+
+#[test]
+fn lean_starts_counting_block_nesting_after_the_third_character() {
+    assert_eq!(
+        sources("lean4", "untitled:comment", "/-/- x -/def x := 1 -- h"),
+        ["/-/- x -/", "-- h"]
+    );
+    assert_eq!(
+        sources(
+            "lean4",
+            "untitled:comment",
+            "/-/- x -/ -- a\n/- y -/ def z := 1"
+        ),
+        ["/-/- x -/", "-- a", "/- y -/"]
+    );
+    assert_eq!(bodies("lean4", "/-/- x -/"), ["/- x "]);
+}
+
+#[test]
+fn lean_compound_tokens_stop_at_comment_boundaries() {
+    let source = r"
+example : True /\/- -- in block -/ True := ⟨trivial, trivial⟩ -- real
+def x : Nat := 1 <<<-- shift amount
+  2
+a <=<-- compose
+a =<<-- bind
+a <...<-- exclusive range
+a *...<-- unbounded start
+a ...<-- exclusive end
+";
+    assert_eq!(
+        sources("lean4", "untitled:comment", source),
+        [
+            "/- -- in block -/",
+            "-- real",
+            "-- shift amount",
+            "-- compose",
+            "-- bind",
+            "-- exclusive range",
+            "-- unbounded start",
+            "-- exclusive end",
+        ]
+    );
+}
+
+#[test]
+fn lean_character_literals_can_hold_lf_or_crlf() {
+    for ending in ["\n", "\r\n"] {
+        let source =
+            format!("def ex := (fun (_a b : Char) => b) '{ending}' '\"' -- visible{ending}");
+        assert_eq!(
+            sources("lean4", "untitled:comment", &source),
+            ["-- visible"]
+        );
+    }
+}
+
+#[test]
+fn lean_reads_comments_in_interpolation_holes_and_skips_literal_text() {
+    let source = r###"
+def a := "a \" -- inside" -- Ordinary
+def b := r"raw \" -- Raw
+def c := r##"raw "# -- inside"## -- Hashes
+def d := «a -- b» -- Escaped name
+def t := `«a /- b -/» -- Name literal
+def e := ('"', '\'', '\\', '\x41', '\u0041', 'β', x'')-- Characters
+def f := s!"\{ before {({x := s!"{1 /- Nested -/} -- text}"} /- Record -/}).x} -- text" -- After
+def g := s!"{toString "literal -- text" -- Hole
+} -- text"
+def h := a <-- b
+def i := a //- b
+def j := a \/- b
+def k := bar"a \" -- inside" -- Adjacent ordinary string
+def l := `r"a \" -- inside" -- Ordinary string after a name literal
+"###;
+    assert_eq!(
+        sources("lean4", "untitled:comment", source),
+        [
+            "-- Ordinary",
+            "-- Raw",
+            "-- Hashes",
+            "-- Escaped name",
+            "-- Name literal",
+            "-- Characters",
+            "/- Nested -/",
+            "/- Record -/",
+            "-- After",
+            "-- Hole",
+            "-- Adjacent ordinary string",
+            "-- Ordinary string after a name literal",
+        ]
+    );
+}
+
+#[test]
+fn lean_unclosed_comments_and_strings_hide_later_comments() {
+    for rest in [
+        "/-",
+        "/-/\n-- hidden",
+        "/--/\n-- hidden",
+        "/-!/\n-- hidden",
+        "\"unclosed\n-- hidden",
+        "r##\"unclosed\"#\n-- hidden",
+        "s!\"{1 /- hidden -/}\n-- hidden",
+        "s!\"{1 /- hidden -/\n-- hidden",
+    ] {
+        let text = format!("-- before\n\n{rest}");
+        assert_eq!(bodies("lean4", &text), ["before"], "{rest}");
+    }
+}
+
+#[test]
+fn lean_raw_strings_skip_many_partial_closers() {
+    let hashes = "#".repeat(8192);
+    let partial = format!("\"{} -- still raw\n", &hashes[1..]);
+    let source = format!("r{hashes}\"{}\"\"{hashes}-- Done", partial.repeat(128));
+    assert_eq!(bodies("lean4", &source), ["Done"]);
 }

@@ -107,7 +107,7 @@ mod tests {
         *,
     };
 
-    const LANGUAGE_IDS: [&str; 54] = [
+    const LANGUAGE_IDS: [&str; 55] = [
         "rust",
         "javascript",
         "typescript",
@@ -151,6 +151,7 @@ mod tests {
         "cmake",
         "glsl",
         "fsharp",
+        "lean4",
         "json",
         "jsonc",
         "yaml",
@@ -346,7 +347,7 @@ mod tests {
                      php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, proto, \
                      graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
                      terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, cmake, glsl, \
-                     fsharp, json, jsonc, \
+                     fsharp, lean4, json, jsonc, \
                      yaml, toml, shellscript, powershell, dockerfile, dockercompose, makefile, \
                      markdown, plaintext"
                 );
@@ -421,8 +422,8 @@ mod tests {
              to rust, javascript, typescript, typescriptreact, csharp, c, cpp, python, go, java, \
              kotlin, swift, ruby, php, html, vue, svelte, astro, xml, css, scss, sql, lua, zig, \
              proto, graphql, clojure, haskell, ocaml, ocaml.interface, scala, dart, elixir, \
-             terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, cmake, glsl, fsharp, \
-             json, jsonc, yaml, toml, \
+             terraform, terraform-vars, hcl, nix, prisma, gleam, erlang, cmake, glsl, \
+             fsharp, lean4, json, jsonc, yaml, toml, \
              shellscript, powershell, dockerfile, dockercompose, makefile"
         );
     }
