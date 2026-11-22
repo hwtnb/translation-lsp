@@ -375,6 +375,11 @@ impl Comments {
         if !joined {
             return false;
         }
+        // A PHP close tag can end a line comment before the physical newline.
+        let gap = &text[self.0[left].range.end..self.0[right].range.start];
+        let Some(newline) = newline_len(gap) else {
+            return false;
+        };
         let indent = |comment: &Comment| {
             let prefix = &text[..comment.range.start];
             let line_start = prefix
@@ -386,11 +391,9 @@ impl Comments {
         };
         let left_indent = indent(&self.0[left]);
         let right_indent = indent(&self.0[right]);
-        if left_indent != right_indent || !left_indent.chars().all(char::is_whitespace) {
-            return false;
-        }
-        let gap = &text[self.0[left].range.end..self.0[right].range.start];
-        newline_len(gap).is_some_and(|length| &gap[length..] == right_indent)
+        left_indent == right_indent
+            && left_indent.chars().all(char::is_whitespace)
+            && &gap[newline..] == right_indent
     }
 }
 

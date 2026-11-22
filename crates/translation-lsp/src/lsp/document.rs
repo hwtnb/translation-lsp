@@ -273,12 +273,13 @@ impl Document {
         let Some(indexed) = self.text.as_ref() else {
             return Vec::new();
         };
+        let mut positions = indexed.positions();
         groups
             .into_iter()
             .filter_map(|(bytes, body)| {
                 let range = Range::new(
-                    indexed.position(bytes.start).ok()?,
-                    indexed.position(bytes.end).ok()?,
+                    positions.position(bytes.start).ok()?,
+                    positions.position(bytes.end).ok()?,
                 );
                 Some(Comment {
                     range,
@@ -358,6 +359,7 @@ impl Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     const LIMIT: Duration = Duration::from_secs(60);
 
@@ -382,6 +384,47 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn many_comments_on_one_line_are_listed_quickly() {
+        let uri: Uri = "file:///sample.c".parse().unwrap();
+        let piece = "/* note */ x; ";
+        let count = 32_000;
+        let mut document = Document::new(1, 1, "c".into(), piece.repeat(count));
+        // Parsing has its own deadline and can be much slower on a loaded runner.
+        document.read_comments(&uri, LIMIT);
+        let started = Instant::now();
+        let comments = document.comments(&uri, LIMIT);
+        let elapsed = started.elapsed();
+        eprintln!("Listed {count} comments in {elapsed:?}");
+        assert_eq!(comments.len(), count);
+        assert_eq!(
+            comments.last().unwrap().range.end,
+            Position::new(0, ((count - 1) * piece.len() + "/* note */".len()) as u32)
+        );
+        assert!(elapsed < Duration::from_secs(9), "{elapsed:?}");
+    }
+
+    #[test]
+    fn many_php_line_comments_on_one_line_are_listed_quickly() {
+        let uri: Uri = "file:///sample.php".parse().unwrap();
+        let piece = "<?php // note ?> ";
+        let count = 32_000;
+        let mut document = Document::new(1, 1, "php".into(), piece.repeat(count));
+        document.read_comments(&uri, LIMIT);
+        let started = Instant::now();
+        let comments = document.comments(&uri, LIMIT);
+        let elapsed = started.elapsed();
+        eprintln!("Listed {count} PHP comments in {elapsed:?}");
+        assert_eq!(comments.len(), count);
+        let last_start = ((count - 1) * piece.len() + "<?php ".len()) as u32;
+        let last_end = last_start + "// note ".len() as u32;
+        assert_eq!(
+            comments.last().unwrap().range,
+            Range::new(Position::new(0, last_start), Position::new(0, last_end))
+        );
+        assert!(elapsed < Duration::from_secs(9), "{elapsed:?}");
     }
 
     #[test]

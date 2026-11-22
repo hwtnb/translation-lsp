@@ -22,7 +22,7 @@ use worker::run_job;
 use worker::{Administered, Completion, Finished, Job, Task, WorkerEvent, worker};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     error::Error,
     path::PathBuf,
     thread,
@@ -1089,13 +1089,14 @@ impl<P: TranslationProvider> Server<P> {
             return Ok(menu);
         }
         let mut ranges: Vec<Range> = Vec::new();
+        let mut seen = HashSet::new();
         for lens in &lenses {
-            if !ranges.contains(&lens.range) {
+            if seen.insert(lens.range) {
                 ranges.push(lens.range);
             }
         }
         for &Comment { range, .. } in &comments {
-            if !ranges.contains(&range) {
+            if seen.insert(range) {
                 if translates {
                     lenses.push(lens(
                         range,

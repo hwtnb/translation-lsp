@@ -62,6 +62,25 @@ impl IndexedText {
     }
 
     pub fn position(&self, offset: usize) -> Result<Position, &'static str> {
+        self.check_position_boundary(offset)?;
+        let line = self.line_at(offset);
+        let character = self.text[self.line_starts[line]..offset]
+            .encode_utf16()
+            .count();
+        lsp_position(line, character)
+    }
+
+    /// Converts successive byte offsets without recounting a line's prefix.
+    pub fn positions(&self) -> Positions<'_> {
+        Positions {
+            indexed: self,
+            offset: 0,
+            line: 0,
+            character: 0,
+        }
+    }
+
+    fn check_position_boundary(&self, offset: usize) -> Result<(), &'static str> {
         if !self.text.is_char_boundary(offset)
             || (offset > 0
                 && self.text.as_bytes().get(offset - 1) == Some(&b'\r')
@@ -69,14 +88,11 @@ impl IndexedText {
         {
             return Err("Offset is not an LSP position boundary");
         }
-        let line = self.line_starts.partition_point(|&start| start <= offset) - 1;
-        let character = self.text[self.line_starts[line]..offset]
-            .encode_utf16()
-            .count();
-        Ok(Position::new(
-            u32::try_from(line).map_err(|_| "Position line is outside the document")?,
-            u32::try_from(character).map_err(|_| "Position character is outside the line")?,
-        ))
+        Ok(())
+    }
+
+    fn line_at(&self, offset: usize) -> usize {
+        self.line_starts.partition_point(|&start| start <= offset) - 1
     }
 
     /// Replaces `range` with `replacement`, and gives the byte offset where
@@ -117,6 +133,49 @@ impl IndexedText {
             && self.text.as_bytes().get(at) == Some(&b'\n');
         Edit::new(range, self.position(at + inserted).ok(), joined)
     }
+}
+
+/// A cursor for converting byte offsets to UTF-16 positions in source order.
+pub(super) struct Positions<'a> {
+    indexed: &'a IndexedText,
+    offset: usize,
+    line: usize,
+    character: usize,
+}
+
+impl Positions<'_> {
+    /// Counts from the last offset on this line, or its start after a jump.
+    pub fn position(&mut self, offset: usize) -> Result<Position, &'static str> {
+        self.indexed.check_position_boundary(offset)?;
+        let starts = &self.indexed.line_starts;
+        let previous_line = self.line;
+        if offset < self.offset {
+            self.line = self.indexed.line_at(offset);
+        } else {
+            while starts
+                .get(self.line + 1)
+                .is_some_and(|&start| start <= offset)
+            {
+                self.line += 1;
+            }
+        }
+        if self.line != previous_line || offset < self.offset {
+            self.offset = starts[self.line];
+            self.character = 0;
+        }
+        self.character += self.indexed.text[self.offset..offset]
+            .encode_utf16()
+            .count();
+        self.offset = offset;
+        lsp_position(self.line, self.character)
+    }
+}
+
+fn lsp_position(line: usize, character: usize) -> Result<Position, &'static str> {
+    Ok(Position::new(
+        u32::try_from(line).map_err(|_| "Position line is outside the document")?,
+        u32::try_from(character).map_err(|_| "Position character is outside the line")?,
+    ))
 }
 
 fn line_breaks(bytes: &[u8], base: usize) -> impl Iterator<Item = usize> + '_ {
@@ -245,6 +304,27 @@ mod tests {
                     .map(|position| (offset, position))
             })
             .collect()
+    }
+
+    #[test]
+    fn successive_positions_match_individual_positions() {
+        for text in ["", "aé🚀z", "first\n\n last\n", "é🚀\r\nz\r🚀\r"] {
+            let indexed = IndexedText::new(text.into());
+            let mut positions = indexed.positions();
+            let offsets = 0..=text.len() + 1;
+            for offset in offsets
+                .clone()
+                .flat_map(|offset| [offset; 2])
+                .chain(offsets.rev())
+                .chain([text.len(), 0, usize::MAX, text.len()])
+            {
+                assert_eq!(
+                    positions.position(offset),
+                    indexed.position(offset),
+                    "byte {offset} in {text:?}"
+                );
+            }
+        }
     }
 
     #[test]
