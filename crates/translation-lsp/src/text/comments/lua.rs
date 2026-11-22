@@ -30,19 +30,16 @@ pub(super) fn parse(text: &str) -> Vec<Comment> {
                         break;
                     };
                     index = closing + level + 2;
-                    // A line break right after the bracket is not part of
-                    // the comment; a space is not shown either.
-                    let mut first = opening;
-                    if bytes[first..].starts_with(b"\r\n") || bytes[first..].starts_with(b"\n\r") {
-                        first += 2;
-                    } else if matches!(bytes.get(first), Some(b'\n' | b'\r' | b' ')) {
-                        first += 1;
-                    }
+                    // Keep the opening newline so the first content line
+                    // contributes to the shared indentation.
+                    let body = text[opening..closing].trim_start_matches([' ', '\t']);
+                    let body_start = closing - body.len();
+                    let body_end = body_start + body.trim_end_matches([' ', '\t']).len();
                     comments.push(Comment {
                         range: start..index,
                         kind: Kind::Contents(vec![Range {
-                            start: first.min(closing),
-                            end: closing,
+                            start: body_start,
+                            end: body_end,
                         }]),
                     });
                 } else {

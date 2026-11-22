@@ -3334,6 +3334,29 @@ fn lua_comments_exclude_strings_and_long_strings_and_skip_a_first_line_of_hash()
     assert!(lua("#!\r-- hidden").is_empty());
 }
 
+#[test]
+fn lua_long_comments_keep_relative_indentation() {
+    for ending in ["\n", "\r\n", "\n\r", "\r"] {
+        let comment = ["--[[", "  Example:", "      print(\"hello\")", "]]"].join(ending);
+        let text = format!("local a = 1{ending}{comment}{ending}local b = 2");
+        let body = ["Example:", "    print(\"hello\")"].join(ending);
+        assert_eq!(lua(&text), [comment], "line ending {ending:?}");
+        assert_eq!(bodies("lua", &text), [body], "line ending {ending:?}");
+    }
+}
+
+#[test]
+fn lua_long_comments_drop_edge_whitespace() {
+    for (comment, body) in [
+        ("--[[ text ]]", "text"),
+        ("--[[\n    text  ]]", "text"),
+        ("--[==[\nLong\n]==]", "Long"),
+    ] {
+        assert_eq!(lua(comment), [comment]);
+        assert_eq!(bodies("lua", comment), [body], "{comment:?}");
+    }
+}
+
 fn zig(text: &str) -> Vec<String> {
     sources("zig", "untitled:comment", text)
 }
