@@ -1596,6 +1596,50 @@ fn anthropic_settings_errors_name_the_setting_at_initialization() {
 }
 
 #[test]
+fn plamo_translate_settings_errors_name_the_setting_at_initialization() {
+    let service = json!({
+        "name": "plamo_translate",
+        "base_url": "http://127.0.0.1:9/v1",
+        "model": "synthetic/plamo",
+    });
+    let with = |field: &str, value: Value| {
+        let mut options = json!({ "provider": service });
+        options["provider"][field] = value;
+        options
+    };
+    for (options, message) in [
+        (
+            json!({"provider": {"name": "plamo_translate", "model": "synthetic/plamo"}}),
+            "provider.base_url is required",
+        ),
+        (
+            with("model", json!("a b")),
+            "provider.model must not contain whitespace",
+        ),
+        (
+            with("effort", json!("low")),
+            "Invalid translation settings: check field names and value types",
+        ),
+        (
+            json!({"provider": service, "target_language": "Japanese"}),
+            "target_language must be a language code, such as ja or pt-BR, with provider plamo_translate",
+        ),
+    ] {
+        let mut client = Client::spawn(&[], false, false);
+        let error = client
+            .call(
+                "initialize",
+                json!({"capabilities": {}, "initializationOptions": options}),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, -32602);
+        assert!(error.message.starts_with(message), "{}", error.message);
+        client.notify("exit", Value::Null);
+        assert!(!client.child.wait().unwrap().success());
+    }
+}
+
+#[test]
 fn settings_written_as_arrays_are_rejected_at_initialization() {
     for options in [
         json!([]),

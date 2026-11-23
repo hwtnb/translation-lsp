@@ -2,7 +2,7 @@
 
 [English](../configuration.md)
 
-このページでは、`lsp.translation-lsp` の設定を説明します。プロバイダーごとの項目は、[ChatGPT](providers/chatgpt.md)、[Anthropic API](providers/anthropic.md)、[OpenAI API](providers/openai-api.md)、[OpenAI互換API](providers/openai-compatible.md)、[DeepL API](providers/deepl.md)、[Google Cloud Translation](providers/google-translate.md) のページにあります。
+このページでは、`lsp.translation-lsp` の設定を説明します。プロバイダーごとの項目は、[ChatGPT](providers/chatgpt.md)、[Anthropic API](providers/anthropic.md)、[OpenAI API](providers/openai-api.md)、[OpenAI互換API](providers/openai-compatible.md)、[DeepL API](providers/deepl.md)、[Google Cloud Translation](providers/google-translate.md)、[PLaMo Translate](providers/plamo-translate.md) のページにあります。
 
 ## 設定の全体例
 
@@ -123,7 +123,7 @@ WindowsのパスもJSON内では `/` で区切れます。バックスラッシ�
 
 ISO 639の言語コードの値は、単独でも `zh-Hans` や `pt-BR` のように続きがあっても、`Japanese (ja)` のように英語の言語名を付けて、コードアクションの表示とプロバイダーへの指示の両方で使います。`Japanese` のようなそれ以外の値は、書いたとおりに使います。
 
-DeepL APIとGoogle Cloud Translationは指示文を受け付けず、言語コードだけを使えます。DeepL APIのページの[設定項目](providers/deepl.md#設定項目)と、Google Cloud Translationのページの[設定項目](providers/google-translate.md#設定項目)を参照してください。
+DeepL API、Google Cloud Translation、PLaMo Translateは指示文を受け付けず、言語コードだけを使えます。[DeepL API](providers/deepl.md#設定項目)、[Google Cloud Translation](providers/google-translate.md#設定項目)、[PLaMo Translate](providers/plamo-translate.md#設定項目)の各ページの設定項目を参照してください。
 
 ## 機能の切り替え
 
@@ -400,7 +400,7 @@ DeepL APIとGoogle Cloud Translationは指示文を受け付けず、言語コ�
 
 1. Zedのコマンドパレットで `zed: open settings file` を実行します。
 2. `lsp.translation-lsp.initialization_options.provider.model` を、使いたいモデルの識別名に変更します。
-3. 必要に応じて、プロバイダーのほかの項目を指定します。項目は [ChatGPT](providers/chatgpt.md#設定項目)、[Anthropic API](providers/anthropic.md#設定項目)、[OpenAI API](providers/openai-api.md#設定項目)、[OpenAI互換API](providers/openai-compatible.md#設定項目) のページにあります。DeepL APIとGoogle Cloud Translationには、選べるモデルはありません。
+3. 必要に応じて、プロバイダーのほかの項目を指定します。項目は [ChatGPT](providers/chatgpt.md#設定項目)、[Anthropic API](providers/anthropic.md#設定項目)、[OpenAI API](providers/openai-api.md#設定項目)、[OpenAI互換API](providers/openai-compatible.md#設定項目)、[PLaMo Translate](providers/plamo-translate.md#設定項目) のページにあります。DeepL APIとGoogle Cloud Translationには、選べるモデルはありません。
 4. 設定を保存します。この拡張を使う文書で、コマンドパレットから `editor: restart language server` を実行します。
 
 拡張は設定したモデルの識別名をそのまま翻訳APIへ送り、別のモデルへ自動で切り替えません。そのモデル・推論強度・速度をアカウントで使えるかどうかは、APIが判断します。

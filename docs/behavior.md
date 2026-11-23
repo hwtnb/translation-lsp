@@ -13,7 +13,7 @@ An explicit request refused because the queue is full reports its file and lines
 A tab translation of a range already accepted shares that work. It is separate work, counted and run on its own, in these cases:
 
 - `provider.document` or [`document_split`](configuration.md#document-split) is enabled.
-- With the Anthropic API, OpenAI API, and OpenAI-compatible providers, the range request has already been sent.
+- With the Anthropic API, OpenAI API, OpenAI-compatible, and PLaMo Translate providers, the range request has already been sent.
 
 A tab translation sent in parts is one piece of work with one slot, but it sends up to `document_split.parallel` parts at once, so the provider can receive that many requests from it. It opens only when every part has succeeded: the first part that fails stops the others. After cancellation, expiry, a document edit, a change of account or key, or a stop described under [Pauses](#pauses), no further part is sent.
 
@@ -58,7 +58,7 @@ Before sending a text, the server looks for a translation of the same text made 
 - Retry actions never use a kept translation: they send the text again, or join the same translation in progress, and replace it.
 - A dictionary entry is used again only for the same term on the same line.
 - A tab translation sent in parts looks up each part and sends only the parts not found. Each part is kept once it completes, even if the document then fails.
-- With the DeepL API and Google Cloud Translation, a selection short enough to be looked up is translated and not kept.
+- With the DeepL API, Google Cloud Translation, and PLaMo Translate, a selection short enough to be looked up is translated and not kept.
 
 These translations are kept in memory within limits of their own equal to `translation_limits.cache`. With [`disk_cache`](configuration.md#disk-cache), they are also kept on disk and used after a restart. Without it, Hover writes no text to disk; a translation opened in a tab is written to a temporary file, as described under [Opening a translation in a tab](usage.md#opening-a-translation-in-a-tab).
 

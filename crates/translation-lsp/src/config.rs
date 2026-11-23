@@ -98,6 +98,13 @@ pub(crate) enum ProviderSettings {
     /// either.
     #[serde(rename = "google_translate")]
     GoogleTranslate {},
+    /// PLaMo 3 Translate at a service that `provider.base_url` names. The
+    /// model is the same for ranges and tabs.
+    #[serde(rename = "plamo_translate")]
+    PlamoTranslate {
+        base_url: String,
+        model: String,
+    },
 }
 
 /// The model and options that one output sends. `provider.document` is one of
@@ -142,7 +149,11 @@ impl ProviderSettings {
     /// `provider.document` is present, whatever its values are.
     pub fn separates_documents(&self) -> bool {
         match self {
-            Self::Unset | Self::Mock {} | Self::DeepL {} | Self::GoogleTranslate {} => false,
+            Self::Unset
+            | Self::Mock {}
+            | Self::DeepL {}
+            | Self::GoogleTranslate {}
+            | Self::PlamoTranslate { .. } => false,
             Self::Chatgpt { document, .. } => document.is_some(),
             Self::Anthropic { document, .. } => document.is_some(),
             Self::OpenAiApi { document, .. } => document.is_some(),

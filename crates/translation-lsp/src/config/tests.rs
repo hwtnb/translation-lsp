@@ -894,6 +894,84 @@ fn openai_compatible_services_are_https_or_this_computer() {
     );
 }
 
+fn plamo(options: Value) -> Result<Settings, ConfigError> {
+    let mut options = options;
+    let provider = options
+        .as_object_mut()
+        .unwrap()
+        .entry("provider")
+        .or_insert(json!({}));
+    for (field, value) in [
+        ("name", "plamo_translate"),
+        ("base_url", "http://localhost:11434/v1"),
+        ("model", "synthetic/plamo"),
+    ] {
+        provider
+            .as_object_mut()
+            .unwrap()
+            .entry(field)
+            .or_insert(json!(value));
+    }
+    provider
+        .as_object_mut()
+        .unwrap()
+        .retain(|_, value| !value.is_null());
+    Settings::from_options(Some(options))
+}
+
+#[test]
+fn plamo_translate_settings_need_a_service_a_model_and_language_codes() {
+    let settings = plamo(json!({"source_language": "en", "target_language": "pt-BR"})).unwrap();
+    let ProviderSettings::PlamoTranslate { base_url, model } = &settings.provider else {
+        panic!("Expected the PLaMo Translate provider")
+    };
+    assert_eq!(base_url, "http://localhost:11434/v1");
+    assert_eq!(model, "synthetic/plamo");
+    assert!(!settings.provider.separates_documents());
+
+    for (field, setting) in [
+        ("base_url", "provider.base_url"),
+        ("model", "provider.model"),
+    ] {
+        let error = plamo(json!({"provider": {(field): null}})).err().unwrap();
+        assert_eq!(error.to_string(), format!("{setting} is required"));
+    }
+    for (provider, message) in [
+        (
+            json!({"model": "a b"}),
+            "provider.model must not contain whitespace",
+        ),
+        (json!({"model": " "}), "provider.model must be nonempty"),
+    ] {
+        let error = plamo(json!({ "provider": provider })).err().unwrap();
+        assert!(error.to_string().starts_with(message), "{error}");
+    }
+    let error = plamo(json!({"provider": {"base_url": "http://192.168.1.20:11434/v1"}}))
+        .err()
+        .unwrap();
+    assert!(matches!(error, ConfigError::BaseUrl));
+    for (field, value) in [
+        ("effort", json!("low")),
+        ("document", json!({"model": "synthetic/plamo"})),
+        ("speed", json!("fast")),
+    ] {
+        let error = plamo(json!({"provider": {(field): value}})).err().unwrap();
+        assert!(matches!(error, ConfigError::Decode(_)), "{field}: {error}");
+    }
+    for (setting, value) in [
+        ("target_language", "Japanese"),
+        ("source_language", "English"),
+    ] {
+        let error = plamo(json!({ (setting): value })).err().unwrap();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "{setting} must be a language code, such as ja or pt-BR, with provider plamo_translate"
+            )
+        );
+    }
+}
+
 #[test]
 fn hover_settings_default_to_a_header_and_markdown_and_reject_unknown_names() {
     use hover::{HoverFormat, HoverSettings};

@@ -74,6 +74,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 | [samples/languages.rs](../../../samples/languages.rs) | 実際 | 翻訳先の言語だとしてホバーが訳さないのがどのコメントか。[翻訳先の言語ですでに書かれた文章](#翻訳先の言語ですでに書かれた文章)を参照してください。 |
 | [samples/languages.md](../../../samples/languages.md) | 実際 | `features.automatic_selection` を `true`、`target_language` を `ja` にして段落を選択すると、日本語の2つの段落にはホバーが出ず、英語の段落には出ること。 |
 | [samples/long-document.md](../../../samples/long-document.md) | モック | 部分に分けて送る翻訳。[部分に分けて送る翻訳](#部分に分けて送る翻訳)を参照してください。 |
+| [samples/context-limit.md](../../../samples/context-limit.md) | 実際 | お使いのコンピューターのモデルのコンテキストを確かめるための長い文書。コンテキストはコンピューターによって違い、変えることもできます。`plamo_translate` で、コンテキストがこの文書より小さいときに `Translate document to Japanese (ja) and open in tab` を実行すると、コンテキストの上限のエラーになります。`document_split` を有効にすると、各部分が収まれば訳が開きます。[長い文章](../providers/plamo-translate.md#長い文章)を参照してください。 |
 | [samples/repeated.rs](../../../samples/repeated.rs) | モックと実際 | 依頼を送らずに表示する訳文。[繰り返しの翻訳](#繰り返しの翻訳)を参照してください。 |
 
 モックのプロバイダーは、「実際」とだけ書いたサンプルを訳しません。
@@ -146,6 +147,10 @@ cargo run -p xtask --locked -- check-notices
 
 `unsafe` なコードは、ワークスペースのlint `unsafe_code` がすべてのクレートで拒否します。例外は擬似端末のテストの補助コードだけで、必要な関数ごとに、理由を付けて許可しています。
 
+## プロバイダーの限界
+
+PLaMo 3 Translateのチャットテンプレートは、`<|plamo:tag|>dataset<|plamo:msg|>translation` で始まる文章をそのままモデルに渡し、システムメッセージを無視します。このため、そのような文章は、`plamo_translate` が送る設定なしに訳されます。このように始まるのは、モデルのプロンプトの書式を説明する文書くらいなので、サーバーはこのままにしています。
+
 ## 残した訳文
 
 残した訳文は鍵で引きます。鍵は、次の値から作るSHA-256です。
@@ -156,7 +161,7 @@ cargo run -p xtask --locked -- check-notices
 - 結果の種類
 - 送った文章
 
-送る内容を、返る訳文が変わる形で直したときは、`FORMAT_VERSION` を上げます。`providers/prompt.rs` や `providers/dictionary.rs` の指示文、`providers/segments.rs` の区切り方を直す場合です。直す前に残した訳文は見つからなくなり、`disk_cache` は使われないまま期限を過ぎたものを消します。
+送る内容を、返る訳文が変わる形で直したときは、`FORMAT_VERSION` を上げます。`providers/prompt.rs` や `providers/dictionary.rs` の指示文、`providers/segments.rs` の区切り方、`providers/plamo_translate.rs` のシステムメッセージを直す場合です。直す前に残した訳文は見つからなくなり、`disk_cache` は使われないまま期限を過ぎたものを消します。
 
 新しいプロバイダーは `identity` を実装し、設定でのプロバイダーの名前と、送る設定のうち訳文を左右するものをすべて入れます。`speed` のように応答の速さだけを変えるものと、キーのように翻訳に使うものは入れません。
 

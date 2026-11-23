@@ -1,6 +1,7 @@
 pub(crate) mod admission;
 pub(crate) mod anthropic;
 pub(crate) mod api_key;
+pub(crate) mod chat_completions;
 pub(crate) mod chatgpt;
 pub(crate) mod credential_directory;
 pub(crate) mod deepl;
@@ -12,6 +13,7 @@ pub(crate) mod http_fixture;
 pub(crate) mod mock;
 pub(crate) mod openai_api;
 pub(crate) mod openai_compatible;
+pub(crate) mod plamo_translate;
 pub(crate) mod prompt;
 pub(crate) mod responses;
 pub(crate) mod segments;

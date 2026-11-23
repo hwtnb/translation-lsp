@@ -94,6 +94,15 @@ pub(super) fn after_decoding(settings: &Settings) -> Result<(), ConfigError> {
                 "google_translate",
             )?;
         }
+        ProviderSettings::PlamoTranslate { base_url, model } => {
+            language::check_codes(
+                &settings.source_language,
+                &settings.target_language,
+                "plamo_translate",
+            )?;
+            check_base_url(base_url)?;
+            check_model("provider.model", model)?;
+        }
         ProviderSettings::Chatgpt {
             model, document, ..
         }
@@ -141,7 +150,7 @@ pub(super) fn after_decoding(settings: &Settings) -> Result<(), ConfigError> {
 /// model of its own to fall back on.
 fn compatible_service(options: &Value) -> Result<(), ConfigError> {
     let provider = &options["provider"];
-    if provider["name"] != "openai_compatible" {
+    if provider["name"] != "openai_compatible" && provider["name"] != "plamo_translate" {
         return Ok(());
     }
     for (field, setting) in [

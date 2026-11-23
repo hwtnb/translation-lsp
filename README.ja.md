@@ -4,7 +4,7 @@
 
 Translation LSPは、Zedでコードのコメントと、Markdownの文章を翻訳し、ホバー表示（テキスト上で開く情報表示）に訳文を出します。原文は変わりません。Rust、TypeScript、Python、Go、シェルスクリプトなど、40を超える言語と形式のコメントを読めます。言語の一覧は[対応言語](docs/ja/languages.md)にあります。
 
-翻訳には、ChatGPT（本人のプラン）、Anthropic API、OpenAI API、OllamaなどのOpenAI互換のサービスを使えます。翻訳サービスのDeepL APIとGoogle Cloud Translationも使えます。プロバイダーを選ぶまでは、文章を外部へ送りません。
+翻訳には、ChatGPT（本人のプラン）、Anthropic API、OpenAI API、OllamaなどのOpenAI互換のサービスを使えます。翻訳サービスのDeepL APIとGoogle Cloud Translationも使えます。翻訳用のモデルPLaMo 3 Translateも、自分で動かせば使えます。プロバイダーを選ぶまでは、文章を外部へ送りません。
 
 - **ホバー:** コメントにマウスポインターを重ねると、訳文を読めます。
 
@@ -93,12 +93,15 @@ cargo build -p translation-lsp --release --locked
 | OpenAI互換API | `openai_compatible` | キーが要るサービスでは、`OpenAI-compatible API key…` から `Save OpenAI-compatible API key` を実行します。 | [OpenAI互換API](docs/ja/providers/openai-compatible.md) |
 | DeepL API | `deepl` | `DeepL API key…` から `Save DeepL API key` を実行します。 | [DeepL API](docs/ja/providers/deepl.md) |
 | Google Cloud Translation | `google_translate` | `Google Cloud API key…` から `Save Google Cloud API key` を実行します。 | [Google Cloud Translation](docs/ja/providers/google-translate.md) |
+| PLaMo Translate | `plamo_translate` | Ollamaの既定のように、キーを求めない道具では何もしません。キーを求める場合は、OpenAI互換APIと同じです。 | [PLaMo Translate](docs/ja/providers/plamo-translate.md) |
 
 プロバイダーによって、次の点が違います。
 
 - ChatGPT、Anthropic API、OpenAI APIでは、`model` と `effort` は省略できます。使える値は各プロバイダーのページにあるので、`name` を変えたら、この2つも変えるか消してください。
 - OpenAI互換のプロバイダーには、サービスのアドレスの `base_url` と、そのサービスのモデル名の `model` が必要です。[お使いのコンピューターのOllama](docs/ja/providers/openai-compatible.md#お使いのコンピューターのollama)のように、キーの要らないサービスは、キーなしで使えます。
-- DeepL APIとGoogle Cloud Translationは、`name` のほかに項目を取りません。`target_language` は言語コードにする必要があり、選択した単語は意味を調べずに翻訳します。
+- PLaMo Translateにも `base_url` と `model` が要ります。OllamaなどのPLaMo 3 Translateを動かすサービスのアドレスと、そこでのモデルの名前です。
+- DeepL APIとGoogle Cloud Translationは、`name` のほかに項目を取りません。
+- DeepL API、Google Cloud Translation、PLaMo Translateでは、`target_language` は言語コードにする必要があり、選択した単語は意味を調べずに翻訳します。
 
 キーの作り方と費用も、各プロバイダーのページで説明します。
 
@@ -108,7 +111,7 @@ cargo build -p translation-lsp --release --locked
 
 | 設定 | 既定値 | 内容 |
 | --- | --- | --- |
-| `target_language` | `ja` | 訳文の言語です。`en`、`ja`、`zh-Hans` のような言語コードか、言語名を書きます。DeepL APIとGoogle Cloud Translationでは言語コードだけを使えます。 |
+| `target_language` | `ja` | 訳文の言語です。`en`、`ja`、`zh-Hans` のような言語コードか、言語名を書きます。DeepL API、Google Cloud Translation、PLaMo Translateでは言語コードだけを使えます。 |
 | `source_language` | `auto` | 原文の言語です。`auto` ではモデルが判別します。 |
 | `features.comment_hover` | `true` | コメントへのホバーで翻訳を始めるかどうかです。 |
 | `features.automatic_selection` | `true` | Markdownの選択が安定したときにバックグラウンドで翻訳を始めるかどうかです。 |
@@ -124,7 +127,7 @@ cargo build -p translation-lsp --release --locked
 | コメントのホバー | 対応するコードのコメントにマウスポインターを重ねるか、カーソルを置いてZedの `editor: hover` を実行します。 |
 | Markdownの選択 | `features.automatic_selection` が `true` の場合、Markdownの文章を選択して安定させるとバックグラウンドで翻訳します。その範囲でホバーを開いて訳文を読みます。 |
 | `Translate selection to …` | このコードアクションは、選択範囲をすぐに翻訳します。バックグラウンド翻訳が失敗したあとにも使えます。終わったら、選択範囲でホバーを開いて訳文を読みます。 |
-| 単語の意味を調べる | 1行で3語以下の語句か識別子1つを選択します。ホバーには、モデルが書いた単語の説明が出ます。DeepL APIとGoogle Cloud Translationでは、意味を調べずに翻訳します。 |
+| 単語の意味を調べる | 1行で3語以下の語句か識別子1つを選択します。ホバーには、モデルが書いた単語の説明が出ます。DeepL API、Google Cloud Translation、PLaMo Translateでは、意味を調べずに翻訳します。 |
 | `… and open in tab` | Markdownまたはプレーンテキスト（Zedの言語名は `Plain Text`）では、このコードアクションで選択範囲の訳文を別の文書に開けます。選択がない場合は文書全体を翻訳します。 |
 | CodeLens | Zedの設定で `"code_lens": "on"` にすると、コメントに `Translate \| Settings` を、翻訳済みの範囲に訳文の1行目を表示します。クリックすると訳文の全体を読めます。 |
 | 取り消し | 範囲にカーソルを置いてコードアクションの `Cancel translation of lines …` を選ぶか、`Cancel all translations` を選びます。 |
@@ -153,6 +156,7 @@ cargo build -p translation-lsp --release --locked
 - [OpenAI互換API](docs/ja/providers/openai-compatible.md): 設定、いくつかのサービスのアドレス、APIキー。
 - [DeepL API](docs/ja/providers/deepl.md): 設定、文章の送り方、APIキー。
 - [Google Cloud Translation](docs/ja/providers/google-translate.md): 設定とAPIキー。
+- [PLaMo Translate](docs/ja/providers/plamo-translate.md): Ollamaでモデルを動かす手順、設定、送る内容。
 - [使い方](docs/ja/usage.md): 翻訳のしかたごとの使い方、取り消しと訳文の削除、送信する内容。
 - [動作](docs/ja/behavior.md): 翻訳の処理が始まる、待つ、止まる条件と、訳文のキャッシュ。
 - [対応言語](docs/ja/languages.md): 対応する言語、コメントが翻訳されないとき、言語サーバーの設定。

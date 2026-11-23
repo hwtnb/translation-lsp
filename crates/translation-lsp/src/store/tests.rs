@@ -12,7 +12,7 @@ use crate::{
     config::{AnthropicEffort, AnthropicModel, AnthropicSpeed, CompatibleModel},
     providers::{
         OutputOptions, TranslationProvider, anthropic::AnthropicProvider,
-        openai_compatible::CompatibleProvider,
+        openai_compatible::CompatibleProvider, plamo_translate::PlamoProvider,
     },
 };
 
@@ -214,6 +214,35 @@ fn provider_identities_leave_out_speed_and_the_key_but_not_the_service() {
     ] {
         assert_ne!(service, other);
     }
+}
+
+#[test]
+fn plamo_translate_keeps_its_translations_apart_from_the_same_compatible_service() {
+    let scratch = Scratch::new();
+    let plamo = |base_url: &str, model: &str| {
+        PlamoProvider::new(
+            base_url,
+            model.into(),
+            "auto".into(),
+            Settings::default().translation_limits.output_kib,
+            Ok(scratch.0.clone()),
+        )
+        .unwrap()
+        .identity(Output::Range)
+    };
+    let service = plamo("http://127.0.0.1:11434/v1", "local");
+    assert_eq!(service, plamo("http://127.0.0.1:11434/v1/", "local"));
+    for other in [
+        plamo("http://127.0.0.1:11435/v1", "local"),
+        plamo("http://127.0.0.1:11434/v1", "other"),
+    ] {
+        assert_ne!(service, other);
+    }
+    let key = |identity: &Identity| Key::new(identity, "ja", "auto", Sent::Passage("Retry."));
+    assert_ne!(
+        key(&service),
+        key(&compatible("http://127.0.0.1:11434/v1", "local", None))
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

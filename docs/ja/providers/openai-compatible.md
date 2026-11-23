@@ -48,6 +48,8 @@ OpenRouterのAPIキーを保存してください。OpenRouterのモデル名は
 
 `MODEL` は、Ollamaに取り込んだモデルの名前に置き換えます。`ollama list` に出る名前です。キーは要りません。
 
+PLaMo 3 Translateには、代わりに[PLaMo Translate](plamo-translate.md)のプロバイダーを選びます。このプロバイダーが送る指示文に、このモデルは従いません。
+
 ### お使いのコンピューターのLM Studio
 
 ```json

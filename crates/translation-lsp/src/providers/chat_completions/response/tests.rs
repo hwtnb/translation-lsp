@@ -1,12 +1,12 @@
 use super::*;
-use crate::providers::error::ErrorKind;
+use crate::providers::{error::ErrorKind, openai_compatible::NAMES};
 
 fn limit() -> SizeLimit {
     SizeLimit::try_from(1).unwrap()
 }
 
 fn read(chunks: &[&str]) -> Result<String, Error> {
-    let mut reply = Reply::default();
+    let mut reply = Reply::new(NAMES);
     for chunk in chunks {
         reply.accept(chunk, serde_json::from_str(chunk).ok(), limit())?;
     }

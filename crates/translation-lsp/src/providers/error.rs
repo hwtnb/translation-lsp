@@ -30,6 +30,8 @@ pub(crate) enum Service {
     Compatible,
     DeepL,
     GoogleTranslation,
+    /// PLaMo Translate at a service that `provider.base_url` names.
+    PlamoTranslate,
 }
 
 impl Service {
@@ -40,7 +42,8 @@ impl Service {
             | Self::Anthropic
             | Self::Compatible
             | Self::DeepL
-            | Self::GoogleTranslation => "retry later",
+            | Self::GoogleTranslation
+            | Self::PlamoTranslate => "retry later",
         }
     }
 
@@ -50,7 +53,8 @@ impl Service {
             | Self::OpenAiApi
             | Self::Compatible
             | Self::DeepL
-            | Self::GoogleTranslation => "code",
+            | Self::GoogleTranslation
+            | Self::PlamoTranslate => "code",
             Self::Anthropic => "type",
         }
     }
@@ -64,6 +68,7 @@ impl fmt::Display for Service {
             Self::Compatible => "OpenAI-compatible API",
             Self::DeepL => "DeepL API",
             Self::GoogleTranslation => "Google Cloud Translation",
+            Self::PlamoTranslate => "PLaMo Translate",
         })
     }
 }

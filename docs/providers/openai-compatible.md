@@ -48,6 +48,8 @@ Save an OpenRouter API key. OpenRouter model names start with the name of the co
 
 Replace `MODEL` with the name of a model you pulled into Ollama, as `ollama list` shows it. No key is needed.
 
+For PLaMo 3 Translate, select the [PLaMo Translate](plamo-translate.md) provider instead: the model does not follow the instructions that this provider sends.
+
 ### LM Studio on your computer
 
 ```json

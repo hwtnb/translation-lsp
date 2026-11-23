@@ -74,6 +74,7 @@ Hover over the comments in these samples.
 | [samples/languages.rs](../../samples/languages.rs) | Real | Which comments Hover leaves untranslated because they are already in the target language. See [Text already in the target language](#text-already-in-the-target-language). |
 | [samples/languages.md](../../samples/languages.md) | Real | With `features.automatic_selection` set to `true` and `target_language` set to `ja`, selecting either Japanese paragraph shows no Hover, while selecting the English paragraph does. |
 | [samples/long-document.md](../../samples/long-document.md) | Mock | A translation sent in parts. See [Translations sent in parts](#translations-sent-in-parts). |
+| [samples/context-limit.md](../../samples/context-limit.md) | Real | A long document for the context of a model on your computer, which differs between computers and can be changed. With `plamo_translate` and a context smaller than the document, `Translate document to Japanese (ja) and open in tab` reports the limit of the context. With `document_split` enabled, it opens the translation when each part fits. See [Long texts](../providers/plamo-translate.md#long-texts). |
 | [samples/repeated.rs](../../samples/repeated.rs) | Mock and real | Translations shown again without a request. See [Repeated translations](#repeated-translations). |
 
 The mock provider does not translate the samples marked only Real.
@@ -146,6 +147,10 @@ The same executable run with `anthropic-key`, `deepl-key`, or `api-key` and the 
 
 The workspace lint `unsafe_code` denies `unsafe` code in every crate. The helper code of the pseudo-terminal tests is the only exception, allowed at the functions that need it with the reason for each.
 
+## Provider limits
+
+The chat template of PLaMo 3 Translate passes a text that starts with `<|plamo:tag|>dataset<|plamo:msg|>translation` to the model unchanged and ignores the system message. Such a text is translated without the settings that `plamo_translate` sends. Only a document about the model's prompt format would start so, and the server leaves it as it is.
+
 ## Stored translations
 
 A stored translation is found by a key: a SHA-256 of these values.
@@ -156,7 +161,7 @@ A stored translation is found by a key: a SHA-256 of these values.
 - the kind of result
 - the text sent
 
-Raise `FORMAT_VERSION` when a change to what is sent changes the translations that come back, such as a change to the instructions of `providers/prompt.rs` or `providers/dictionary.rs` or the segments of `providers/segments.rs`. The translations stored before the change are then no longer found, and `disk_cache` removes them when they go unused.
+Raise `FORMAT_VERSION` when a change to what is sent changes the translations that come back, such as a change to the instructions of `providers/prompt.rs` or `providers/dictionary.rs`, the segments of `providers/segments.rs`, or the system message of `providers/plamo_translate.rs`. The translations stored before the change are then no longer found, and `disk_cache` removes them when they go unused.
 
 A new provider implements `identity` with its name in the settings and every setting it sends that changes a translation. It leaves out what changes only how fast the reply comes, such as `speed`, and what a translation is made with, such as the key.
 

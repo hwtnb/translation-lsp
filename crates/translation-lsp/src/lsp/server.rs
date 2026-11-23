@@ -73,6 +73,7 @@ use crate::{
         mock::{MockOptions, MockProvider},
         openai_api::OpenAiApiProvider,
         openai_compatible::CompatibleProvider,
+        plamo_translate::PlamoProvider,
         unset::UnsetProvider,
     },
     store::{Store, disk},
@@ -240,6 +241,7 @@ fn serve(
         ProviderSettings::OpenAiCompatible { .. } => capabilities::<CompatibleProvider>(),
         ProviderSettings::DeepL {} => capabilities::<DeepLProvider>(),
         ProviderSettings::GoogleTranslate {} => capabilities::<GoogleProvider>(),
+        ProviderSettings::PlamoTranslate { .. } => capabilities::<PlamoProvider>(),
     };
     connection.initialize_finish(id, serde_json::to_value(initialized)?)?;
 
@@ -349,6 +351,16 @@ fn serve(
         ProviderSettings::GoogleTranslate {} => {
             let provider = GoogleProvider::new(
                 &settings.source_language,
+                settings.translation_limits.output_kib,
+                key_directory,
+            )?;
+            serve_initialized(connection, settings, ui, provider, cache_directory)
+        }
+        ProviderSettings::PlamoTranslate { base_url, model } => {
+            let provider = PlamoProvider::new(
+                &base_url,
+                model,
+                settings.source_language.clone(),
                 settings.translation_limits.output_kib,
                 key_directory,
             )?;

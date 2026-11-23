@@ -174,7 +174,8 @@ fn speeds(name: &str, fields: Value) -> (Option<Value>, Option<Option<Value>>) {
         | ProviderSettings::Mock {}
         | ProviderSettings::OpenAiCompatible { .. }
         | ProviderSettings::DeepL {}
-        | ProviderSettings::GoogleTranslate {} => panic!("Expected provider settings"),
+        | ProviderSettings::GoogleTranslate {}
+        | ProviderSettings::PlamoTranslate { .. } => panic!("Expected provider settings"),
     }
 }
 

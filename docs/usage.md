@@ -52,7 +52,7 @@ Automatic Markdown selections, `Translate selection to …`, and `… and open i
 
 - A selection of the whole document is translated, as `Translate document to … and open in tab` translates it.
 - A comment read by Comment Hover is never looked up, even when it is one word.
-- The DeepL API and Google Cloud Translation write no dictionary entries: with them, such a selection is translated like any other.
+- The DeepL API, Google Cloud Translation, and PLaMo Translate write no dictionary entries: with them, such a selection is translated like any other.
 
 ## How Hover shows a translation
 
@@ -177,13 +177,17 @@ After deletion, the next comment Hover can translate the comment again. To trans
 
 The extension sends the provider the extracted comment body, without the marks and margin described under [Comment Hover](#comment-hover), the selected text, or the whole document when you explicitly choose document translation. To look up a term, it also sends the line the term is on, at most 200 characters on each side of it.
 
-The model receives the passage as one text, marked as the text to translate. It is instructed to return only its translation, preserving meaning, code, identifiers, and URLs, and to translate any instructions or questions in it instead of following or answering them. These instructions do not guarantee translation accuracy. The server does not split the translation into JSON fragments or reject it for changes in Markdown formatting or line breaks.
+With every provider except the DeepL API, Google Cloud Translation, and PLaMo Translate, which take no instructions, the model receives the passage as one text, marked as the text to translate. It is instructed to return only its translation, preserving meaning, code, identifiers, and URLs, and to translate any instructions or questions in it instead of following or answering them. These instructions do not guarantee translation accuracy.
+
+The server does not split the translation into JSON fragments or reject it for changes in Markdown formatting or line breaks.
 
 Explicit selection and document actions send the requested text even when it is indented or contains only code. Only automatic background translation checks whether a Markdown selection is prose.
 
-With [`document_split`](configuration.md#document-split) enabled, a translation opened in a tab of a text of more than one and a half times `chunk_kib` that can be divided is sent part by part, each part as a text of its own. The instructions of each part add that it is one part of a longer document, that every sentence of it is to be translated, and that no heading, introduction, or sentence is to be added.
+With [`document_split`](configuration.md#document-split) enabled, a translation opened in a tab of a text of more than one and a half times `chunk_kib` that can be divided is sent part by part, each part as a text of its own. For a provider that takes instructions, the instructions of each part add that it is one part of a longer document, that every sentence of it is to be translated, and that no heading, introduction, or sentence is to be added.
 
 The DeepL API and Google Cloud Translation take no instructions. The server sends them the text in segments, with code spans and URLs marked, and puts the translation together again; each part of a text sent in parts is sent the same way. Code blocks are not sent to them, so a text of only code shows as written. See [What is sent](providers/deepl.md#what-is-sent) of the DeepL API page.
+
+PLaMo Translate takes no instructions either, and the server sends it the text as written. The system message holds only the model's settings: the target language, and the source language when `source_language` is a code. Each part of a text sent in parts is sent the same way. See [What is sent](providers/plamo-translate.md#what-is-sent) of the PLaMo Translate page.
 
 To look up a term, the model is instructed to reply with a JSON object of meanings, word parts, and an example. The server builds the entry from that object and escapes every text of the reply, so the reply cannot add links, images, or other formatting to the Hover. A reply that is not such an object is reported as an error; retry it from Code Actions.
 
@@ -191,15 +195,17 @@ The extension does not send conversation history, and does not write translation
 
 ### Text already in the target language
 
-For comment Hover and automatic Markdown selection with `source_language` set to `auto`, the model is also asked for the language of each sentence, where code, identifiers, and URLs do not count. The server shows nothing when every sentence is in the target language. Otherwise it shows the translation, and reports a reply without one as an error. The DeepL API and Google Cloud Translation report the language they detected in each segment, and the server decides the same way.
+For comment Hover and automatic Markdown selection with `source_language` set to `auto`, a model that takes instructions is also asked for the language of each sentence, where code, identifiers, and URLs do not count. The server shows nothing when every sentence is in the target language. Otherwise it shows the translation, and reports a reply without one as an error.
 
-The server does not ask for the language, and always translates, in these cases:
+PLaMo Translate gives no language. For the same translations, the server shows nothing when the reply is the text sent, apart from whitespace at its start and end, whatever `target_language` is. When the model returns such text rewritten, the server shows the reply as a translation. Explicit translations, and every translation with `source_language` set to a language, show the reply.
+
+A model that takes instructions is not asked for the language, and the server always translates, in these cases:
 
 - explicit translations and dictionary lookups
 - `source_language` set to a language
-- with a provider that takes instructions, `target_language` set to a language name, such as `Japanese`, to the Chinese code `zh` or `zho`, with or without a region, or to a code that names a script, such as `zh-Hant` or `sr-Latn`
+- `target_language` set to a language name, such as `Japanese`, to the Chinese code `zh` or `zho`, with or without a region, or to a code that names a script, such as `zh-Hant` or `sr-Latn`
 
-The DeepL API and Google Cloud Translation decide from the code detected in each segment, ignoring its region. With a Chinese code or a code that names a script as `target_language`, the server shows nothing only when the detected code is the same in full, ignoring case. Google Cloud Translation takes `zh` and `zh-CN` as the same code.
+The DeepL API and Google Cloud Translation report the language they detected in each segment, and the server decides from its code the same way, ignoring its region. With a Chinese code or a code that names a script as `target_language`, the server shows nothing only when the detected code is the same in full, ignoring case. Google Cloud Translation takes `zh` and `zh-CN` as the same code.
 
 If you run a Code Action or another explicit translation of a range while an automatic translation of it waits for its reply, and the text is found to be in the target language, the same text is sent again as an explicit translation.
 

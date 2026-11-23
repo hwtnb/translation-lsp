@@ -4,7 +4,7 @@
 
 Translation LSP translates code comments and Markdown in Zed and shows the translation in Hover; the source stays unchanged. It reads comments in more than 40 languages and file formats, including Rust, TypeScript, Python, Go, and shell scripts. The full list is under [Languages](docs/languages.md).
 
-You can translate with ChatGPT using your plan, the Anthropic API, the OpenAI API, or an OpenAI-compatible service such as Ollama. Two translation services, the DeepL API and Google Cloud Translation, also work. Until you select a provider, the extension sends no text to an external service.
+You can translate with ChatGPT using your plan, the Anthropic API, the OpenAI API, or an OpenAI-compatible service such as Ollama. Two translation services, the DeepL API and Google Cloud Translation, also work, as does the translation model PLaMo 3 Translate when you run it yourself. Until you select a provider, the extension sends no text to an external service.
 
 - **Hover:** Hover over a comment to read its translation.
 
@@ -93,12 +93,15 @@ Then connect the provider: in a supported document, run `editor: toggle code act
 | OpenAI-compatible API | `openai_compatible` | For a service that needs a key, choose `OpenAI-compatible API key…`, then run `Save OpenAI-compatible API key`. | [OpenAI-compatible API](docs/providers/openai-compatible.md) |
 | DeepL API | `deepl` | Choose `DeepL API key…`, then run `Save DeepL API key`. | [DeepL API](docs/providers/deepl.md) |
 | Google Cloud Translation | `google_translate` | Choose `Google Cloud API key…`, then run `Save Google Cloud API key`. | [Google Cloud Translation](docs/providers/google-translate.md) |
+| PLaMo Translate | `plamo_translate` | Nothing for a tool that asks for no key, as Ollama by default. Otherwise, as for the OpenAI-compatible API. | [PLaMo Translate](docs/providers/plamo-translate.md) |
 
 The providers differ in a few ways:
 
 - For ChatGPT, the Anthropic API, and the OpenAI API, `model` and `effort` are optional. Each provider's page lists the values it takes, so change or remove them when you change `name`.
 - The OpenAI-compatible provider needs `base_url`, the address of the service, and `model`, one of its model names. A service that needs no key, such as [Ollama on your computer](docs/providers/openai-compatible.md#ollama-on-your-computer), works without one.
-- The DeepL API and Google Cloud Translation take no fields other than `name`. With them, `target_language` must be a language code, and a selected word is translated instead of looked up.
+- PLaMo Translate also needs `base_url` and `model`: the address of the service that runs PLaMo 3 Translate, such as Ollama, and the model's name there.
+- The DeepL API and Google Cloud Translation take no fields other than `name`.
+- With the DeepL API, Google Cloud Translation, and PLaMo Translate, `target_language` must be a language code, and a selected word is translated instead of looked up.
 
 Each provider's page also describes creating the key and cost.
 
@@ -108,7 +111,7 @@ These settings sit next to `provider` in `initialization_options`. Each can be o
 
 | Setting | Default | What it sets |
 | --- | --- | --- |
-| `target_language` | `ja` | The language translations are written in: a language code such as `en`, `ja`, or `zh-Hans`, or a language name. The DeepL API and Google Cloud Translation take language codes only. |
+| `target_language` | `ja` | The language translations are written in: a language code such as `en`, `ja`, or `zh-Hans`, or a language name. The DeepL API, Google Cloud Translation, and PLaMo Translate take language codes only. |
 | `source_language` | `auto` | The language of the original text. With `auto`, the model identifies it. |
 | `features.comment_hover` | `true` | Whether Hover over a comment starts a translation. |
 | `features.automatic_selection` | `true` | Whether a stable Markdown selection starts a translation in the background. |
@@ -124,7 +127,7 @@ These settings sit next to `provider` in `initialization_options`. Each can be o
 | Comment Hover | Hover over a supported code comment, or place the cursor in it and run Zed's `editor: hover`. |
 | Markdown selection | With `features.automatic_selection` set to `true`, select Markdown prose and keep the selection stable. Translation starts in the background; Hover over that range to read it. |
 | `Translate selection to …` | This Code Action translates the selection immediately, also after a background failure. When it is done, Hover over the selection to read it. |
-| Word lookup | Select up to three words or one identifier on one line. Hover shows a dictionary entry that the model writes. The DeepL API and Google Cloud Translation translate it instead. |
+| Word lookup | Select up to three words or one identifier on one line. Hover shows a dictionary entry that the model writes. The DeepL API, Google Cloud Translation, and PLaMo Translate translate it instead. |
 | `… and open in tab` | In Markdown or Plain Text, this Code Action opens the translation of the selection in a separate document, or of the whole document when nothing is selected. |
 | CodeLens | With `"code_lens": "on"` in Zed's settings, comments get `Translate \| Settings`, and translated ranges show the first line of the translation; click it to read all of it. |
 | Cancel | Place the cursor in a range and choose `Cancel translation of lines …` from Code Actions, or choose `Cancel all translations`. |
@@ -153,6 +156,7 @@ What each request contains is described under [What is sent](docs/usage.md#what-
 - [OpenAI-compatible API](docs/providers/openai-compatible.md): settings, the addresses of some services, and API keys.
 - [DeepL API](docs/providers/deepl.md): settings, how the text is sent, and the API key.
 - [Google Cloud Translation](docs/providers/google-translate.md): settings and the API key.
+- [PLaMo Translate](docs/providers/plamo-translate.md): running the model with Ollama, settings, and what is sent.
 - [Usage](docs/usage.md): each way of translating, canceling and deleting translations, and what is sent.
 - [Behavior](docs/behavior.md): when translation work starts, waits, and stops, and how translations are cached.
 - [Languages](docs/languages.md): supported languages, comments that are not translated, and language server settings.
