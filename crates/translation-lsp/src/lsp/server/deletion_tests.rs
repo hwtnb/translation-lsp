@@ -482,7 +482,7 @@ fn delete_all_clears_results_at_confirmation_and_does_not_stop_translation() {
 #[test]
 fn a_delete_all_card_from_settings_allows_an_account_menu_to_open() {
     let uri = "file:///settings.rs".parse().unwrap();
-    let mut editor = Editor::new(UnsetProvider, Settings::default());
+    let mut editor = Editor::new(UnsetProvider::default(), Settings::default());
     editor.open(&uri, "rust", COMMENT);
     editor.server.cache.insert(
         uri.clone(),
@@ -570,7 +570,7 @@ fn delete_actions_follow_prose_selection_and_hover_priority() {
         );
     }
 
-    let mut editor = Editor::new(UnsetProvider, Settings::default());
+    let mut editor = Editor::new(UnsetProvider::default(), Settings::default());
     editor.open(&uri, "plaintext", "Sentence.");
     editor.server.cache.insert(
         uri.clone(),

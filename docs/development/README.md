@@ -76,6 +76,8 @@ Hover over the comments in these samples.
 | [samples/long-document.md](../../samples/long-document.md) | Mock | A translation sent in parts. See [Translations sent in parts](#translations-sent-in-parts). |
 | [samples/context-limit.md](../../samples/context-limit.md) | Real | A long document for the context of a model on your computer, which differs between computers and can be changed. With `plamo_translate` and a context smaller than the document, `Translate document to Japanese (ja) and open in tab` reports the limit of the context. With `document_split` enabled, it opens the translation when each part fits. See [Long texts](../providers/plamo-translate.md#long-texts). |
 | [samples/repeated.rs](../../samples/repeated.rs) | Mock and real | Translations shown again without a request. See [Repeated translations](#repeated-translations). |
+| [samples/comment.rs](../../samples/comment.rs) | Mock, Anthropic API | In VS Code, `Settings` after the comment opens the menu as a list at the top of the window, titled `Automatic translation: On (comment Hover and automatic selection translation)`. Choosing `Turn off automatic translation` makes the next menu say `Off`. After a translation, `Delete all cached translations` asks in a modal dialog first, and `Cancel` keeps them. With `anthropic_api`, `Anthropic API key…` from Code Actions opens a menu titled `Anthropic API key`. `Save Anthropic API key` opens a terminal that asks for the key; with a key saved, `Remove Anthropic API key` asks in a modal dialog first. Neither calls the API. |
+| [samples/icons.rs](../../samples/icons.rs) | Mock and real | In VS Code, `$(sync)` and `$(file)` in a translation show as written in Hover, in its CodeLens line, and in the text opened from that line, also in code. The mock translation starts with `$(sync)`. |
 
 The mock provider does not translate the samples marked only Real.
 
@@ -111,12 +113,81 @@ Files do not count requests otherwise: a retry replaces a file, and one translat
 
 The stdio tests start the executable with `--mock-delay-ms <milliseconds>`, `--mock-fail`, `--mock-timeout-ms <milliseconds>`, or `--mock-same-language` to delay mock translations, make them fail, set their deadlines, or have automatic translations find the text already in the target language. These arguments affect only the mock provider.
 
+## VS Code extension
+
+`vscode-extension` holds the VS Code extension, written in TypeScript. It starts the server named in its settings and shows what the server sends with VS Code's own parts. Run these commands in that directory, with Node.js 22.12 or later:
+
+```sh
+npm ci
+npm run check
+npm run lint
+npm run format:check
+npm test
+npm run package
+```
+
+`check` checks the types. `lint` runs Oxlint, including its rules that use the types, such as one against a promise that nothing awaits, and fails on any warning. `format:check` checks that Oxfmt leaves `src` and `test` as they are; `npm run format` formats them.
+
+`test` runs the tests that need no VS Code with Vitest: the settings that the extension sends, the localized texts of the manifest and the extension, and how the extension starts and stops the server. `package` builds the extension with Rolldown and writes `translation-lsp.vsix`.
+
+The settings of the extension are listed in `package.json`, and the settings that each provider takes in `src/providers.json`. The server's tests read both: every server setting must have one VS Code setting with the server's default, and each provider must accept the settings of its row and refuse the others. They also check that the extension starts the server only for languages that the server reads.
+
+To check the extension in VS Code, start VS Code with a user data directory and an extensions directory of their own, so that your usual settings and extensions stay apart:
+
+```sh
+code --user-data-dir <directory> --extensions-dir <directory> --install-extension translation-lsp.vsix
+```
+
+Start it again with the same two options and a folder of samples, set `translationLsp.server.path` to the server you built, and `translationLsp.provider.name` to `mock` in `settings.json`. The Settings editor does not list `mock`.
+
+### Messages of the VS Code extension
+
+The extension names the messages it takes under `capabilities.experimental.translationLsp` in its `initialize` request. The server uses each only when its value is `true`; a client that names none, such as Zed, gets the requests and texts of Zed.
+
+| Name | What changes |
+| --- | --- |
+| `showTranslation` | `translation-lsp.show-translation` sends the notification `translation-lsp/showTranslation` in place of a card. |
+| `openSettings` | Opening the settings sends the request `translation-lsp/openSettings`, with `null` as its parameters, in place of opening Zed's settings file. A success means the settings opened. The texts that name Zed's settings name the settings instead. |
+| `choose` | A menu that the user opens, such as `Settings` or the account menu of the provider, and the question before every cached translation is deleted or a saved key is removed, send the request `translation-lsp/choose` in place of a message with buttons. The prompt that the server opens itself when no provider is set stays a message. |
+| `themeIcons` | The Hover header is `$(globe) Translation LSP`. In Hover and in `showTranslation`, the server puts a word joiner after each `$` before `(`, and makes no link to a URL or a `#section` with `$(`, so that VS Code draws no icon from a translation. In a CodeLens line, it puts a backslash before each icon name. |
+
+For a client whose standard `general.markdown.parser` is `marked`, as VS Code's is, the server checks the translation of a Markdown document as Zed reads it and as pulldown-cmark reads it with only the extensions of marked: tables, strikethrough, and task lists. This comes close to marked, which has none of Zed's other extensions, such as footnotes and heading attributes.
+
+Footnotes appear as text so that marked cannot turn them into links. For links outside the current document, both readings check the destination against the original. An unverified destination makes the whole translation a code block. This also applies to links that only marked recognizes, for example in metadata or heading attributes. A destination can be verified from a link elsewhere in the original.
+
+For example, if the original contains `https://example.com` and both readings find that URL in the translated prose, it stays clickable. In other bare `://` sequences, `www.` prefixes, and email addresses, the server inserts a word joiner to prevent marked from creating links.
+
+`translation-lsp/showTranslation` carries these fields:
+
+| Field | Value |
+| --- | --- |
+| `uri`, `range` | Where the translation is now. |
+| `version` | The version of the document that the translation belongs to. The extension shows no translation of another version. |
+| `failed` | `true` when it shows why a translation failed. |
+| `markdown` | The Markdown to show: the body of Hover for a translation, without its header, or the reason of a failure. |
+| `text` | The text to copy: the translation as it came, a dictionary entry as Markdown, or the reason of a failure. |
+| `actions` | The buttons: `id` (`retry` or `delete`), `title`, and the `command` and `arguments` that the client sends back with `workspace/executeCommand`. |
+| `targetLanguage` | The `target_language` setting as written, such as `ja` or `Japanese`. The extension names the language in the line above the text. |
+
+`translation-lsp/choose` carries these fields, and the client answers with the `id` of the choice picked, as `{"id": "1"}`, or `null` when it closed without one:
+
+| Field | Value |
+| --- | --- |
+| `kind` | `menu` for a menu that the user opened, which the extension shows as a Quick Pick; `confirm` for agreement asked before an operation of the user goes on, with that one choice, which the extension shows as a modal warning. |
+| `message` | One line: the title of a menu, or the question. |
+| `choices` | The choices, each with an `id` that names it in this request and its `title`. The server reads only the `id`, so two choices may have the same title. |
+
+The server reads only the `id` of an answer, so other fields, such as the `title` of the choice, change nothing. It takes an `id` that names no choice, an answer without one, and `null` as no choice.
+
+The extension answers `null` without showing anything when the request was canceled before it opened. It closes a Quick Pick and answers `null` when the server withdraws the request or the connection ends, whether the extension stops or restarts the server or the connection breaks. VS Code cannot close a modal dialog from an extension, so a dialog stays until the user closes it. Its answer then does nothing; if it agrees, the extension says once that nothing was done.
+
 ## CI and release checks
 
-The [CI workflow](../../.github/workflows/ci.yml) has two jobs:
+The [CI workflow](../../.github/workflows/ci.yml) has three jobs:
 
 - **Verify** runs formatting, workspace tests, Clippy, the native release build, and the WASM release build on Windows, macOS, and Linux. It runs the tests one at a time (`RUST_TEST_THREADS` is `1`), so the tests that measure time do not share the runner's CPUs with other tests.
 - **Distribution contracts and registry compiler** runs on Linux. It builds the WASM extension with the compiler of the Zed registry, currently Rust 1.90, and runs the `xtask` checks described below.
+- **VS Code extension** runs on Linux. It checks the types of the VS Code extension, runs its linter and its formatting check, runs its tests, and writes its `.vsix`.
 
 When a dependency of the extension needs a newer compiler than the registry's, decide again how to stay compatible with the registry.
 
@@ -140,7 +211,7 @@ cargo run -p xtask --locked -- check-notices
 Tests do not call the real APIs or read the credential directory of the user. HTTP/OIDC fixtures use synthetic credentials and do not require a ChatGPT account or an API key.
 
 - The tests that start the language server as a process start only the mock provider or no provider. They give it a home directory of their own, which on macOS and Linux holds the folder of [`disk_cache`](../configuration.md#disk-cache).
-- Windows takes the `disk_cache` folder from the OS and not from the environment, so these tests would use the cache folder of the user who runs them there. Those that turn `disk_cache` on run on macOS and Linux only. None of these tests confirms `Delete all cached translations`.
+- Windows takes the `disk_cache` folder from the OS and not from the environment, so these tests would use the cache folder of the user who runs them there. Those that turn `disk_cache` on run on macOS and Linux only. None of these tests confirms `Delete all cached translations`; they decline it. The unit tests of the server that agree to it give the server a directory of their own, or none.
 - The tests of the providers that read credentials use directories of their own. The tests of stored translations pass the server a directory of their own.
 
 The same executable run with `anthropic-key`, `deepl-key`, or `api-key` and the address of a service asks for an API key in a terminal and saves it instead of serving an editor. The tests that run it that way give it a home directory of their own and a pseudo-terminal. They run on macOS and Linux only, because Windows takes the credential directory from the OS and not from the environment.

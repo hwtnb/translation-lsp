@@ -84,6 +84,9 @@ const XML_COMMENT_BODY: &str =
     "<summary>\nRetry only if the remote service\nreports a temporary failure.\n</summary>";
 const PARAGRAPH: &str =
     "The `retry_count` value is preserved.\nRetry only after a temporary failure. 🚀";
+/// The comment of `samples/icons.rs`, whose translation keeps icon names of
+/// VS Code, starting with its first line.
+const ICONS_BODY: &str = "Press $(sync) to refresh the view.\nThe `$(file)` button opens the file.";
 /// The term of the Markdown sample that the mock provider looks up.
 const TERM: &str = "retry_count";
 const TERM_ENTRY: &str = r#"{"senses": [{"part_of_speech": "識別子", "meaning": "再試行の回数"}], "parts": [{"part": "retry", "meaning": "再試行"}, {"part": "count", "meaning": "回数"}], "combined": "再試行した回数", "example": {"text": "The retry_count value is preserved.", "translation": "retry_count の値は保持される。"}}"#;
@@ -237,6 +240,9 @@ impl TranslationProvider for MockProvider {
             }
             XML_COMMENT_BODY => {
                 "<summary>\nリモートサービスが一時的な障害を報告した場合に限り、再試行する。\n</summary>"
+            }
+            ICONS_BODY => {
+                "$(sync) を押すと、ビューを更新する。\n`$(file)` のボタンは、そのファイルを開く。"
             }
             PARAGRAPH => {
                 "`retry_count` の値を維持する。\n一時的な障害が発生した場合に限り再試行する。🚀"

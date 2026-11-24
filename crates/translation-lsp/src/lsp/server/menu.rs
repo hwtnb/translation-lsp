@@ -16,10 +16,16 @@ pub(super) const DELETE_ALL: &str = "Delete all cached translations";
 const DELETE_ALL_QUESTION: &str = "Delete all cached translations? Comments and selections are translated again when you ask for them.";
 const CONFIRM_DELETE: &str = "Delete";
 
+/// The buttons of a translation card, in order.
+pub(super) const TRANSLATION_BUTTONS: [&str; 2] = [RETRY, DELETE];
+
 pub(super) enum Card {
+    /// A translation, with [`TRANSLATION_BUTTONS`].
     Translation(TranslationTarget),
+    /// The question whether to delete every translation, with one button
+    /// that agrees.
     ConfirmDeleteAll,
-    /// A menu, with the command of each title.
+    /// A menu, with the command of each choice.
     Menu(Vec<Command>),
 }
 
@@ -59,12 +65,14 @@ impl<P: TranslationProvider> Server<P> {
                     .account_menu
                     .map(|title| (title, ServerCommand::Account(SETTINGS_COMMAND.into()))),
             )
-            .chain(
-                self.ui
-                    .capabilities
-                    .show_document
-                    .then_some(("Open Zed settings file", ServerCommand::OpenSettings)),
-            )
+            .chain(self.ui.capabilities.opens_settings().then_some((
+                if self.ui.capabilities.open_settings {
+                    "Open settings"
+                } else {
+                    "Open Zed settings file"
+                },
+                ServerCommand::OpenSettings,
+            )))
             .chain(uri.filter(|uri| self.can_delete_document(uri)).map(|uri| {
                 (
                     DELETE_DOCUMENT,
@@ -102,12 +110,14 @@ impl<P: TranslationProvider> Server<P> {
                     .account_menu
                     .map(|title| (title.to_owned(), SETTINGS_COMMAND)),
             )
-            .chain(
-                self.ui
-                    .capabilities
-                    .show_document
-                    .then(|| ("Zed settings".to_owned(), OPEN_SETTINGS_COMMAND)),
-            )
+            .chain(self.ui.capabilities.opens_settings().then(|| {
+                let title = if self.ui.capabilities.open_settings {
+                    "Settings"
+                } else {
+                    "Zed settings"
+                };
+                (title.to_owned(), OPEN_SETTINGS_COMMAND)
+            }))
             .map(|(title, command)| lens(Range::default(), title, command, None));
         let mut lenses: Vec<_> = tab.into_iter().chain(menu).collect();
         if let Some(first) = lenses.first_mut().and_then(|lens| lens.command.as_mut()) {
@@ -117,10 +127,13 @@ impl<P: TranslationProvider> Server<P> {
     }
 
     pub(super) fn confirm_delete_all(&mut self) -> Result<(), ProviderError> {
-        let id = self
-            .ui
-            .show_card(MessageType::INFO, DELETE_ALL_QUESTION, &[CONFIRM_DELETE])?;
-        self.cards.insert(id, Card::ConfirmDeleteAll);
+        let (id, answers) = self.ui.show_card(
+            MessageType::INFO,
+            ChoiceKind::Confirm,
+            DELETE_ALL_QUESTION,
+            &[CONFIRM_DELETE],
+        )?;
+        self.cards.insert(id, (Card::ConfirmDeleteAll, answers));
         Ok(())
     }
 
@@ -133,8 +146,10 @@ impl<P: TranslationProvider> Server<P> {
         choices: Vec<Command>,
     ) -> Result<(), ProviderError> {
         let titles: Vec<_> = choices.iter().map(|choice| choice.title.as_str()).collect();
-        let id = self.ui.show_card(MessageType::INFO, message, &titles)?;
-        self.cards.insert(id, Card::Menu(choices));
+        let (id, answers) =
+            self.ui
+                .show_card(MessageType::INFO, ChoiceKind::Menu, message, &titles)?;
+        self.cards.insert(id, (Card::Menu(choices), answers));
         Ok(())
     }
 
@@ -144,23 +159,28 @@ impl<P: TranslationProvider> Server<P> {
         connection: &Connection,
         response: Response,
     ) -> ServerResult<()> {
-        let Some(card) = self.cards.remove(&response.id) else {
+        let Some((card, answers)) = self.cards.remove(&response.id) else {
             return Ok(());
         };
 
-        let title = response
+        let chosen = response
             .response_result
             .as_ref()
             .ok()
-            .and_then(|value| value["title"].as_str());
-        match (card, title) {
-            (Card::ConfirmDeleteAll, Some(CONFIRM_DELETE)) => {
+            .and_then(|value| answers.chosen(value));
+        let Some(index) = chosen else {
+            return Ok(());
+        };
+        match card {
+            Card::ConfirmDeleteAll => {
                 self.clear_previews();
                 self.store.clear();
                 self.ui.refresh_lenses()?;
             }
-            (Card::Translation(target), Some(DELETE)) => self.delete_translation(&target)?,
-            (Card::Translation(target), Some(RETRY)) => {
+            Card::Translation(target) if TRANSLATION_BUTTONS.get(index) == Some(&DELETE) => {
+                self.delete_translation(&target)?
+            }
+            Card::Translation(target) => {
                 // A retry answers no request, so the card's request stands in for one.
                 if let Err(error) =
                     self.queue(response.id, target, PendingReply::Retry { notice: false })
@@ -168,8 +188,8 @@ impl<P: TranslationProvider> Server<P> {
                     self.ui.error(&error.message)?;
                 }
             }
-            (Card::Menu(choices), Some(title)) => {
-                let Some(choice) = choices.into_iter().find(|choice| choice.title == title) else {
+            Card::Menu(choices) => {
+                let Some(choice) = choices.into_iter().nth(index) else {
                     return Ok(());
                 };
                 let params = ExecuteCommandParams {
@@ -185,7 +205,6 @@ impl<P: TranslationProvider> Server<P> {
                     self.command_failure(&error)?;
                 }
             }
-            _ => (),
         }
 
         Ok(())

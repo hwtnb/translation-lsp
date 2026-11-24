@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::providers::{
+    ChoiceKind,
     anthropic::test_support::KeyDirectory,
     credential_directory,
     error::ErrorKind,
@@ -308,13 +309,21 @@ impl Interaction for Confirm {
         unreachable!()
     }
 
-    async fn edit(&self, _path: &Path) -> Result<(), Error> {
+    async fn open_settings(&self) -> Result<(), Error> {
         unreachable!()
     }
 
-    async fn choose(&self, message: &str, choices: &[String]) -> Result<Option<String>, Error> {
-        assert_eq!(message, REMOVAL);
-        Ok(self.0.then(|| choices[0].clone()))
+    async fn choose(
+        &self,
+        kind: ChoiceKind,
+        message: &str,
+        choices: &[String],
+    ) -> Result<Option<usize>, Error> {
+        assert_eq!(
+            (kind, message, choices.len()),
+            (ChoiceKind::Confirm, REMOVAL, 1)
+        );
+        Ok(self.0.then_some(0))
     }
 }
 

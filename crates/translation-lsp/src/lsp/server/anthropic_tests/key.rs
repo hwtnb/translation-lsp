@@ -9,9 +9,9 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-use super::{actions, next, server, target};
+use super::{actions, next, server, server_for, target};
 use crate::{
-    lsp::server::*,
+    lsp::{server::*, ui::CHOOSE},
     providers::{
         AccountChange, TranslationProvider,
         anthropic::test_support::{self, Fixture, KEY, KeyDirectory, Reply, Terminal},
@@ -759,4 +759,79 @@ async fn in_code_the_key_menu_appears_only_where_a_translation_failed() {
     assert!(
         titles(&mut server, &markdown, line(0)).ends_with(&[MENU.into(), menu::DELETE_ALL.into()])
     );
+}
+
+/// A client that names `choose` gets the key menu, titled with what it is
+/// for, and the question before removal as a confirmation, and both act on
+/// the ID of the choice. An ID that names no choice removes nothing.
+#[tokio::test(flavor = "current_thread")]
+async fn a_client_that_names_choose_gets_the_key_menu_and_its_confirmation_by_id() {
+    let fixture = Fixture::new().await;
+    let capabilities = UiCapabilities {
+        choose: true,
+        ..Default::default()
+    };
+    let (mut server, connection, client, completions) =
+        server_for(fixture.provider(), Settings::default(), capabilities);
+    let answer = |server: &mut Server<AnthropicProvider>, request: RequestId, id: &str| {
+        let response = Response::new_ok(request, json!({"id": id}));
+        if let Some((Purpose::Card, chosen)) = server.ui.response(response) {
+            server.card_response(&connection, chosen).unwrap();
+        }
+    };
+
+    assert_eq!(
+        server
+            .execute_command(
+                &connection,
+                1.into(),
+                parse(json!({"command": SETTINGS_COMMAND})).unwrap(),
+            )
+            .unwrap(),
+        Some(Value::Null)
+    );
+    let Message::Request(menu) = message(&client).await else {
+        panic!("Expected the menu")
+    };
+    assert_eq!(menu.method, CHOOSE);
+    assert_eq!(
+        menu.params,
+        json!({
+            "kind": "menu",
+            "message": "Anthropic API key",
+            "choices": [
+                {"id": "0", "title": "Replace Anthropic API key"},
+                {"id": "1", "title": "Remove Anthropic API key"}
+            ]
+        })
+    );
+
+    answer(&mut server, menu.id, "1");
+    let Message::Request(confirmation) = message(&client).await else {
+        panic!("Expected the confirmation")
+    };
+    assert_eq!(confirmation.method, CHOOSE);
+    assert_eq!(
+        confirmation.params,
+        json!({
+            "kind": "confirm",
+            "message": concat!(
+                "Remove the saved Anthropic API key from this computer? The key stays valid ",
+                "until you delete it in the Claude Console."
+            ),
+            "choices": [{"id": "0", "title": "Remove"}]
+        })
+    );
+    answer(&mut server, confirmation.id, "1");
+    server
+        .finish(&connection, next(&completions).await)
+        .unwrap();
+    let Message::Notification(notice) = message(&client).await else {
+        panic!("Expected the notice")
+    };
+    assert_eq!(
+        notice.params["message"],
+        "The Anthropic API key was not removed."
+    );
+    assert_eq!(fs::read(fixture.keys.file()).unwrap(), KEY.as_bytes());
 }

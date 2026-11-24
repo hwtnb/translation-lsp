@@ -1,0 +1,560 @@
+{
+  "name": "translation-lsp",
+  "displayName": "Translation LSP",
+  "description": "%description%",
+  "version": "0.9.0",
+  "publisher": "hwtnb",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hwtnb/zed-translation-lsp"
+  },
+  "engines": {
+    "vscode": "^1.123.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onLanguage:rust",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:csharp",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:java",
+    "onLanguage:swift",
+    "onLanguage:ruby",
+    "onLanguage:php",
+    "onLanguage:html",
+    "onLanguage:xml",
+    "onLanguage:css",
+    "onLanguage:scss",
+    "onLanguage:sql",
+    "onLanguage:lua",
+    "onLanguage:clojure",
+    "onLanguage:dart",
+    "onLanguage:fsharp",
+    "onLanguage:json",
+    "onLanguage:jsonc",
+    "onLanguage:yaml",
+    "onLanguage:shellscript",
+    "onLanguage:powershell",
+    "onLanguage:dockerfile",
+    "onLanguage:dockercompose",
+    "onLanguage:makefile",
+    "onLanguage:markdown",
+    "onLanguage:plaintext"
+  ],
+  "contributes": {
+    "configuration": [
+      {
+        "id": "translationLsp.server",
+        "title": "%configuration.server%",
+        "order": 0,
+        "properties": {
+          "translationLsp.server.path": {
+            "type": "string",
+            "default": "",
+            "scope": "machine",
+            "markdownDescription": "%setting.server.path%",
+            "order": 0
+          }
+        }
+      },
+      {
+        "id": "translationLsp.languages",
+        "title": "%configuration.languages%",
+        "order": 1,
+        "properties": {
+          "translationLsp.targetLanguage": {
+            "type": "string",
+            "default": "ja",
+            "markdownDescription": "%setting.targetLanguage%",
+            "order": 0
+          },
+          "translationLsp.sourceLanguage": {
+            "type": "string",
+            "default": "auto",
+            "markdownDescription": "%setting.sourceLanguage%",
+            "order": 1
+          }
+        }
+      },
+      {
+        "id": "translationLsp.provider",
+        "title": "%configuration.provider%",
+        "order": 2,
+        "properties": {
+          "translationLsp.provider.name": {
+            "type": "string",
+            "default": "",
+            "enum": [
+              "",
+              "chatgpt",
+              "anthropic_api",
+              "openai_api",
+              "openai_compatible",
+              "deepl",
+              "google_translate",
+              "plamo_translate"
+            ],
+            "enumItemLabels": [
+              "%setting.provider.name.none%",
+              "ChatGPT",
+              "Anthropic API",
+              "OpenAI API",
+              "OpenAI-compatible API",
+              "DeepL API",
+              "Google Cloud Translation",
+              "PLaMo Translate"
+            ],
+            "markdownDescription": "%setting.provider.name%",
+            "order": 0
+          },
+          "translationLsp.provider.baseUrl": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.baseUrl%",
+            "order": 1
+          },
+          "translationLsp.provider.model": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.model%",
+            "order": 2
+          },
+          "translationLsp.provider.effort": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.effort%",
+            "order": 3
+          },
+          "translationLsp.provider.thinking": {
+            "type": "string",
+            "default": "auto",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ],
+            "enumDescriptions": [
+              "%setting.provider.thinking.auto%",
+              "%setting.provider.thinking.on%",
+              "%setting.provider.thinking.off%"
+            ],
+            "markdownDescription": "%setting.provider.thinking%",
+            "order": 4
+          },
+          "translationLsp.provider.speed": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.speed%",
+            "order": 5
+          },
+          "translationLsp.provider.document.model": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.document.model%",
+            "order": 6
+          },
+          "translationLsp.provider.document.effort": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.document.effort%",
+            "order": 7
+          },
+          "translationLsp.provider.document.thinking": {
+            "type": "string",
+            "default": "auto",
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ],
+            "enumDescriptions": [
+              "%setting.provider.thinking.auto%",
+              "%setting.provider.thinking.on%",
+              "%setting.provider.thinking.off%"
+            ],
+            "markdownDescription": "%setting.provider.document.thinking%",
+            "order": 8
+          },
+          "translationLsp.provider.document.speed": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%setting.provider.document.speed%",
+            "order": 9
+          }
+        }
+      },
+      {
+        "id": "translationLsp.features",
+        "title": "%configuration.features%",
+        "order": 3,
+        "properties": {
+          "translationLsp.features.commentHover": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.features.commentHover%",
+            "order": 0
+          },
+          "translationLsp.features.automaticSelection": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.features.automaticSelection%",
+            "order": 1
+          },
+          "translationLsp.features.selectionAction": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.features.selectionAction%",
+            "order": 2
+          },
+          "translationLsp.features.documentAction": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.features.documentAction%",
+            "order": 3
+          },
+          "translationLsp.features.commentLens": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.features.commentLens%",
+            "order": 4
+          },
+          "translationLsp.features.languages": {
+            "type": "object",
+            "default": {},
+            "markdownDescription": "%setting.features.languages%",
+            "order": 5
+          }
+        }
+      },
+      {
+        "id": "translationLsp.hover",
+        "title": "%configuration.hover%",
+        "order": 4,
+        "properties": {
+          "translationLsp.hover.header": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%setting.hover.header%",
+            "order": 0
+          },
+          "translationLsp.hover.format": {
+            "type": "string",
+            "default": "markdown",
+            "enum": [
+              "markdown",
+              "text"
+            ],
+            "enumDescriptions": [
+              "%setting.hover.format.markdown%",
+              "%setting.hover.format.text%"
+            ],
+            "markdownDescription": "%setting.hover.format%",
+            "order": 1
+          }
+        }
+      },
+      {
+        "id": "translationLsp.timing",
+        "title": "%configuration.timing%",
+        "order": 5,
+        "properties": {
+          "translationLsp.hoverTimeoutMs": {
+            "type": "integer",
+            "default": 20000,
+            "minimum": 1000,
+            "maximum": 120000,
+            "markdownDescription": "%setting.hoverTimeoutMs%",
+            "order": 0
+          },
+          "translationLsp.selectionTimeoutMs": {
+            "type": "integer",
+            "default": 30000,
+            "minimum": 1000,
+            "maximum": 120000,
+            "markdownDescription": "%setting.selectionTimeoutMs%",
+            "order": 1
+          },
+          "translationLsp.documentTimeoutMs": {
+            "type": "integer",
+            "default": 180000,
+            "minimum": 1000,
+            "maximum": 600000,
+            "markdownDescription": "%setting.documentTimeoutMs%",
+            "order": 2
+          },
+          "translationLsp.selectionDebounceMs": {
+            "type": "integer",
+            "default": 450,
+            "minimum": 100,
+            "maximum": 2000,
+            "markdownDescription": "%setting.selectionDebounceMs%",
+            "order": 3
+          },
+          "translationLsp.commentParseTimeoutMs": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 100,
+            "maximum": 60000,
+            "markdownDescription": "%setting.commentParseTimeoutMs%",
+            "order": 4
+          }
+        }
+      },
+      {
+        "id": "translationLsp.limits",
+        "title": "%configuration.limits%",
+        "order": 6,
+        "properties": {
+          "translationLsp.translationLimits.inputKib.hover": {
+            "type": "integer",
+            "default": 16,
+            "minimum": 1,
+            "maximum": 1024,
+            "markdownDescription": "%setting.translationLimits.inputKib.hover%",
+            "order": 0
+          },
+          "translationLsp.translationLimits.inputKib.document": {
+            "type": "integer",
+            "default": 1024,
+            "minimum": 1,
+            "maximum": 16384,
+            "markdownDescription": "%setting.translationLimits.inputKib.document%",
+            "order": 1
+          },
+          "translationLsp.translationLimits.outputKib": {
+            "type": "integer",
+            "default": 4096,
+            "minimum": 1,
+            "maximum": 16384,
+            "markdownDescription": "%setting.translationLimits.outputKib%",
+            "order": 2
+          },
+          "translationLsp.translationLimits.work.admitted": {
+            "type": "integer",
+            "default": 8,
+            "minimum": 1,
+            "maximum": 64,
+            "markdownDescription": "%setting.translationLimits.work.admitted%",
+            "order": 3
+          },
+          "translationLsp.translationLimits.work.concurrent": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 1,
+            "maximum": 8,
+            "markdownDescription": "%setting.translationLimits.work.concurrent%",
+            "order": 4
+          },
+          "translationLsp.translationLimits.work.documents": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 8,
+            "markdownDescription": "%setting.translationLimits.work.documents%",
+            "order": 5
+          },
+          "translationLsp.translationLimits.work.automatic": {
+            "type": "integer",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 63,
+            "markdownDescription": "%setting.translationLimits.work.automatic%",
+            "order": 6
+          },
+          "translationLsp.translationLimits.work.hoverWaiters": {
+            "type": "integer",
+            "default": 16,
+            "minimum": 1,
+            "maximum": 256,
+            "markdownDescription": "%setting.translationLimits.work.hoverWaiters%",
+            "order": 7
+          },
+          "translationLsp.translationLimits.cache.entries": {
+            "type": "integer",
+            "default": 64,
+            "minimum": 1,
+            "maximum": 4096,
+            "markdownDescription": "%setting.translationLimits.cache.entries%",
+            "order": 8
+          },
+          "translationLsp.translationLimits.cache.capacityKib": {
+            "type": "integer",
+            "default": 16384,
+            "minimum": 1,
+            "maximum": 262144,
+            "markdownDescription": "%setting.translationLimits.cache.capacityKib%",
+            "order": 9
+          }
+        }
+      },
+      {
+        "id": "translationLsp.documentSplit",
+        "title": "%configuration.documentSplit%",
+        "order": 7,
+        "properties": {
+          "translationLsp.documentSplit.enabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%setting.documentSplit.enabled%",
+            "order": 0
+          },
+          "translationLsp.documentSplit.parallel": {
+            "type": "integer",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 8,
+            "markdownDescription": "%setting.documentSplit.parallel%",
+            "order": 1
+          },
+          "translationLsp.documentSplit.chunkKib": {
+            "type": "integer",
+            "default": 8,
+            "minimum": 1,
+            "maximum": 16384,
+            "markdownDescription": "%setting.documentSplit.chunkKib%",
+            "order": 2
+          }
+        }
+      },
+      {
+        "id": "translationLsp.diskCache",
+        "title": "%configuration.diskCache%",
+        "order": 8,
+        "properties": {
+          "translationLsp.diskCache.enabled": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "%setting.diskCache.enabled%",
+            "order": 0
+          },
+          "translationLsp.diskCache.days": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 1,
+            "maximum": 365,
+            "markdownDescription": "%setting.diskCache.days%",
+            "order": 1
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "translationLsp.restartServer",
+        "title": "%command.restartServer%",
+        "category": "Translation LSP"
+      },
+      {
+        "command": "translationLsp.copyTranslation",
+        "title": "%command.copyTranslation%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "translationLsp.retryTranslation",
+        "title": "%command.retryTranslation%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "translationLsp.deleteTranslation",
+        "title": "%command.deleteTranslation%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "translationLsp.moreActions",
+        "title": "%command.moreActions%",
+        "icon": "$(ellipsis)"
+      },
+      {
+        "command": "translationLsp.closeTranslation",
+        "title": "%command.closeTranslation%",
+        "icon": "$(close)"
+      }
+    ],
+    "menus": {
+      "comments/commentThread/title": [
+        {
+          "command": "translationLsp.copyTranslation",
+          "group": "inline@1",
+          "when": "commentController == translation-lsp"
+        },
+        {
+          "command": "translationLsp.retryTranslation",
+          "group": "inline@2",
+          "when": "commentController == translation-lsp && commentThread =~ /\\bretry\\b/"
+        },
+        {
+          "command": "translationLsp.deleteTranslation",
+          "group": "inline@3",
+          "when": "commentController == translation-lsp && commentThread =~ /\\bdelete\\b/"
+        },
+        {
+          "command": "translationLsp.moreActions",
+          "group": "inline@4",
+          "when": "commentController == translation-lsp && commentThread =~ /\\bmore\\b/"
+        },
+        {
+          "command": "translationLsp.closeTranslation",
+          "group": "inline@5",
+          "when": "commentController == translation-lsp"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "translationLsp.copyTranslation",
+          "when": "false"
+        },
+        {
+          "command": "translationLsp.retryTranslation",
+          "when": "false"
+        },
+        {
+          "command": "translationLsp.deleteTranslation",
+          "when": "false"
+        },
+        {
+          "command": "translationLsp.moreActions",
+          "when": "false"
+        },
+        {
+          "command": "translationLsp.closeTranslation",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "lint": "oxlint --type-aware --deny-warnings src test",
+    "format": "oxfmt src test",
+    "format:check": "oxfmt --check src test",
+    "build": "rolldown src/extension.ts --file out/extension.js --format cjs --platform node --external vscode",
+    "test": "vitest run",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --out translation-lsp.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/vscode": "~1.120.0",
+    "@vscode/vsce": "^4.1.1",
+    "oxfmt": "^0.80.0",
+    "oxlint": "^1.95.0",
+    "oxlint-tsgolint": "^7.0.2008",
+    "rolldown": "^1.3.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

@@ -5,8 +5,11 @@ relative to the repository root.
 
 ## Project layout
 
-- `crates/zed-extension`: Zed's WASM extension bridge and `extension.toml` manifest.
+- `zed-extension`: Zed's WASM extension bridge and `extension.toml` manifest.
   Select this directory when using **Install Dev Extension**.
+- `vscode-extension`: the VS Code extension (TypeScript, npm), a client of the
+  same server. Its settings table and the languages it starts the server for
+  are checked by the server's tests.
 - `crates/translation-lsp`: native language server. `src/config.rs` owns settings;
   `src/lsp/` owns requests, scheduling, previews, and activity;
   `src/providers/` owns translation providers and authentication;

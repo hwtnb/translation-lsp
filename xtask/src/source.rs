@@ -88,7 +88,7 @@ pub fn targets() -> Result<Vec<Target>> {
         include: Vec<Target>,
     }
     let matrix: Matrix = serde_json::from_str(&fs::read_to_string(
-        root().join("crates/zed-extension/release-targets.json"),
+        root().join("zed-extension/release-targets.json"),
     )?)?;
     let mut pairs = BTreeSet::new();
     for item in &matrix.include {
@@ -163,8 +163,8 @@ fn manifest<T: DeserializeOwned>(path: &str) -> Result<T> {
 
 pub fn version() -> Result<String> {
     let native: CargoManifest = manifest("crates/translation-lsp/Cargo.toml")?;
-    let extension: CargoManifest = manifest("crates/zed-extension/Cargo.toml")?;
-    let registry: ExtensionMetadata = manifest("crates/zed-extension/extension.toml")?;
+    let extension: CargoManifest = manifest("zed-extension/Cargo.toml")?;
+    let registry: ExtensionMetadata = manifest("zed-extension/extension.toml")?;
     let version = native.package.version;
     ensure!(
         extension.package.version == version && registry.version == version,
@@ -188,13 +188,12 @@ pub fn check() -> Result<()> {
     ensure!(
         license.starts_with("MIT License\n")
             && license
-                == fs::read_to_string(root().join("crates/zed-extension/LICENSE"))?
-                    .replace("\r\n", "\n"),
+                == fs::read_to_string(root().join("zed-extension/LICENSE"))?.replace("\r\n", "\n"),
         "MIT licenses must match"
     );
     for path in [
         "crates/translation-lsp/Cargo.toml",
-        "crates/zed-extension/Cargo.toml",
+        "zed-extension/Cargo.toml",
     ] {
         let m: CargoManifest = manifest(path)?;
         ensure!(
@@ -202,7 +201,7 @@ pub fn check() -> Result<()> {
             "Invalid package metadata in {path}"
         );
     }
-    let m: ExtensionMetadata = manifest("crates/zed-extension/extension.toml")?;
+    let m: ExtensionMetadata = manifest("zed-extension/extension.toml")?;
     ensure!(
         m.id == "translation-lsp" && m.repository == REPOSITORY && !m.authors.is_empty(),
         "Invalid extension metadata"

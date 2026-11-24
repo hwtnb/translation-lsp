@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind, Position, Range};
 use uuid::Uuid;
 
@@ -63,29 +65,17 @@ impl<C> Preview<C> {
         }
     }
 
-    pub fn hover(&self, position: Position) -> Option<Hover> {
+    /// The Hover at `position`, for a client that reads Markdown as
+    /// `markup` says.
+    pub fn hover(&self, position: Position, markup: Markup) -> Option<Hover> {
         // Zed keyboard hover uses the selection head, including the exclusive end.
         // Cached ranges match their own positions; there is no nearest-range fallback.
         if position < self.range.start || position > self.range.end {
             return None;
         }
-        let body = match (&self.form, self.hover.format) {
-            (Form::Entry(_), _) => self.translation.clone(),
-            // A link to elsewhere would be one the original does not have.
-            (Form::Markdown(urls), HoverFormat::Markdown) => {
-                markdown::document(&self.translation, urls)
-                    .unwrap_or_else(|| fenced_text(&self.translation))
-            }
-            (Form::Text(urls), HoverFormat::Markdown) => markdown::render(&self.translation, urls),
-            (Form::Markdown(_) | Form::Text(_), HoverFormat::Text) => {
-                fenced_text(&self.translation)
-            }
-        };
+        let body = self.body(markup);
         let value = if self.hover.header {
-            let header = match self.note {
-                Some(note) => format!("> **Translation LSP**\n>\n> {note}"),
-                None => "> **Translation LSP**".into(),
-            };
+            let header = header(TITLE, self.note, markup.theme_icons);
             format!("{header}\n\n---\n\n{body}")
         } else {
             body
@@ -97,6 +87,26 @@ impl<C> Preview<C> {
             }),
             range: Some(self.range),
         })
+    }
+
+    /// The Markdown that Hover shows under its header, for a client that
+    /// reads Markdown as `markup` says.
+    pub fn body(&self, markup: Markup) -> String {
+        let body = match (&self.form, self.hover.format) {
+            (Form::Entry(_), _) => self.translation.clone(),
+            // A link to elsewhere would be one the original does not have.
+            (Form::Markdown(urls), HoverFormat::Markdown) => {
+                markdown::document(&self.translation, &linkable(urls, markup), markup.marked)
+                    .unwrap_or_else(|| fenced_text(&self.translation))
+            }
+            (Form::Text(urls), HoverFormat::Markdown) => {
+                markdown::render(&self.translation, &linkable(urls, markup))
+            }
+            (Form::Markdown(_) | Form::Text(_), HoverFormat::Text) => {
+                fenced_text(&self.translation)
+            }
+        };
+        shown(body, markup.theme_icons)
     }
 
     /// The text whose first line a CodeLens shows: the term and its first
@@ -120,9 +130,120 @@ impl<C> Preview<C> {
     }
 }
 
+/// The title of the Hover of a translation.
+const TITLE: &str = "Translation LSP";
+
+/// What a client does with Markdown beyond what Zed does.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Markup {
+    /// It draws `$(name)` as an icon, as VS Code does.
+    pub theme_icons: bool,
+    /// It reads Markdown with marked, as VS Code does, which also makes links
+    /// of `www.` and of e-mail addresses in text.
+    pub marked: bool,
+}
+
+/// The URLs of the original that links may open in a client that reads
+/// Markdown as `markup` says. In a client that draws theme icons, a URL with
+/// `$(` is no link: escaping its icon name would change where it leads.
+fn linkable(urls: &Urls, markup: Markup) -> Cow<'_, Urls> {
+    if markup.theme_icons {
+        Cow::Owned(urls.without_icon_names())
+    } else {
+        Cow::Borrowed(urls)
+    }
+}
+
+/// The header of a Hover that the server shows, which starts with `title`,
+/// with `note` under it. A client that draws theme icons gets the title after
+/// an icon, as a line of its own, where a quote would indent it; any other
+/// client gets it as a quote.
+pub(crate) fn header(title: &str, note: Option<&str>, icons: bool) -> String {
+    match (icons, note) {
+        (false, None) => format!("> **{title}**"),
+        (false, Some(note)) => format!("> **{title}**\n>\n> {note}"),
+        (true, None) => format!("$(globe) {title}"),
+        (true, Some(note)) => format!("$(globe) {title}\n\n{}", shown(note.into(), true)),
+    }
+}
+
+/// `markdown` as a client that draws theme icons if `icons` shows it as
+/// written.
+pub(crate) fn shown(markdown: String, icons: bool) -> String {
+    if icons {
+        literal_icons(&markdown)
+    } else {
+        markdown
+    }
+}
+
+/// `markdown` with a word joiner after each `$` that a `(` follows, directly
+/// or after a backslash. VS Code draws `$(name)` as an icon wherever it is in
+/// the rendered Markdown, including code spans, where no backslash escapes
+/// it, so the invisible character keeps the two apart in every context.
+fn literal_icons(markdown: &str) -> String {
+    let mut shown = String::with_capacity(markdown.len());
+    for (index, character) in markdown.char_indices() {
+        shown.push(character);
+        if character == '$' {
+            let rest = &markdown[index + 1..];
+            if rest.starts_with('(') || rest.starts_with("\\(") {
+                shown.push('\u{2060}');
+            }
+        }
+    }
+    shown
+}
+
+/// `label`, a line of plain text such as the title of a CodeLens, as a
+/// client that draws theme icons if `icons` shows it as written. VS Code draws
+/// `$(name)` in a label as an icon unless a backslash comes before it, and
+/// shows a backslash anywhere else, so only icon names get one.
+pub(crate) fn label_shown(label: String, icons: bool) -> String {
+    if !icons {
+        return label;
+    }
+    let mut shown = String::with_capacity(label.len());
+    for (index, character) in label.char_indices() {
+        if character == '$' && icon_name_at(&label[index + 1..]) {
+            shown.push('\\');
+        }
+        shown.push(character);
+    }
+    shown
+}
+
+/// Whether `text` starts with the rest of an icon name that VS Code reads
+/// after a `$`: `(`, letters, digits, and `-`, an optional `~` modifier of
+/// letters, and `)`.
+fn icon_name_at(text: &str) -> bool {
+    let Some(rest) = text.strip_prefix('(') else {
+        return false;
+    };
+    let name = rest
+        .bytes()
+        .take_while(|b| b.is_ascii_alphanumeric() || *b == b'-')
+        .count();
+    if name == 0 {
+        return false;
+    }
+    let rest = &rest[name..];
+    let rest = match rest.strip_prefix('~') {
+        Some(modifier) => {
+            let letters = modifier.bytes().take_while(u8::is_ascii_alphabetic).count();
+            if letters == 0 {
+                return false;
+            }
+            &modifier[letters..]
+        }
+        None => rest,
+    };
+    rest.starts_with(')')
+}
+
 /// `text` as Markdown that shows the words of each line as written, with the
 /// line breaks of `text`.
-fn plain_text(text: &str) -> String {
+pub(super) fn plain_text(text: &str) -> String {
     text.lines()
         .map(|line| {
             let line = inline(line);
@@ -308,7 +429,10 @@ mod tests {
     }
 
     fn value<C>(preview: &Preview<C>) -> String {
-        let HoverContents::Markup(content) = preview.hover(preview.range.start).unwrap().contents
+        let HoverContents::Markup(content) = preview
+            .hover(preview.range.start, Markup::default())
+            .unwrap()
+            .contents
         else {
             panic!("Expected Markdown");
         };
@@ -366,14 +490,350 @@ mod tests {
         }
     }
 
+    /// How VS Code reads Markdown, apart from marked.
+    const ICONS: Markup = Markup {
+        theme_icons: true,
+        marked: false,
+    };
+
+    #[test]
+    fn headers_take_the_form_that_the_client_shows_well() {
+        for (note, icons, expected) in [
+            (None, false, "> **Translation LSP**"),
+            (Some("Note"), false, "> **Translation LSP**\n>\n> Note"),
+            (None, true, "$(globe) Translation LSP"),
+            (Some("Note"), true, "$(globe) Translation LSP\n\nNote"),
+            (
+                Some("Uses $(sync)"),
+                true,
+                "$(globe) Translation LSP\n\nUses $\u{2060}(sync)",
+            ),
+        ] {
+            assert_eq!(header("Translation LSP", note, icons), expected);
+        }
+    }
+
+    #[test]
+    fn icon_names_stay_as_written_only_for_a_client_with_theme_icons() {
+        for (markdown, expected) in [
+            ("$(sync)", "$\u{2060}(sync)"),
+            ("`$(file)` and $(x)", "`$\u{2060}(file)` and $\u{2060}(x)"),
+            ("\\$(sync)", "\\$\u{2060}(sync)"),
+            ("$\\(sync\\)", "$\u{2060}\\(sync\\)"),
+            ("```text\n$(sync)\n```", "```text\n$\u{2060}(sync)\n```"),
+            ("$ (sync) $$ 5$", "$ (sync) $$ 5$"),
+            ("末尾 $", "末尾 $"),
+        ] {
+            assert_eq!(shown(markdown.into(), true), expected, "{markdown:?}");
+            assert_eq!(shown(markdown.into(), false), markdown);
+        }
+        // Every form of the body, and the note under the header; the
+        // translation itself stays as it is.
+        let translation = "Run `$(sync)`, then $(file).";
+        let mut preview = Preview::new(
+            (),
+            Range::default(),
+            translation.into(),
+            false,
+            Some("$(x)"),
+        );
+        for (form, format) in [
+            (Form::Text(Urls::default()), HoverFormat::Markdown),
+            (Form::Text(Urls::default()), HoverFormat::Text),
+            (Form::Markdown(Urls::default()), HoverFormat::Markdown),
+            (Form::Entry(String::new()), HoverFormat::Markdown),
+        ] {
+            preview.form = form;
+            preview.hover.format = format;
+            let HoverContents::Markup(content) =
+                preview.hover(preview.range.start, ICONS).unwrap().contents
+            else {
+                panic!("Expected Markdown");
+            };
+            let icons = content.value;
+            let body = icons
+                .strip_prefix("$(globe) Translation LSP\n\n$\u{2060}(x)\n\n---\n\n")
+                .unwrap_or_else(|| panic!("{icons:?}"));
+            assert_eq!(body, preview.body(ICONS));
+            // Markdown escapes `(` in text, so `$\(` is broken up too.
+            assert_eq!(body.matches("$\u{2060}").count(), 2, "{body:?}");
+            assert!(!body.contains("$(") && !body.contains("$\\("), "{body:?}");
+            assert_eq!(
+                body.replace('\u{2060}', ""),
+                preview.body(Markup::default())
+            );
+            assert_eq!(preview.translation, translation);
+        }
+    }
+
+    #[test]
+    fn a_client_that_reads_markdown_with_marked_gets_no_link_that_the_original_lacks() {
+        let original = "Read the manual.";
+        let urls = Urls::of_markdown(original);
+        let vscode = Markup {
+            theme_icons: true,
+            marked: true,
+        };
+        for (translation, marked) in [
+            (
+                "マニュアルは www.example.com で読む。",
+                "マニュアルは www\u{2060}.example.com で読む。",
+            ),
+            (
+                "質問は person@example.org に送る。",
+                "質問は person@\u{2060}example.org に送る。",
+            ),
+            (
+                "WWW.Example.com と a.b+c@d-e.org",
+                "WWW\u{2060}.Example.com と a.b+c@\u{2060}d-e.org",
+            ),
+            // Code, and an `@` that no address surrounds, stay as written.
+            (
+                "`www.example.com` と @name と a@ b",
+                "`www.example.com` と @name と a@ b",
+            ),
+        ] {
+            let mut preview = Preview::new((), Range::default(), translation.into(), false, None);
+            preview.form = Form::Markdown(urls.clone());
+            assert_eq!(preview.body(vscode), marked, "{translation:?}");
+            // Zed makes no link of them, and gets the translation as it was.
+            assert_eq!(preview.body(Markup::default()), translation);
+        }
+    }
+
+    /// The forms of the two reviews of the first fixes, each with what VS Code
+    /// and Zed get. In none does marked, which VS Code reads Markdown with,
+    /// find a link that the original lacks: footnotes show as text, other
+    /// links outside the original make the whole translation a code block,
+    /// and `://`, `www.`, and e-mail addresses that either reading has as
+    /// text get a word joiner. Zed gets what it got before.
+    #[test]
+    fn the_translation_of_a_markdown_document_links_only_where_the_original_does_as_marked_reads_it()
+     {
+        let original = "Read [the docs](https://example.com/d) at <https://example.com> and \
+            [notes](#notes).\n\n## Notes\n";
+        let vscode = Markup {
+            theme_icons: true,
+            marked: true,
+        };
+        for (translation, marked, zed) in [
+            (
+                "詳細は http://evil.example と HTTPS://evil.example と ftp://evil.example を読む。",
+                "詳細は http:\u{2060}//evil.example と HTTPS:\u{2060}//evil.example と ftp:\u{2060}//evil.example を読む。",
+                "詳細は http:\u{2060}//evil.example と HTTPS:\u{2060}//evil.example と ftp:\u{2060}//evil.example を読む。",
+            ),
+            (
+                "<http://evil.example> を読む。",
+                "```text\n<http://evil.example> を読む。\n```",
+                "```text\n<http://evil.example> を読む。\n```",
+            ),
+            (
+                "<evil@example.org> に送る。",
+                "```text\n<evil@example.org> に送る。\n```",
+                "```text\n<evil@example.org> に送る。\n```",
+            ),
+            (
+                "<www.evil.example> を読む。",
+                "<www\u{2060}.evil.example> を読む。",
+                "<www.evil.example> を読む。",
+            ),
+            (
+                "[文書][1] を読む。\n\n[1]: https://evil.example",
+                "```text\n[文書][1] を読む。\n\n[1]: https://evil.example\n```",
+                "```text\n[文書][1] を読む。\n\n[1]: https://evil.example\n```",
+            ),
+            (
+                "段落の文。\n[1]: https://evil.example\n\n[1] を読む。",
+                "段落の文。\n[1]: https:\u{2060}//evil.example\n\n[1] を読む。",
+                "段落の文。\n[1]: https:\u{2060}//evil.example\n\n[1] を読む。",
+            ),
+            (
+                "> [1]: https://evil.example\n\n[1] を読む。",
+                "```text\n> [1]: https://evil.example\n\n[1] を読む。\n```",
+                "```text\n> [1]: https://evil.example\n\n[1] を読む。\n```",
+            ),
+            (
+                "- [1]: https://evil.example\n\n[1] を読む。",
+                "```text\n- [1]: https://evil.example\n\n[1] を読む。\n```",
+                "```text\n- [1]: https://evil.example\n\n[1] を読む。\n```",
+            ),
+            (
+                "| a |\n| - |\n| b |\n[1]: https://evil.example\n\n[1] を読む。",
+                "| a |\n| - |\n| b |\n[1]: https:\u{2060}//evil.example\n\n[1] を読む。",
+                "| a |\n| - |\n| b |\n[1]: https:\u{2060}//evil.example\n\n[1] を読む。",
+            ),
+            (
+                "注[^1]を見る。\n\n[^1]: https:evil.example",
+                "注\\[^1]を見る。\n\n\\[^1]: https:evil.example",
+                "注[^1]を見る。\n\n[^1]: https:evil.example",
+            ),
+            (
+                "注[^a]\n\n[^a]: mailto:evil%40example.org",
+                "注\\[^a]\n\n\\[^a]: mailto:evil%40example.org",
+                "注[^a]\n\n[^a]: mailto:evil%40example.org",
+            ),
+            (
+                "注[^a]\n\n[^a]: file:/etc/hosts",
+                "注\\[^a]\n\n\\[^a]: file:/etc/hosts",
+                "注[^a]\n\n[^a]: file:/etc/hosts",
+            ),
+            (
+                "## www.evil.example の evil@example.org\n\n| www.evil.example |\n| - |\n| evil@example.org |\n\n*www.evil.example*",
+                "## www\u{2060}.evil.example の evil@\u{2060}example.org\n\n| www\u{2060}.evil.example |\n| - |\n| evil@\u{2060}example.org |\n\n*www\u{2060}.evil.example*",
+                "## www.evil.example の evil@example.org\n\n| www.evil.example |\n| - |\n| evil@example.org |\n\n*www.evil.example*",
+            ),
+            (
+                "mailto:evil@example.org と xmpp:evil@example.org",
+                "mailto:evil@\u{2060}example.org と xmpp:evil@\u{2060}example.org",
+                "mailto:evil@example.org と xmpp:evil@example.org",
+            ),
+            (
+                "https://example.com.evil.org を読む。",
+                "https:\u{2060}//example.com.evil.org を読む。",
+                "https:\u{2060}//example.com.evil.org を読む。",
+            ),
+            (
+                "<span>www.evil.example</span>\n\n<div>\nhttps://evil.example\n</div>",
+                "<span>www\u{2060}.evil.example</span>\n\n<div>\nhttps:\u{2060}//evil.example\n</div>",
+                "<span>www.evil.example</span>\n\n<div>\nhttps:\u{2060}//evil.example\n</div>",
+            ),
+            (
+                "![www.evil.example の evil@example.org](https://example.com/d)",
+                "![www.evil.example の evil@example.org](https://example.com/d)",
+                "![www.evil.example の evil@example.org](https://example.com/d)",
+            ),
+            (
+                "## 見出し {#id data=www.evil.example}",
+                "## 見出し {#id data=www\u{2060}.evil.example}",
+                "## 見出し {#id data=www.evil.example}",
+            ),
+            (
+                "## 見出し {.note data=https://evil.example}",
+                "## 見出し {.note data=https:\u{2060}//evil.example}",
+                "## 見出し {.note data=https://evil.example}",
+            ),
+            (
+                "[文書](https://example.com/d) と <https://example.com> と [注](#notes)",
+                "[文書](https://example.com/d) と <https://example.com> と [注](#notes)",
+                "[文書](https://example.com/d) と <https://example.com> と [注](#notes)",
+            ),
+        ] {
+            let mut preview = Preview::new((), Range::default(), translation.into(), false, None);
+            preview.form = Form::Markdown(Urls::of_markdown(original));
+            assert_eq!(preview.body(vscode), marked, "{translation:?}");
+            assert_eq!(preview.body(Markup::default()), zed, "{translation:?}");
+        }
+    }
+
+    /// A footnote, which marked has none of and would read as a link, shows
+    /// as text in VS Code, and the rest keeps its formatting. Zed gets the
+    /// footnote as it was.
+    #[test]
+    fn footnotes_show_as_text_where_markdown_is_read_with_marked() {
+        let vscode = Markup {
+            theme_icons: true,
+            marked: true,
+        };
+        for (original, translation, marked) in [
+            (
+                "# Guide\n\nSee the guide[^1].\n\n[^1]: guide.md\n",
+                "# ガイド\n\nガイドを見る[^1]。\n\n[^1]: guide.md\n",
+                "# ガイド\n\nガイドを見る\\[^1]。\n\n\\[^1]: guide.md\n",
+            ),
+            (
+                "# Notes\n\nText[^1].\n\n[^1]: Details.\n",
+                "# 説明\n\n本文[^1]。\n\n[^1]: 詳細は付録を参照。\n",
+                "# 説明\n\n本文\\[^1]。\n\n\\[^1]: 詳細は付録を参照。\n",
+            ),
+            (
+                "# Notes\n\nText[^1].\n\n[^1]: For details see the appendix.\n",
+                "# 注\n\n本文[^1]。\n\n[^1]: 詳細は付録を参照。\n",
+                "# 注\n\n本文\\[^1]。\n\n\\[^1]: 詳細は付録を参照。\n",
+            ),
+        ] {
+            let mut preview = Preview::new((), Range::default(), translation.into(), false, None);
+            preview.form = Form::Markdown(Urls::of_markdown(original));
+            assert_eq!(preview.body(vscode), marked, "{translation:?}");
+            assert_eq!(preview.body(Markup::default()), translation);
+        }
+    }
+
+    #[test]
+    fn a_link_to_a_section_with_an_icon_name_is_text_in_a_client_with_theme_icons() {
+        let markdown = "See [the notes](#notes-$(file)) and [the rest](#rest).";
+        let mut preview = Preview::new((), Range::default(), markdown.into(), false, None);
+        preview.form = Form::Markdown(Urls::of_markdown(markdown));
+        assert_eq!(preview.body(Markup::default()), markdown);
+        let body = preview.body(ICONS);
+        assert!(body.starts_with("```text\n"), "{body:?}");
+        let plain = "See [the rest](#rest).";
+        preview.translation = plain.into();
+        assert_eq!(preview.body(ICONS), plain);
+    }
+
+    #[test]
+    fn a_link_with_an_icon_name_is_text_in_a_client_with_theme_icons() {
+        let url = "https://example.org/$(file)";
+        let markdown = format!("See [the guide]({url}).");
+        let mut preview = Preview::new((), Range::default(), markdown.clone(), false, None);
+        preview.form = Form::Markdown(Urls::of_markdown(&markdown));
+        assert_eq!(preview.body(Markup::default()), markdown);
+        let body = preview.body(ICONS);
+        assert!(body.starts_with("```text\n"), "{body:?}");
+        assert!(!body.contains(url), "{body:?}");
+
+        let text = format!("See {url} for the guide.");
+        let mut preview = Preview::new((), Range::default(), text.clone(), false, None);
+        preview.form = Form::Text(Urls::of(&text));
+        assert!(
+            preview
+                .body(Markup::default())
+                .contains(&format!("<{url}>"))
+        );
+        let body = preview.body(ICONS);
+        assert!(!body.contains('<') && !body.contains(url), "{body:?}");
+        // A URL without an icon name stays a link.
+        let text = "See https://example.org/guide for the guide.";
+        let mut preview = Preview::new((), Range::default(), text.into(), false, None);
+        preview.form = Form::Text(Urls::of(text));
+        assert!(preview.body(ICONS).contains("<https://example.org/guide>"));
+    }
+
+    #[test]
+    fn labels_escape_only_icon_names_and_only_for_a_client_with_theme_icons() {
+        for (label, shown) in [
+            ("$(sync) を押す", "\\$(sync) を押す"),
+            ("$(sync~spin) と $(file)", "\\$(sync~spin) と \\$(file)"),
+            (
+                "$(echo hi) $() $(a~) $(a b) $ (x) $",
+                "$(echo hi) $() $(a~) $(a b) $ (x) $",
+            ),
+            ("費用 $(5) と $(a-1)。", "費用 \\$(5) と \\$(a-1)。"),
+        ] {
+            assert_eq!(label_shown(label.into(), true), shown, "{label:?}");
+            assert_eq!(label_shown(label.into(), false), label);
+        }
+    }
+
     #[test]
     fn hover_includes_only_its_own_range_and_exact_end() {
         let range = Range::new(Position::new(1, 4), Position::new(2, 35));
         let preview = Preview::new((), range, "模擬訳".into(), false, None);
         for position in [range.start, Position::new(2, 10), range.end] {
-            assert_eq!(preview.hover(position).unwrap().range, Some(range));
+            assert_eq!(
+                preview.hover(position, Markup::default()).unwrap().range,
+                Some(range)
+            );
         }
-        assert!(preview.hover(Position::new(1, 3)).is_none());
-        assert!(preview.hover(Position::new(2, 36)).is_none());
+        assert!(
+            preview
+                .hover(Position::new(1, 3), Markup::default())
+                .is_none()
+        );
+        assert!(
+            preview
+                .hover(Position::new(2, 36), Markup::default())
+                .is_none()
+        );
     }
 }

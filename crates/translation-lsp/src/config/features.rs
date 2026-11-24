@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn language_ids_match_the_extension_manifest() {
-        let manifest = include_str!("../../../zed-extension/extension.toml");
+        let manifest = include_str!("../../../../zed-extension/extension.toml");
         let registered: Vec<_> = manifest
             .lines()
             .skip_while(|line| *line != "[language_servers.translation-lsp.language_ids]")
@@ -273,16 +273,18 @@ mod tests {
                 }
             }
         }
-        // A language outside the registered ones follows the switch for every language.
+        // A language outside the registered ones follows the switch for every
+        // language, and a `.jsx` document of VS Code the JavaScript switch.
         let features = features(json!({
             "selection_action": false,
             "languages": {"javascript": {"selection_action": true}}
         }))
         .unwrap();
         assert!(features.enables(Feature::SelectionAction, Language::from_id("javascript")));
-        assert!(!features.enables(
+        assert!(!features.enables(Feature::SelectionAction, Language::from_id("tsx")));
+        assert!(features.enables(
             Feature::SelectionAction,
-            Language::from_id("javascriptreact")
+            Language::of_document("javascriptreact")
         ));
     }
 

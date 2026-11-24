@@ -307,3 +307,6 @@ mod document_tests;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod vscode_tests;

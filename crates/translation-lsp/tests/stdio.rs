@@ -163,6 +163,15 @@ struct Client {
     lens_refreshes: Vec<Request>,
     progress: Vec<Value>,
     statuses: Vec<Value>,
+    /// What the client names under `capabilities.experimental.translationLsp`,
+    /// which decides the messages of this server that it takes.
+    named: Value,
+    /// The `translation-lsp/showTranslation` notifications.
+    translations: Vec<Value>,
+    /// The `translation-lsp/openSettings` requests.
+    settings_requests: Vec<Request>,
+    /// The `translation-lsp/choose` requests.
+    choices: Vec<Request>,
     _home: Arc<Home>,
 }
 
@@ -231,6 +240,10 @@ impl Client {
             lens_refreshes: Vec::new(),
             progress: Vec::new(),
             statuses: Vec::new(),
+            named: Value::Null,
+            translations: Vec::new(),
+            settings_requests: Vec::new(),
+            choices: Vec::new(),
             _home: home,
         }
     }
@@ -400,6 +413,23 @@ impl Client {
             {
                 self.statuses.push(notification.params);
             }
+            Message::Notification(notification)
+                if self.named["showTranslation"] == true
+                    && notification.method == "translation-lsp/showTranslation" =>
+            {
+                self.translations.push(notification.params);
+            }
+            Message::Request(request)
+                if self.named["openSettings"] == true
+                    && request.method == "translation-lsp/openSettings" =>
+            {
+                self.settings_requests.push(request);
+            }
+            Message::Request(request)
+                if self.named["choose"] == true && request.method == "translation-lsp/choose" =>
+            {
+                self.choices.push(request);
+            }
             Message::Notification(notification) if notification.method == "window/showMessage" => {
                 assert!(matches!(notification.params["type"].as_u64(), Some(1..=3)));
                 assert!(notification.params["message"].is_string());
@@ -427,6 +457,27 @@ impl Client {
             self.pump();
         }
         self.prompts.remove(0)
+    }
+
+    fn choice(&mut self) -> Request {
+        while self.choices.is_empty() {
+            self.pump();
+        }
+        self.choices.remove(0)
+    }
+
+    fn translation(&mut self) -> Value {
+        while self.translations.is_empty() {
+            self.pump();
+        }
+        self.translations.remove(0)
+    }
+
+    fn settings_request(&mut self) -> Request {
+        while self.settings_requests.is_empty() {
+            self.pump();
+        }
+        self.settings_requests.remove(0)
     }
 
     fn document(&mut self) -> Request {
@@ -567,6 +618,7 @@ impl Client {
         assert!(self.replies.is_empty(), "Unconsumed responses");
         assert!(self.documents.is_empty(), "Unexpected document opening");
         assert!(self.prompts.is_empty(), "Unanswered prompt");
+        assert!(self.choices.is_empty(), "Unanswered choice");
         let stderr = self.stderr.take().unwrap().join().unwrap();
         if expect_clean_stderr {
             assert!(stderr.is_empty(), "Unexpected stderr: {stderr}");
@@ -1405,13 +1457,42 @@ fn choose_in_menu<const N: usize>(
 ) {
     let id = client.execute(settings.clone());
     let menu = client.prompt();
-    assert_eq!(menu.params["message"], message);
+    // Every field, so that a client that names nothing gets what it got
+    // before clients could name `choose`.
     assert_eq!(
-        menu.params["actions"],
-        json!(titles.map(|title| json!({"title": title})).as_slice())
+        menu.params,
+        json!({
+            "type": 3,
+            "message": message,
+            "actions": titles.map(|title| json!({"title": title})).as_slice(),
+        })
     );
     assert!(client.receive(id, TIMEOUT).unwrap().is_null());
     client.send(Response::new_ok(menu.id, json!({"title": choice})).into());
+}
+
+/// Opens the server menu of a client that names `choose`, checks it as
+/// `choose_in_menu` does, and picks the choice with `id`.
+fn choose_by_id<const N: usize>(
+    client: &mut Client,
+    settings: &Value,
+    message: &str,
+    titles: [&str; N],
+    id: &str,
+) {
+    let request = client.execute(settings.clone());
+    let menu = client.choice();
+    let choices: Vec<_> = titles
+        .iter()
+        .enumerate()
+        .map(|(index, title)| json!({"id": index.to_string(), "title": title}))
+        .collect();
+    assert_eq!(
+        menu.params,
+        json!({"kind": "menu", "message": message, "choices": choices})
+    );
+    assert!(client.receive(request, TIMEOUT).unwrap().is_null());
+    client.send(Response::new_ok(menu.id, json!({"id": id})).into());
 }
 
 #[test]
@@ -1858,7 +1939,7 @@ fn translation_problems_clear_on_edit_and_fallback_channels_remain_independent()
         (vec!["--mock-fail"], "Simulated mock translation failure"),
         (
             vec!["--mock-delay-ms", "1000", "--mock-timeout-ms", "80"],
-            "Translation timed out. Try a shorter selection or adjust the timeout in Zed settings.",
+            "Translation timed out. Try a shorter selection or adjust the timeout in the settings.",
         ),
     ] {
         let mut client = Client::with_activity(&args, false, true);
@@ -1918,14 +1999,14 @@ fn a_failed_ticket_reports_its_problem_while_another_ticket_remains_busy() {
     assert_eq!(
         client.status(),
         json!({
-            "health":"warning", "quiescent":false, "message":"Translation timed out. Try a shorter selection or adjust the timeout in Zed settings."
+            "health":"warning", "quiescent":false, "message":"Translation timed out. Try a shorter selection or adjust the timeout in the settings."
         })
     );
     assert_error(client.receive(second, TIMEOUT), -32803);
     assert_eq!(
         client.status(),
         json!({
-            "health":"warning", "quiescent":true, "message":"Translation timed out. Try a shorter selection or adjust the timeout in Zed settings."
+            "health":"warning", "quiescent":true, "message":"Translation timed out. Try a shorter selection or adjust the timeout in the settings."
         })
     );
     assert!(client.notifications.is_empty());
@@ -5092,7 +5173,7 @@ fn a_reading_past_its_limit_leaves_the_document_without_comments_until_it_is_reo
     assert_eq!(
         client.notice(),
         json!({"type": 2, "message": format!(
-            "Reading comments in slow 読.py timed out. {NOT_RECOGNIZED} To allow more time, adjust comment_parse_timeout_ms in Zed settings."
+            "Reading comments in slow 読.py timed out. {NOT_RECOGNIZED} To allow more time, adjust comment_parse_timeout_ms in the settings."
         )})
     );
 
@@ -5226,5 +5307,529 @@ fn a_large_c_file_is_read_within_the_default_limit() {
         COMMENT_JA,
         &range,
     );
+    client.finish(true);
+}
+
+/// Everything a client can name under `capabilities.experimental.translationLsp`.
+fn every_name() -> Value {
+    json!({"showTranslation": true, "openSettings": true, "choose": true, "themeIcons": true})
+}
+
+/// A client that names `names` under `capabilities.experimental.translationLsp`,
+/// reads Markdown with marked as VS Code does, takes CodeLens refresh
+/// requests, and opens files if `documents`, with `options` as its settings.
+fn named_client(args: &[&str], names: Value, documents: bool, options: Value) -> Client {
+    let mut client = Client::spawn(args, false, false);
+    client.named = names.clone();
+    client
+        .call(
+            "initialize",
+            json!({
+                "initializationOptions": options,
+                "processId": null,
+                "rootUri": null,
+                "capabilities": {
+                    "general": {
+                        "positionEncodings": ["utf-16"],
+                        "markdown": {"parser": "marked", "version": "1.1.0"}
+                    },
+                    "workspace": {"codeLens": {"refreshSupport": true}},
+                    "window": {"showDocument": {"support": documents}},
+                    "experimental": {"translationLsp": names},
+                }
+            }),
+        )
+        .unwrap();
+    client.notify("initialized", json!({}));
+    client
+}
+
+/// The command of one of the buttons that a `showTranslation` notification
+/// gives, as the client sends it back.
+fn button(shown: &Value, index: usize) -> Value {
+    let action = &shown["actions"][index];
+    json!({"command": action["command"], "arguments": action["arguments"]})
+}
+
+#[test]
+fn a_client_that_names_show_translation_gets_the_translation_without_a_card() {
+    let uri = "file:///named.rs";
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&[], every_name(), false, mock);
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let hover = client.hover(uri, range["start"].clone());
+    let body = hover["contents"]["value"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("$(globe) Translation LSP\n\nMock translation (fixed sample)\n\n---\n\n")
+        .unwrap_or_else(|| panic!("{hover}"))
+        .to_owned();
+    assert_eq!(shown(&body).0.trim_end(), COMMENT_JA);
+    let found = lenses(&mut client, uri);
+    let first_line = COMMENT_JA.lines().next().unwrap();
+    assert_eq!(lens_titles(&found), [first_line, "Settings"]);
+    let show = found[0]["command"].clone();
+    assert!(
+        client
+            .call("workspace/executeCommand", show.clone())
+            .unwrap()
+            .is_null()
+    );
+    let shown = client.translation();
+    assert_eq!(shown["uri"], uri);
+    assert_eq!(shown["range"], range);
+    assert_eq!(shown["failed"], false);
+    assert_eq!(shown["markdown"], body);
+    assert_eq!(shown["text"], COMMENT_JA);
+    assert_eq!(shown["targetLanguage"], "ja");
+    let actions = shown["actions"].as_array().unwrap();
+    assert_eq!(
+        actions
+            .iter()
+            .map(|action| (
+                action["id"].as_str().unwrap(),
+                action["title"].as_str().unwrap(),
+                action["command"].as_str().unwrap()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("retry", "Retry", "translation-lsp.retry-lens"),
+            ("delete", "Delete", "translation-lsp.delete-translation")
+        ]
+    );
+    assert!(
+        actions
+            .iter()
+            .all(|action| action["arguments"][0]["range"] == range)
+    );
+    assert!(client.prompts.is_empty());
+
+    // Retry translates the range again, and its CodeLens shows the result.
+    assert!(
+        client
+            .call("workspace/executeCommand", button(&shown, 0))
+            .unwrap()
+            .is_null()
+    );
+    assert_eq!(
+        lens_titles(&finished_lenses(&mut client, uri)),
+        [first_line, "Settings"]
+    );
+    // Delete removes the translation, whose line then offers a translation.
+    assert!(
+        client
+            .call("workspace/executeCommand", button(&shown, 1))
+            .unwrap()
+            .is_null()
+    );
+    assert_eq!(
+        lens_titles(&lenses(&mut client, uri)),
+        ["Translate", "Settings"]
+    );
+    let error = client.call("workspace/executeCommand", show).unwrap_err();
+    assert_eq!(error.code, ErrorCode::ContentModified as i32);
+    assert!(client.translations.is_empty() && client.prompts.is_empty());
+    assert!(
+        client.notifications.is_empty(),
+        "{:?}",
+        client.notifications
+    );
+    client.finish(true);
+}
+
+#[test]
+fn a_failure_reaches_a_client_that_names_show_translation_with_its_reason() {
+    let uri = "file:///named-failure.rs";
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&["--mock-fail"], every_name(), false, mock);
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    client
+        .call(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": range["start"]}),
+        )
+        .unwrap_err();
+    let hover = client.hover(uri, range["start"].clone());
+    let value = hover["contents"]["value"].as_str().unwrap();
+    assert!(
+        value.starts_with("$(globe) Translation LSP: translation failed\n\n```text\n"),
+        "{value}"
+    );
+    let found = lenses(&mut client, uri);
+    assert_eq!(
+        lens_titles(&found),
+        ["Translation failed", "Retry", "Settings"]
+    );
+    client
+        .call("workspace/executeCommand", found[0]["command"].clone())
+        .unwrap();
+    let shown = client.translation();
+    assert_eq!(shown["failed"], true);
+    let reason = shown["text"].as_str().unwrap();
+    assert!(
+        reason.contains("Simulated mock translation failure"),
+        "{reason}"
+    );
+    assert_eq!(
+        self::shown(shown["markdown"].as_str().unwrap())
+            .0
+            .trim_end(),
+        reason
+    );
+    assert!(client.prompts.is_empty());
+    // Its Retry fails again and says so.
+    assert!(
+        client
+            .call("workspace/executeCommand", button(&shown, 0))
+            .unwrap()
+            .is_null()
+    );
+    let failed = client.notice();
+    assert_eq!(failed["type"], 1);
+    client.finish(true);
+}
+
+#[test]
+fn a_client_that_names_open_settings_opens_its_own_settings_and_reads_no_zed() {
+    let uri = "file:///named-settings.rs";
+    let markdown = "file:///named-settings.md";
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&[], every_name(), false, mock);
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    client.open(markdown, "markdown", MARKDOWN_DOCUMENT, 1);
+    let found = lenses(&mut client, markdown);
+    assert_eq!(
+        lens_titles(&found),
+        ["Translation LSP: Auto-translate: On", "Settings"]
+    );
+    let settings = found[1]["command"].clone();
+    assert_eq!(settings["command"], "translation-lsp.open-zed-settings");
+
+    // A success opens them, and an error tells that they did not open.
+    let id = client.execute(settings.clone());
+    let request = client.settings_request();
+    assert_eq!(request.params, Value::Null);
+    client.send(Response::new_ok(request.id, Value::Null).into());
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+    let id = client.execute(settings);
+    let request = client.settings_request();
+    client.send(
+        Response::new_err(
+            request.id,
+            ErrorCode::RequestFailed as i32,
+            "Synthetic failure".into(),
+        )
+        .into(),
+    );
+    let error = client.receive(id, TIMEOUT).unwrap_err();
+    assert_eq!(error.message, "Could not open the settings");
+    assert_eq!(
+        client.notice(),
+        json!({"type": 1, "message": "Could not open the settings"})
+    );
+
+    // The menu of code offers them by the same name.
+    let menu = lenses(&mut client, uri)[1]["command"].clone();
+    choose_by_id(
+        &mut client,
+        &menu,
+        "Automatic translation: On (comment Hover and automatic selection translation)",
+        ["Turn off automatic translation", "Open settings"],
+        "1",
+    );
+    let request = client.settings_request();
+    client.send(Response::new_ok(request.id, Value::Null).into());
+    assert!(client.documents.is_empty());
+    client.finish(true);
+}
+
+#[test]
+fn without_a_provider_a_named_client_is_shown_its_own_settings() {
+    let mut client = named_client(&[], every_name(), false, json!({}));
+    // The server opens this prompt itself, so it stays a message with buttons.
+    let prompt = client.prompt();
+    assert_eq!(
+        prompt.params["message"],
+        "Translation LSP has no provider and translates nothing. Choose one in the settings."
+    );
+    assert_eq!(
+        prompt.params["actions"],
+        json!([{"title": "Open settings"}, {"title": "Open setup guide"}])
+    );
+    client.send(Response::new_ok(prompt.id, json!({"title": "Open settings"})).into());
+    let request = client.settings_request();
+    client.send(Response::new_ok(request.id, Value::Null).into());
+    assert_eq!(
+        client.notice(),
+        json!({
+            "type": 3,
+            "message": "Choose a provider in the settings, then restart the language server."
+        })
+    );
+
+    let uri = "file:///work/named-unset.rs";
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let hover = client.hover(uri, json!({"line": 1, "character": 8}));
+    assert_eq!(
+        hover["contents"]["value"],
+        "$(globe) Translation LSP is not set up\n\nTo choose a provider, run Set up Translation LSP… from Code Actions."
+    );
+    let line = json!({"start": {"line": 1, "character": 8}, "end": {"line": 1, "character": 8}});
+    let actions = client.actions(uri, line);
+    // The menu that the user opens is a menu of the client, titled with
+    // what it is for.
+    let id = client.execute(actions[0]["command"].clone());
+    let menu = client.choice();
+    assert_eq!(
+        menu.params,
+        json!({
+            "kind": "menu",
+            "message": "Set up Translation LSP",
+            "choices": [
+                {"id": "0", "title": "Open settings"},
+                {"id": "1", "title": "Open setup guide"}
+            ]
+        })
+    );
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+    client.send(Response::new_ok(menu.id, json!({"id": "0"})).into());
+    let request = client.settings_request();
+    client.send(
+        Response::new_err(
+            request.id,
+            ErrorCode::RequestFailed as i32,
+            "Synthetic failure".into(),
+        )
+        .into(),
+    );
+    assert_eq!(client.notice()["message"], "Could not open the settings");
+    assert!(client.notifications.is_empty() && client.documents.is_empty());
+    client.finish(true);
+}
+
+#[test]
+fn a_client_that_names_choose_gets_menus_and_confirmations_that_act_by_id() {
+    const ON: &str =
+        "Automatic translation: On (comment Hover and automatic selection translation)";
+    const OFF: &str = "Automatic translation: Off until the language server restarts";
+    const QUESTION: &str = "Delete all cached translations? Comments and selections are translated again when you ask for them.";
+    let uri = "file:///named-choose.rs";
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&[], every_name(), false, mock);
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let range = range_for(COMMENT_DOCUMENT, COMMENT);
+    let hover = client.hover(uri, range["start"].clone());
+    assert_eq!(hover["range"], range);
+    let settings = lenses(&mut client, uri)[1]["command"].clone();
+
+    // Closing the menu, an ID that names no choice, and an answer by title
+    // do nothing: the menu still offers to turn automatic translation off.
+    for answer in [
+        Value::Null,
+        json!({"id": "4"}),
+        json!({"title": "Turn off automatic translation"}),
+    ] {
+        let id = client.execute(settings.clone());
+        let menu = client.choice();
+        assert_eq!(menu.params["message"], ON);
+        assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+        client.send(Response::new_ok(menu.id, answer).into());
+    }
+    let rest = [
+        "Open settings",
+        "Delete translations of this document",
+        "Delete all cached translations",
+    ];
+    choose_by_id(
+        &mut client,
+        &settings,
+        ON,
+        ["Turn off automatic translation", rest[0], rest[1], rest[2]],
+        "0",
+    );
+    choose_by_id(
+        &mut client,
+        &settings,
+        OFF,
+        ["Turn on automatic translation", rest[0], rest[1], rest[2]],
+        "3",
+    );
+
+    // Deleting every translation asks first, as a confirmation. Declining
+    // deletes nothing. The test never agrees: on Windows, the server would
+    // delete the stored translations of whoever runs it, whose folder the
+    // test cannot move. A unit test with a folder of its own agrees.
+    let confirmation = client.choice();
+    assert_eq!(
+        confirmation.params,
+        json!({
+            "kind": "confirm",
+            "message": QUESTION,
+            "choices": [{"id": "0", "title": "Delete"}]
+        })
+    );
+    client.send(Response::new_ok(confirmation.id, Value::Null).into());
+    assert_eq!(
+        lens_titles(&lenses(&mut client, uri)),
+        [COMMENT_JA.lines().next().unwrap(), "Settings"]
+    );
+    assert!(client.prompts.is_empty());
+    client.finish(true);
+}
+
+/// A client that stops while a choice is open answers it after `shutdown`.
+/// The server drops that answer while it waits for `exit`, and ends cleanly.
+#[test]
+fn an_answer_to_a_choice_after_shutdown_is_dropped_while_the_server_waits_for_exit() {
+    let uri = "file:///named-stop.rs";
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&[], every_name(), false, mock);
+    client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+    let settings = lenses(&mut client, uri)[1]["command"].clone();
+    let id = client.execute(settings);
+    let menu = client.choice();
+    assert!(client.receive(id, TIMEOUT).unwrap().is_null());
+
+    assert!(client.call("shutdown", Value::Null).unwrap().is_null());
+    client.send(Response::new_ok(menu.id, Value::Null).into());
+    client.finish_exit(true);
+}
+
+/// A request after `shutdown` is an error of the protocol, as before.
+#[test]
+fn a_request_after_shutdown_ends_the_server_with_an_error() {
+    let mut client = Client::new(&[]);
+    assert!(client.call("shutdown", Value::Null).unwrap().is_null());
+    client.request(
+        "workspace/executeCommand",
+        json!({"command": "translation-lsp.cancel-all"}),
+    );
+    // The reader of the standard input stops at `exit`.
+    client.notify("exit", Value::Null);
+    assert!(!client.child.wait().unwrap().success());
+    client.reader.take().unwrap().join().unwrap();
+    let stderr = client.stderr.take().unwrap().join().unwrap();
+    assert!(
+        stderr.contains("unexpected message during shutdown"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn names_other_than_true_leave_the_client_as_one_that_names_nothing() {
+    for names in [
+        json!(true),
+        json!([]),
+        json!({"showTranslation": "true", "openSettings": 1, "themeIcons": null}),
+        json!({"showTranslation": false, "unknown": true}),
+        json!({"choose": "true", "openSettings": null}),
+    ] {
+        let uri = "file:///unnamed.rs";
+        let mock = json!({"provider": {"name": "mock"}});
+        let mut client = named_client(&[], names.clone(), true, mock);
+        client.open(uri, "rust", COMMENT_DOCUMENT, 1);
+        let range = range_for(COMMENT_DOCUMENT, COMMENT);
+        assert_preview(
+            &client.hover(uri, range["start"].clone()),
+            COMMENT,
+            COMMENT_JA,
+            &range,
+        );
+        let found = lenses(&mut client, uri);
+        client
+            .call("workspace/executeCommand", found[0]["command"].clone())
+            .unwrap();
+        assert_eq!(answer_card(&mut client, None), (3, COMMENT_JA.to_owned()));
+        choose_in_menu(
+            &mut client,
+            &found[1]["command"],
+            "Automatic translation: On  \n(comment Hover and automatic selection translation)",
+            [
+                "Turn off automatic translation",
+                "Open Zed settings file",
+                "Delete translations of this document",
+                "Delete all cached translations",
+            ],
+            "Turn off automatic translation",
+        );
+        client.finish(true);
+    }
+}
+
+#[test]
+fn a_jsx_file_that_vs_code_sends_as_javascriptreact_follows_the_javascript_settings() {
+    let uri = "file:///comment.jsx";
+    let document = sample!("comment.jsx");
+    let comment = "// Retry only if the remote service\n// reports a temporary failure.";
+    let range = range_for(document, comment);
+    let mut client = Client::new(&[]);
+    client.open(uri, "javascriptreact", document, 1);
+    assert_preview(
+        &client.hover(uri, range["start"].clone()),
+        comment,
+        COMMENT_JA,
+        &range,
+    );
+    client.finish(true);
+    let features = json!({"features": {"languages": {"javascript": {"comment_hover": false}}}});
+    let mut client = Client::configured(&[], false, false, features);
+    client.open(uri, "javascriptreact", document, 1);
+    assert!(client.hover(uri, range["start"].clone()).is_null());
+    client.finish(true);
+}
+
+#[test]
+fn icon_names_of_a_translation_show_as_written_only_where_the_client_draws_icons() {
+    let uri = "file:///icons.rs";
+    let document = sample!("icons.rs");
+    let comment =
+        "/// Press $(sync) to refresh the view.\n/// The `$(file)` button opens the file.";
+    let translation =
+        "$(sync) を押すと、ビューを更新する。\n`$(file)` のボタンは、そのファイルを開く。";
+    let range = range_for(document, comment);
+    let first_line = translation.lines().next().unwrap();
+
+    let mock = json!({"provider": {"name": "mock"}});
+    let mut client = named_client(&[], every_name(), false, mock);
+    client.open(uri, "rust", document, 1);
+    let hover = client.hover(uri, range["start"].clone());
+    let body = hover["contents"]["value"]
+        .as_str()
+        .unwrap()
+        .strip_prefix("$(globe) Translation LSP\n\nMock translation (fixed sample)\n\n---\n\n")
+        .unwrap_or_else(|| panic!("{hover}"))
+        .to_owned();
+    assert!(!body.contains("$(") && !body.contains("$\\("), "{body:?}");
+    // The code span keeps its text, which shows without the backticks.
+    assert_eq!(
+        shown(&body.replace('\u{2060}', "")).0.trim_end(),
+        translation.replace('`', "")
+    );
+    let found = lenses(&mut client, uri);
+    assert_eq!(
+        lens_titles(&found),
+        ["\\$(sync) を押すと、ビューを更新する。", "Settings"]
+    );
+    client
+        .call("workspace/executeCommand", found[0]["command"].clone())
+        .unwrap();
+    let handed = client.translation();
+    assert_eq!(handed["markdown"], body);
+    assert_eq!(handed["text"], translation);
+    assert_eq!(handed["version"], 1);
+    client.finish(true);
+
+    // A client that draws no icons gets the translation as before.
+    let mut client = lens_client(&[], "file:///lens.rs", false);
+    client.open(uri, "rust", document, 1);
+    let hover = client.hover(uri, range["start"].clone());
+    let value = hover["contents"]["value"].as_str().unwrap();
+    assert!(
+        value.starts_with("> **Translation LSP**") && !value.contains('\u{2060}'),
+        "{value}"
+    );
+    assert_eq!(lens_titles(&lenses(&mut client, uri))[0], first_line);
     client.finish(true);
 }

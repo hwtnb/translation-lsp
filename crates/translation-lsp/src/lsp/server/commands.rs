@@ -3,10 +3,12 @@
 use std::collections::HashSet;
 
 use super::{
-    menu::{DELETE, RETRY, card_message},
+    menu::{TRANSLATION_BUTTONS, card_message},
     parts::sent_parts,
     *,
 };
+use serde_json::json;
+
 use crate::store::{Key, Sent};
 
 pub(super) enum ServerCommand {
@@ -35,7 +37,7 @@ pub(super) enum ServerCommand {
     Menu(Option<Uri>),
     /// Turns the automatic features back to the settings (`true`) or off.
     Automatic(bool),
-    /// Opens Zed's settings file.
+    /// Opens the settings of the editor.
     OpenSettings,
 }
 
@@ -262,7 +264,13 @@ impl<P: TranslationProvider> Server<P> {
                     .into_iter()
                     .map(|entry| Command::new(entry.title.into(), entry.command.into(), None))
                     .collect();
-                self.open_menu("", choices).map_err(provider_failure)?;
+                // A client that names `choose` shows the message as the
+                // title of the menu; Zed is sent none, as before.
+                let message = match P::capabilities().account_menu {
+                    Some(title) if self.ui.capabilities.choose => title.trim_end_matches('…'),
+                    _ => "",
+                };
+                self.open_menu(message, choices).map_err(provider_failure)?;
                 Ok(Some(Value::Null))
             }
             ServerCommand::Account(command) => self.start_administration(
@@ -284,7 +292,7 @@ impl<P: TranslationProvider> Server<P> {
                 Ok(Some(Value::Null))
             }
             ServerCommand::OpenSettings => {
-                if !self.ui.capabilities.show_document {
+                if !self.ui.capabilities.opens_settings() {
                     return Err(failure(
                         ErrorCode::RequestFailed,
                         "The editor does not support opening files",
@@ -344,6 +352,10 @@ impl<P: TranslationProvider> Server<P> {
                     return Err(gone());
                 }
                 self.check_cache()?;
+                if self.ui.capabilities.show_translation {
+                    self.hand_over_translation(target)?;
+                    return Ok(Some(Value::Null));
+                }
                 let (kind, message) = match self
                     .cache
                     .message(&target.uri, target.range)
@@ -354,12 +366,68 @@ impl<P: TranslationProvider> Server<P> {
                 };
                 let card = self
                     .ui
-                    .show_card(kind, &card_message(&message), &[RETRY, DELETE])
+                    .show_card(
+                        kind,
+                        ChoiceKind::Message,
+                        &card_message(&message),
+                        &TRANSLATION_BUTTONS,
+                    )
                     .map_err(provider_failure)?;
-                self.cards.insert(card, Card::Translation(target));
+                self.cards
+                    .insert(card.0, (Card::Translation(target), card.1));
                 Ok(Some(Value::Null))
             }
         }
+    }
+
+    /// Sends the translation or failure of `target` to a client that shows
+    /// translations itself, with the version of the document it belongs to
+    /// and the commands of its Retry and Delete buttons, which carry the
+    /// target.
+    fn hand_over_translation(&mut self, target: TranslationTarget) -> RequestResult<()> {
+        let markup = self.ui.capabilities.markup();
+        let (failed, markdown, text) = match self.cache.result(&target.uri, target.range) {
+            Some(Ok(preview)) => (false, preview.body(markup), preview.translation.clone()),
+            Some(Err(reason)) => {
+                let reason_markdown = shown(plain_text(reason), markup.theme_icons);
+                (true, reason_markdown, reason.to_owned())
+            }
+            None => {
+                return Err(failure(
+                    ErrorCode::ContentModified,
+                    "The translation is no longer available",
+                ));
+            }
+        };
+        let mut actions = Vec::new();
+        for (id, title, command) in [
+            ("retry", "Retry", ServerCommand::LensRetry(target.clone())),
+            (
+                "delete",
+                "Delete",
+                ServerCommand::DeleteTranslation(target.clone()),
+            ),
+        ] {
+            let command = command.command(title.into())?;
+            actions.push(json!({
+                "id": id,
+                "title": command.title,
+                "command": command.command,
+                "arguments": command.arguments,
+            }));
+        }
+        self.ui
+            .show_translation(json!({
+                "uri": target.uri,
+                "version": target.version,
+                "range": target.range,
+                "failed": failed,
+                "markdown": markdown,
+                "text": text,
+                "actions": actions,
+                "targetLanguage": self.settings.target_language,
+            }))
+            .map_err(provider_failure)
     }
 
     /// The target of a CodeLens command in the current text. Zed keeps a

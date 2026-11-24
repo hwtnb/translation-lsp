@@ -3,10 +3,7 @@ mod callback;
 #[cfg(test)]
 use callback::callback;
 use callback::wait_callback;
-use std::{
-    collections::HashMap,
-    time::{Duration, UNIX_EPOCH},
-};
+use std::time::{Duration, UNIX_EPOCH};
 
 use openidconnect::{
     AdditionalProviderMetadata, AuthType, AuthorizationCode, ClientId, CsrfToken, DiscoveryError,
@@ -20,7 +17,7 @@ use tokio::{net::TcpListener, task::JoinSet, time::sleep};
 use uuid::Uuid;
 
 use crate::providers::{
-    AuthUiState, Interaction,
+    AuthUiState, ChoiceKind, Interaction,
     error::{Error, ErrorKind},
 };
 
@@ -572,7 +569,7 @@ impl Auth {
     ) -> Result<String, Error> {
         let snapshot = self.store.snapshot()?;
         let mut choices = Vec::new();
-        let mut ids = HashMap::new();
+        let mut ids = Vec::new();
         if let Some(snapshot) = snapshot {
             for (id, registration) in snapshot.state.registrations {
                 let label = format!(
@@ -585,13 +582,14 @@ impl Auth {
                         ""
                     }
                 );
-                ids.insert(label.clone(), id);
+                ids.push(id);
                 choices.push(label);
             }
         }
         choices.push("Add another ChatGPT account".into());
         let Some(choice) = ui
             .choose(
+                ChoiceKind::Menu,
                 "Continue with ChatGPT: choose a saved registration or add an account.",
                 &choices,
             )
@@ -599,7 +597,8 @@ impl Auth {
         else {
             return Ok("ChatGPT sign-in cancelled.".into());
         };
-        self.connect(ui, ids.get(&choice).copied(), enable).await
+        // The last choice, past the saved registrations, adds an account.
+        self.connect(ui, ids.get(choice).copied(), enable).await
     }
 }
 

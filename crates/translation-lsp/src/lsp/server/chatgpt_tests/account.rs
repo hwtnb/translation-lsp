@@ -31,6 +31,7 @@ async fn activity_cancellation_leaves_the_account_picker_open() {
                 work_done_progress: true,
                 server_status: true,
                 lens_refresh: false,
+                ..UiCapabilities::default()
             },
         ),
     )

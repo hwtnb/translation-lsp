@@ -29,7 +29,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Sender, after, bounded, never, select};
+use crossbeam_channel::{RecvTimeoutError, Sender, after, bounded, never, select};
 use futures_util::{StreamExt, stream};
 use lsp_server::{Connection, ErrorCode, Message, Request, RequestId, Response, ResponseError};
 use lsp_types::{
@@ -62,7 +62,7 @@ use crate::{
     },
     language::Language,
     providers::{
-        AccountChange, AuthUiState, Interaction, Output, OutputOptions, Translated,
+        AccountChange, AuthUiState, ChoiceKind, Interaction, Output, OutputOptions, Translated,
         TranslationProvider,
         anthropic::AnthropicProvider,
         chatgpt::ChatGptProvider,
@@ -87,8 +87,9 @@ use super::{
         Preview,
         cache::{Cache, Lens, Stored, overlaps},
         files::PreviewFiles,
+        header, label_shown, plain_text, shown,
     },
-    ui::{Purpose, Ui, UiCapabilities},
+    ui::{Answers, Purpose, Ui, UiCapabilities},
 };
 
 type ServerResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -118,7 +119,9 @@ const AUTOMATIC_OFF_COMMAND: &str = "translation-lsp.turn-off-automatic-translat
 /// Turns comment Hover and automatic selection translation back to what the
 /// settings say.
 const AUTOMATIC_ON_COMMAND: &str = "translation-lsp.turn-on-automatic-translation";
-/// Opens Zed's settings file in the editor.
+/// Opens the settings of the editor: Zed's settings file, or those of an
+/// editor that names `openSettings`. The ID stays as it was, since Zed keeps
+/// CodeLenses that send it.
 const OPEN_SETTINGS_COMMAND: &str = "translation-lsp.open-zed-settings";
 const ACTION_KIND: &str = "translation";
 const TRANSLATION_READY: &str = "Translation ready. Hover over the selected text to view it.";
@@ -187,8 +190,8 @@ struct Server<P: TranslationProvider> {
     /// request CodeLenses again.
     lens_tickets: Vec<u64>,
     /// The open cards, by the requests whose responses tell which button
-    /// the user pressed.
-    cards: HashMap<RequestId, Card>,
+    /// the user pressed, with how they tell it.
+    cards: HashMap<RequestId, (Card, Answers)>,
 }
 
 pub fn run_stdio() -> ServerResult<()> {
@@ -247,8 +250,9 @@ fn serve(
 
     match settings.provider.clone() {
         ProviderSettings::Unset => {
-            prompt_setup(ui.clone())?;
-            serve_initialized(connection, settings, ui, UnsetProvider, cache_directory)
+            let provider = UnsetProvider::new(ui.capabilities.open_settings);
+            prompt_setup(ui.clone(), provider.clone())?;
+            serve_initialized(connection, settings, ui, provider, cache_directory)
         }
         ProviderSettings::Mock {} => {
             let mut settings = settings;
@@ -369,10 +373,42 @@ fn serve(
     }
 }
 
+/// How long the server waits for `exit` after it answers `shutdown`, as long
+/// as `lsp-server` waits.
+const EXIT_WAIT: Duration = Duration::from_secs(30);
+
+/// Answers `shutdown` and waits for `exit`, as `lsp-server` does, except that
+/// a response that comes between them is dropped: the client may answer a
+/// request of the server, such as a choice that it closed as it stopped,
+/// after it sent `shutdown`. Any other message is an error.
+fn wait_for_exit(connection: &Connection, shutdown: &Request) -> ServerResult<()> {
+    let _ = connection
+        .sender
+        .send(Response::new_ok(shutdown.id.clone(), ()).into());
+    let deadline = Instant::now() + EXIT_WAIT;
+    loop {
+        match connection.receiver.recv_deadline(deadline) {
+            Ok(Message::Response(_)) => (),
+            Ok(Message::Notification(notification)) if notification.method == Exit::METHOD => {
+                return Ok(());
+            }
+            Ok(message) => {
+                return Err(format!("unexpected message during shutdown: {message:?}").into());
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                return Err("timed out waiting for exit notification".into());
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err("channel disconnected waiting for exit notification".into());
+            }
+        }
+    }
+}
+
 /// Asks the user to choose a provider, apart from the workers, so that a
 /// prompt left open holds up no account operation. An unanswered prompt waits
 /// until the process ends.
-fn prompt_setup(ui: Ui) -> ServerResult<()> {
+fn prompt_setup(ui: Ui, provider: UnsetProvider) -> ServerResult<()> {
     let runtime = runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -380,7 +416,7 @@ fn prompt_setup(ui: Ui) -> ServerResult<()> {
         .name("setup-prompt".into())
         .spawn(move || {
             runtime.block_on(async {
-                let _ = match UnsetProvider.prompt(&ui).await {
+                let _ = match provider.prompt(&ui).await {
                     Ok(Some(message)) => ui.inform(&message),
                     Ok(None) => Ok(()),
                     Err(error) => ui.error(&error.to_string()),
@@ -490,7 +526,7 @@ pub(crate) fn serve_initialized<P: TranslationProvider>(
                             server.cancel_all_work(connection)?;
                             server.activity.shutdown();
                             server.preview_files.clear();
-                            connection.handle_shutdown(&request)?;
+                            wait_for_exit(connection, &request)?;
                             break;
                         }
                         server.request(connection, request)?;
@@ -1038,7 +1074,7 @@ impl<P: TranslationProvider> Server<P> {
                     Lens::Translated(translation) => {
                         lenses.push(lens(
                             range,
-                            lens_title(translation),
+                            label_shown(lens_title(translation), self.ui.capabilities.theme_icons),
                             SHOW_COMMAND,
                             target(range)?,
                         ));
@@ -1174,10 +1210,14 @@ impl<P: TranslationProvider> Server<P> {
         let eligible = |preview: &Preview<P::Context>| {
             hover_eligible(preview, position.position, &text[offset..])
         };
-        if let Some(hover) =
-            self.cache
-                .hover(&position.text_document.uri, position.position, eligible)
-        {
+        let markup = self.ui.capabilities.markup();
+        let icons = markup.theme_icons;
+        if let Some(hover) = self.cache.hover(
+            &position.text_document.uri,
+            position.position,
+            eligible,
+            markup,
+        ) {
             authorization?;
             return to_value(hover).map(Some);
         }
@@ -1187,9 +1227,9 @@ impl<P: TranslationProvider> Server<P> {
         {
             return self.queue(id, target, PendingReply::Hover(position.position, received));
         }
-        if let Some(hover) = self
-            .cache
-            .failure_hover(&position.text_document.uri, position.position)
+        if let Some(hover) =
+            self.cache
+                .failure_hover(&position.text_document.uri, position.position, icons)
         {
             authorization?;
             return to_value(hover).map(Some);
@@ -1216,7 +1256,11 @@ impl<P: TranslationProvider> Server<P> {
             return to_value(Hover {
                 contents: HoverContents::Markup(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: notice.into(),
+                    value: format!(
+                        "{}\n\n{}",
+                        header(notice.title, None, icons),
+                        shown(notice.body.into(), icons)
+                    ),
                 }),
                 range: Some(range),
             })
@@ -1370,7 +1414,7 @@ fn report_comment_failure(ui: &Ui, uri: &Uri, document: &mut Document) -> Reques
         Failure::TimedOut => {
             eprintln!("translation-lsp: reading comments timed out (language {language:?})");
             format!(
-                "Reading comments in {name} timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in Zed settings."
+                "Reading comments in {name} timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in the settings."
             )
         }
         Failure::Panicked(place) => {

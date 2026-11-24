@@ -1,0 +1,16 @@
+{
+  "The language server is not running": "言語サーバーが動いていません",
+  "Restart": "再起動",
+  "Restart the language server to apply the changed Translation LSP settings.": "変更したTranslation LSPの設定は、言語サーバーを再起動すると反映されます。",
+  "Open Settings": "設定を開く",
+  "The Translation LSP server is not found at {0}.": "Translation LSPのサーバーが {0} にありません。",
+  "Set the path of the Translation LSP server to start it.": "Translation LSPのサーバーを起動するには、その場所を設定してください。",
+  "Choose an action": "操作を選んでください",
+  "The path of the Translation LSP server must be absolute: {0}": "Translation LSPのサーバーの場所は、絶対パスで書いてください: {0}",
+  "The path of the Translation LSP server is not a file: {0}": "Translation LSPのサーバーの場所がファイルではありません: {0}",
+  "The path of the Translation LSP server cannot be read: {0}": "Translation LSPのサーバーの場所を読めません: {0}",
+  "The path of the Translation LSP server must be text: {0}": "Translation LSPのサーバーの場所は、文字列で書いてください: {0}",
+  "Translation to {0}": "{0}への翻訳",
+  "Translation to {0} failed": "{0}への翻訳に失敗",
+  "Nothing was done: the language server stopped or withdrew the question before you answered.": "答える前に言語サーバーが止まったか問いを取り消したため、何も行いませんでした。"
+}

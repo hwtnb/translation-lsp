@@ -1,0 +1,8 @@
+**
+!out/extension.js
+!package.json
+!package.nls.json
+!package.nls.ja.json
+!l10n/**
+!LICENSE
+!README.md

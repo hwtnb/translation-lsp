@@ -62,7 +62,7 @@ impl Document {
         Self {
             version,
             session,
-            language: Language::from_id(&language_id),
+            language: Language::of_document(&language_id),
             text: Some(IndexedText::new(text)),
             comments: Reading::Pending,
             unreported: None,

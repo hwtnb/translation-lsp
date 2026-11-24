@@ -1,0 +1,18 @@
+{
+  "chatgpt": ["model", "effort", "speed", "document.model", "document.effort", "document.speed"],
+  "anthropic_api": [
+    "model",
+    "effort",
+    "thinking",
+    "speed",
+    "document.model",
+    "document.effort",
+    "document.thinking",
+    "document.speed"
+  ],
+  "openai_api": ["model", "effort", "speed", "document.model", "document.effort", "document.speed"],
+  "openai_compatible": ["base_url", "model", "effort", "document.model", "document.effort"],
+  "deepl": [],
+  "google_translate": [],
+  "plamo_translate": ["base_url", "model"]
+}

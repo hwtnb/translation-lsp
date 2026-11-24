@@ -4,7 +4,10 @@ use crossbeam_channel::Receiver;
 use serde_json::json;
 
 use super::*;
-use crate::store::{Content, Sent};
+use crate::{
+    lsp::ui::CHOOSE,
+    store::{Content, Sent},
+};
 
 const WAIT: Duration = Duration::from_secs(5);
 const COMMENT: &str = "// Retry only if the remote service\n// reports a temporary failure.";
@@ -26,12 +29,16 @@ struct Editor {
 impl Editor {
     /// A server with the comment open, which can open Zed's settings file.
     fn new() -> Self {
-        let (connection, client) = Connection::memory();
-        let (finished, events) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
-        let capabilities = UiCapabilities {
+        Self::with(UiCapabilities {
             show_document: true,
             ..Default::default()
-        };
+        })
+    }
+
+    /// A server with the comment open, for an editor with `capabilities`.
+    fn with(capabilities: UiCapabilities) -> Self {
+        let (connection, client) = Connection::memory();
+        let (finished, events) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
         let mut server = Server::configured(
             finished,
             MockProvider::default(),
@@ -525,4 +532,112 @@ fn a_menu_has_no_deadline_and_its_account_operation_answers_no_request() {
     editor.finish_next();
     assert!(editor.reply(4).unwrap().is_null());
     editor.assert_quiet();
+}
+
+/// A client that names `choose` gets the menu on one line, each choice with
+/// an ID, and the ID it answers picks the choice even where two choices have
+/// the same title. `null`, an ID that names no choice, and an answer of
+/// another shape do nothing.
+#[test]
+fn a_client_that_names_choose_picks_a_menu_choice_by_its_id() {
+    let mut editor = Editor::with(UiCapabilities {
+        choose: true,
+        show_document: true,
+        ..Default::default()
+    });
+    editor.request(1, MENU_COMMAND, json!([editor.uri]));
+    let Message::Request(menu) = editor.next_message() else {
+        panic!("Expected the menu");
+    };
+    assert!(editor.reply(1).unwrap().is_null());
+    assert_eq!(menu.method, CHOOSE);
+    assert_eq!(
+        menu.params,
+        json!({
+            "kind": "menu",
+            "message": "Automatic translation: On (comment Hover and automatic selection translation)",
+            "choices": [
+                {"id": "0", "title": TURN_OFF},
+                {"id": "1", "title": OPEN_SETTINGS}
+            ]
+        })
+    );
+    editor.choose(&menu, Value::Null);
+    for answer in [
+        json!({"id": "2"}),
+        json!({"id": "+0"}),
+        json!({"id": "00"}),
+        json!({"id": 0}),
+        json!({"title": TURN_OFF}),
+    ] {
+        let choices = vec![
+            ServerCommand::Automatic(false)
+                .command(TURN_OFF.into())
+                .unwrap(),
+        ];
+        editor.server.open_menu("", choices).unwrap();
+        let Message::Request(menu) = editor.next_message() else {
+            panic!("Expected the menu");
+        };
+        editor.choose(&menu, answer.clone());
+        assert!(editor.server.cards.is_empty(), "{answer}");
+        assert!(
+            !editor.server.settings.features.automatic_paused(),
+            "{answer}"
+        );
+    }
+
+    // Two choices with one title: the second turns automatic translation off.
+    let same = "Automatic translation";
+    let choices = vec![
+        ServerCommand::Automatic(true).command(same.into()).unwrap(),
+        ServerCommand::Automatic(false)
+            .command(same.into())
+            .unwrap(),
+    ];
+    editor.server.open_menu("", choices).unwrap();
+    let Message::Request(menu) = editor.next_message() else {
+        panic!("Expected the menu");
+    };
+    assert_eq!(
+        menu.params["choices"],
+        json!([{"id": "0", "title": same}, {"id": "1", "title": same}])
+    );
+    editor.choose(&menu, json!({"id": "1"}));
+    assert!(editor.server.settings.features.automatic_paused());
+    assert!(editor.server.cards.is_empty());
+}
+
+/// The question before every translation is deleted is a confirmation for a
+/// client that names `choose`, and a message with a button for any other.
+#[test]
+fn deleting_all_translations_is_confirmed_as_the_client_shows_it() {
+    for choose in [false, true] {
+        let mut editor = Editor::with(UiCapabilities {
+            choose,
+            ..Default::default()
+        });
+        editor.server.confirm_delete_all().unwrap();
+        let Message::Request(question) = editor.next_message() else {
+            panic!("Expected the question");
+        };
+        let message = "Delete all cached translations? Comments and selections are translated again when you ask for them.";
+        if choose {
+            assert_eq!(question.method, CHOOSE);
+            assert_eq!(
+                question.params,
+                json!({
+                    "kind": "confirm",
+                    "message": message,
+                    "choices": [{"id": "0", "title": "Delete"}]
+                })
+            );
+        } else {
+            assert_eq!(question.method, "window/showMessageRequest");
+            assert_eq!(
+                question.params,
+                json!({"type": 3, "message": message, "actions": [{"title": "Delete"}]})
+            );
+        }
+    }
 }

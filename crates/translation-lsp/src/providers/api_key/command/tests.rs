@@ -107,7 +107,7 @@ async fn entered_key_is_saved_privately_and_sent_with_the_next_request() {
         "Create the key for a single workspace in the Claude Console",
         "https://platform.claude.com/settings/keys",
         "Paste the Anthropic API key and press Enter (input is hidden)",
-        "The key was saved. Return to Zed: the next translation uses it.",
+        "The key was saved. Return to your editor: the next translation uses it.",
         "Press Enter to finish.",
     ] {
         assert!(console.shown.contains(expected), "{}", console.shown);

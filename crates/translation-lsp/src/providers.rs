@@ -21,7 +21,7 @@ pub(crate) mod sse;
 pub(crate) mod transport;
 pub(crate) mod unset;
 
-use std::{fmt::Debug, future::Future, path::Path};
+use std::{fmt::Debug, future::Future};
 
 use error::Error;
 
@@ -30,13 +30,30 @@ use crate::store::Identity;
 pub(crate) trait Interaction {
     /// Opens a page outside the editor, such as in the browser.
     fn open(&self, uri: &str) -> impl Future<Output = Result<(), Error>>;
-    /// Opens a file in the editor.
-    fn edit(&self, path: &Path) -> impl Future<Output = Result<(), Error>>;
+    /// Opens the settings that choose the provider.
+    fn open_settings(&self) -> impl Future<Output = Result<(), Error>>;
+    /// Asks the user to pick one of `choices`, and gives the index of the
+    /// one they picked, or none if they closed the choice.
     fn choose(
         &self,
+        kind: ChoiceKind,
         message: &str,
         choices: &[String],
-    ) -> impl Future<Output = Result<Option<String>, Error>>;
+    ) -> impl Future<Output = Result<Option<usize>, Error>>;
+}
+
+/// What a choice asks of the user, which decides how an editor that names
+/// `choose` shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChoiceKind {
+    /// A menu that the user opened, to pick one item from.
+    Menu,
+    /// Agreement asked before an operation of the user goes on, with that
+    /// one choice.
+    Confirm,
+    /// A message with buttons, such as one the user did not open, which
+    /// every editor shows as a message.
+    Message,
 }
 
 /// When a command changes the account or key that translations are made with.
@@ -67,12 +84,21 @@ pub(crate) struct Capabilities {
     pub commands: &'static [ProviderCommand],
     /// A line that the Hover header adds under the title.
     pub hover_note: Option<&'static str>,
-    /// The Markdown that Hover over a comment shows in place of a translation,
-    /// for a provider that translates nothing.
-    pub comment_notice: Option<&'static str>,
+    /// What Hover over a comment shows in place of a translation, for a
+    /// provider that translates nothing.
+    pub comment_notice: Option<Notice>,
     /// Whether a range request asks for less output than a tab request for
     /// the same text.
     pub range_output_bounded: bool,
+}
+
+/// A Hover that tells something in place of a translation.
+#[derive(Clone, Copy)]
+pub(crate) struct Notice {
+    /// The title of its header.
+    pub title: &'static str,
+    /// The Markdown under the header.
+    pub body: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

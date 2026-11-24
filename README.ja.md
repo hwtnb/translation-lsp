@@ -26,7 +26,7 @@ Translation LSPは、開発用拡張として導入します。Zedがチェッ�
 
 1. Zedと、[rustup経由のRust](https://www.rust-lang.org/tools/install)を導入します。Zedは、開発用拡張のビルドにRustを使います。
 2. このリポジトリをクローンし、[公開済みリリース](https://github.com/hwtnb/zed-translation-lsp/releases)のタグをチェックアウトします。
-3. Zedの拡張画面で `Install Dev Extension` を選び、チェックアウト内の **`crates/zed-extension`** を指定します。[Zedの開発用拡張の導入手順](https://zed.dev/docs/extensions/developing-extensions)も参照してください。
+3. Zedの拡張画面で `Install Dev Extension` を選び、チェックアウト内の **`zed-extension`** を指定します。v0.9.0までのタグでは `crates/zed-extension` です。[Zedの開発用拡張の導入手順](https://zed.dev/docs/extensions/developing-extensions)も参照してください。
 
 Zedの設定で言語の言語サーバーを列挙している場合は、その一覧に `"translation-lsp"` を加えてください。[言語サーバーの設定](docs/ja/languages.md#言語サーバーの設定)を参照してください。
 
@@ -59,6 +59,17 @@ cargo build -p translation-lsp --release --locked
 ```
 
 ビルドした実行ファイルの絶対パスを、[サーバーのパス](docs/ja/configuration.md#サーバーのパス)の説明に沿って `lsp.translation-lsp.binary.path` に設定します。拡張はその実行ファイルを起動し、サーバーを取得しません。
+
+## VS Codeに入れる
+
+同じサーバーはVS Code 1.123以降でも使えます。その拡張は、自分でビルドして手で入れます。拡張は設定に書いた場所のサーバーを起動し、何もダウンロードしません。
+
+1. [サーバーをソースからビルドする](#サーバーをソースからビルドする)の手順でサーバーをビルドします。
+2. [Node.js](https://nodejs.org/) 22.12以降を導入します。チェックアウトの `vscode-extension` で `npm ci` を実行し、続けて `npm run package` を実行します。`translation-lsp.vsix` ができます。
+3. VS Codeのコマンドパレットで `Extensions: Install from VSIX…` を実行し、そのファイルを選びます。
+4. 設定エディターで `Translation LSP` を検索し、`Server: Path` にサーバーの絶対パスを書きます。
+
+プロバイダーは同じ設定の `Provider` で選びます。設定とその名前は[VS Codeの設定](docs/ja/configuration.md#vs-codeの設定)で説明します。VS Codeで動きが違うところは[VS Code](docs/ja/usage.md#vs-code)で説明します。
 
 ## プロバイダーの設定
 

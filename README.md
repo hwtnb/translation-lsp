@@ -26,7 +26,7 @@ Install Translation LSP as a development extension: Zed builds the extension fro
 
 1. Install Zed and [Rust through rustup](https://www.rust-lang.org/tools/install). Zed builds development extensions with Rust.
 2. Clone this repository and check out the tag of a [published release](https://github.com/hwtnb/zed-translation-lsp/releases).
-3. In Zed's Extensions view, choose `Install Dev Extension` and select **`crates/zed-extension`** in the checkout. See [Zed's development extension instructions](https://zed.dev/docs/extensions/developing-extensions).
+3. In Zed's Extensions view, choose `Install Dev Extension` and select **`zed-extension`** in the checkout; in tags up to v0.9.0, it is `crates/zed-extension`. See [Zed's development extension instructions](https://zed.dev/docs/extensions/developing-extensions).
 
 If your Zed settings list the language servers of a language, add `"translation-lsp"` to that list; see [Language server settings](docs/languages.md#language-server-settings).
 
@@ -59,6 +59,17 @@ cargo build -p translation-lsp --release --locked
 ```
 
 Set `lsp.translation-lsp.binary.path` to the absolute path of the executable you built, as described under [Server path](docs/configuration.md#server-path). The extension then starts that executable and downloads nothing.
+
+## Install in VS Code
+
+The same server also works in VS Code 1.123 or later, through an extension that you build and install by hand. It starts the server named in its settings and downloads nothing.
+
+1. Build the server as described under [Build the server from source](#build-the-server-from-source).
+2. Install [Node.js](https://nodejs.org/) 22.12 or later. In `vscode-extension` in the checkout, run `npm ci`, then `npm run package`, which writes `translation-lsp.vsix`.
+3. In VS Code, run `Extensions: Install from VSIX…` from the Command Palette and choose that file.
+4. Open the Settings editor, search for `Translation LSP`, and set `Server: Path` to the absolute path of the server.
+
+Choose a provider in the same settings, under `Provider`; the settings and their names are described under [VS Code settings](docs/configuration.md#vs-code-settings). What works differently in VS Code is described under [VS Code](docs/usage.md#vs-code).
 
 ## Set up a provider
 

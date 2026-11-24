@@ -144,7 +144,7 @@ When the comments of a document cannot be read, the server shows one of the foll
 
 | Warning | Cause |
 | --- | --- |
-| `Reading comments in <file> timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in Zed settings.` | The reading took longer than `comment_parse_timeout_ms`. |
+| `Reading comments in <file> timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in the settings.` | The reading took longer than `comment_parse_timeout_ms`. |
 | `Reading comments in <file> failed. Comments in this file are not recognized until you reopen it.` | The reading failed inside the server. |
 
 ## Canceling and retrying
@@ -212,3 +212,21 @@ If you run a Code Action or another explicit translation of a range while an aut
 ### What is written to disk
 
 With [`disk_cache`](configuration.md#disk-cache) enabled, the server writes each completed translation to an unencrypted file on this computer. The text that was sent and the lines around it are not written. A dictionary entry holds its word and example sentence, and a translation holds what was left untranslated, such as code and identifiers. What the files hold and where they are is described under [Disk cache](configuration.md#disk-cache).
+
+## VS Code
+
+In VS Code, the extension works as described on this page, with these differences:
+
+- Hover titles a translation with a globe icon and `Translation LSP`, without a quote.
+- Clicking the first line of a translation, or `Translation failed`, opens the text under that line in place of a card. Its buttons copy the text, translate it again, delete it, and close it. The copy holds the translation as it came, without the characters added to format it, and a dictionary entry as its Markdown. Editing the document, or opening another translation, closes it.
+- `Open settings` in the `Settings` menu, and `Settings` above Markdown and Plain Text, open the settings of the extension.
+- The line above the text names what it is, such as `Translation to Japanese` or `Translation to Japanese failed`.
+- Menus, such as `Settings` and the menu of an API key, open as a list at the top of the window, titled with what they are for. The questions before deleting all cached translations and before removing a saved key open as a dialog with `Cancel`.
+
+The text under a line shows about the first 100,000 characters of a translation; `Copy` holds all of it.
+
+Changed settings apply when the language server restarts. The extension offers `Restart` in a notification. Until you choose it, the running server keeps its settings and its work. `Translation LSP: Restart Language Server` in the Command Palette restarts it at any time.
+
+The extension starts the server for the languages of [Languages](languages.md) that VS Code supports without another extension. Kotlin, Vue.js, TOML, and the other languages that need an extension in VS Code get no translation there. VS Code opens `.jsx` files as their own language, and the JavaScript settings of `features.languages` apply to them.
+
+The buttons, settings, and messages of the extension follow the display language of VS Code, in English or Japanese. The server's menus, CodeLenses, and messages stay in English.

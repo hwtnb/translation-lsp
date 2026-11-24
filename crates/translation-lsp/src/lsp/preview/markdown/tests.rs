@@ -488,7 +488,7 @@ fn markdown_documents_keep_links_only_to_urls_of_the_original() {
         ),
     ] {
         assert_eq!(
-            document(translation, &urls).as_deref(),
+            document(translation, &urls, false).as_deref(),
             Some(shown.unwrap_or(translation)),
             "{translation:?}"
         );
@@ -519,7 +519,7 @@ fn markdown_documents_keep_links_only_to_urls_of_the_original() {
         "| a |\n|---|\n| https&#58;//evil.example/x |",
         "[r]: \\^^*&#47;_\n\n[r]",
     ] {
-        assert_eq!(document(translation, &urls), None, "{translation:?}");
+        assert_eq!(document(translation, &urls, false), None, "{translation:?}");
     }
 }
 
@@ -542,13 +542,23 @@ fn escapes_and_character_references_make_no_links_in_text() {
             "{translation:?} → {markdown:?}"
         );
         assert!(
-            links_stay(&markdown, &docs, true),
+            links_stay(&markdown, &docs, true, ZED_OPTIONS),
             "{translation:?} → {markdown:?}"
         );
     }
     // The check finds a URL that escapes divide.
-    assert!(!links_stay("https\\://evil.example/", &docs, true));
-    assert!(!links_stay("https&#58;//evil.example/", &docs, true));
+    assert!(!links_stay(
+        "https\\://evil.example/",
+        &docs,
+        true,
+        ZED_OPTIONS
+    ));
+    assert!(!links_stay(
+        "https&#58;//evil.example/",
+        &docs,
+        true,
+        ZED_OPTIONS
+    ));
 }
 
 #[test]
@@ -1164,7 +1174,7 @@ fn conversion_time() {
             let markdown = rendered(&translation);
             let text = started.elapsed();
             let started = Instant::now();
-            let document = document(&translation, &markdown_urls);
+            let document = document(&translation, &markdown_urls, false);
             println!(
                 "{unit:?} {} KiB: {text:?} as text, {} bytes; {:?} as Markdown, {}",
                 bytes / 1024,

@@ -76,6 +76,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 | [samples/long-document.md](../../../samples/long-document.md) | モック | 部分に分けて送る翻訳。[部分に分けて送る翻訳](#部分に分けて送る翻訳)を参照してください。 |
 | [samples/context-limit.md](../../../samples/context-limit.md) | 実際 | お使いのコンピューターのモデルのコンテキストを確かめるための長い文書。コンテキストはコンピューターによって違い、変えることもできます。`plamo_translate` で、コンテキストがこの文書より小さいときに `Translate document to Japanese (ja) and open in tab` を実行すると、コンテキストの上限のエラーになります。`document_split` を有効にすると、各部分が収まれば訳が開きます。[長い文章](../providers/plamo-translate.md#長い文章)を参照してください。 |
 | [samples/repeated.rs](../../../samples/repeated.rs) | モックと実際 | 依頼を送らずに表示する訳文。[繰り返しの翻訳](#繰り返しの翻訳)を参照してください。 |
+| [samples/comment.rs](../../../samples/comment.rs) | モック、Anthropic API | VS Codeでは、コメントの後ろの `Settings` で、ウィンドウの上部にメニューの一覧が開きます。題名は `Automatic translation: On (comment Hover and automatic selection translation)` です。`Turn off automatic translation` を選ぶと、次のメニューは `Off` になります。翻訳のあと、`Delete all cached translations` はモーダルのダイアログで先に確かめ、`キャンセル` で残します。`anthropic_api` では、コードアクションの `Anthropic API key…` で、題名が `Anthropic API key` のメニューが開きます。`Save Anthropic API key` は、キーを尋ねる端末を開きます。キーを保存したあとの `Remove Anthropic API key` は、モーダルのダイアログで先に確かめます。どちらもAPIを呼びません。 |
+| [samples/icons.rs](../../../samples/icons.rs) | モックと実際 | VS Codeで、訳文の中の `$(sync)` と `$(file)` が、ホバー、CodeLensの行、その行から開いた文で、コードの中でも書いたとおりに見えること。モックの訳文は `$(sync)` で始まります。 |
 
 モックのプロバイダーは、「実際」とだけ書いたサンプルを訳しません。
 
@@ -111,12 +113,81 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 stdioのテストは、実行ファイルを `--mock-delay-ms <ミリ秒>`、`--mock-fail`、`--mock-timeout-ms <ミリ秒>`、`--mock-same-language` 付きで起動します。それぞれ、モックの翻訳を遅らせる、失敗させる、期限を指定の値にする、自動の翻訳で文章をすでに翻訳先の言語だとする、の働きをします。これらの引数はモックのプロバイダーにだけ効きます。
 
+## VS Codeの拡張
+
+`vscode-extension` には、TypeScriptで書いたVS Codeの拡張があります。設定に書いた場所のサーバーを起動し、サーバーが送るものをVS Codeの部品で見せます。Node.js 22.12以降で、そのディレクトリーで次のコマンドを実行します。
+
+```sh
+npm ci
+npm run check
+npm run lint
+npm run format:check
+npm test
+npm run package
+```
+
+`check` は型を検査します。`lint` はOxlintを実行し、待たないPromiseを禁じる規則のような、型を使う規則も見ます。警告が1つでもあれば失敗します。`format:check` は `src` と `test` がOxfmtの整形のとおりであることを確かめます。整形は `npm run format` で行います。
+
+`test` は、VS Codeなしで動くテストをVitestで実行します。拡張が送る設定、マニフェストと拡張の翻訳した文言、拡張によるサーバーの起動と停止を確かめます。`package` はRolldownで拡張をビルドし、`translation-lsp.vsix` を作ります。
+
+拡張の設定は `package.json` に、プロバイダーごとに使う設定は `src/providers.json` にあります。サーバーのテストは両方を読みます。サーバーのどの設定にも、サーバーの既定値を持つVS Codeの設定が1つずつあること、各プロバイダーがその行の設定を受け付けてほかを断ることを確かめます。拡張がサーバーを起動する言語が、サーバーの読む言語だけであることも確かめます。
+
+VS Codeで拡張を確かめるときは、専用のユーザーデータのディレクトリーと拡張のディレクトリーを指定してVS Codeを起動します。ふだんの設定と拡張とは分けておけます。
+
+```sh
+code --user-data-dir <ディレクトリー> --extensions-dir <ディレクトリー> --install-extension translation-lsp.vsix
+```
+
+同じ2つのオプションとサンプルのフォルダーを付けてもう一度起動し、`settings.json` で `translationLsp.server.path` をビルドしたサーバーに、`translationLsp.provider.name` を `mock` にします。設定エディターには `mock` は出ません。
+
+### VS Codeの拡張のメッセージ
+
+拡張は、`initialize` 要求の `capabilities.experimental.translationLsp` に、受け取るメッセージを名乗ります。サーバーは、値が `true` のものだけを使います。Zedのように何も名乗らないクライアントには、Zed向けの要求と文言を送ります。
+
+| 名前 | 変わること |
+| --- | --- |
+| `showTranslation` | `translation-lsp.show-translation` は、カードの代わりに通知 `translation-lsp/showTranslation` を送ります。 |
+| `openSettings` | 設定を開くとき、Zedの設定ファイルを開く代わりに、要求 `translation-lsp/openSettings` を引数 `null` で送ります。成功の応答は、設定が開いたことを表します。Zedの設定を指す文言は、設定を指す文言になります。 |
+| `choose` | ユーザーが開くメニュー（`Settings` や、プロバイダーのアカウントのメニュー）と、キャッシュした訳文をすべて削除する前と保存したキーを削除する前の確認は、ボタン付きのメッセージの代わりに、要求 `translation-lsp/choose` を送ります。プロバイダーが未設定のときにサーバーが自分で出す案内は、メッセージのままです。 |
+| `themeIcons` | ホバーの見出しは `$(globe) Translation LSP` です。ホバーと `showTranslation` では、`(` の前の `$` の後ろに単語結合子を入れ、`$(` を含むURLと `#節` はリンクにしません。VS Codeが訳文からアイコンを描かないようにするためです。CodeLensの行では、アイコン名の前にバックスラッシュを入れます。 |
+
+標準の `general.markdown.parser` が `marked` のクライアント（VS Codeがそうです）には、サーバーはMarkdownの文書の訳文を、Zedの読み方と、pulldown-cmarkをmarkedの拡張（表、取り消し線、タスクリスト）だけで読む読み方の両方で検査します。後者はmarkedに近づけた読み方です。markedには、脚注や見出しの属性など、Zedのほかの拡張がありません。
+
+脚注は文字として表示し、markedがリンクに変えるのを防ぎます。文書の外を指すリンクについては、どちらの読み方でも宛先を原文と照合します。確認できない宛先があれば、訳文全体をコードブロックで表示します。メタデータや見出しの属性の中など、markedだけがリンクとして読む箇所にも同じ規則が適用されます。原文の別の箇所に同じ宛先のリンクがあれば、そこから宛先を確認できます。
+
+たとえば、原文にある `https://example.com` がどちらの読み方でも訳文の本文に現れれば、そのURLはクリックできます。本文中のそれ以外の `://` や、`www.`、メールアドレスには単語結合子を入れ、markedがリンクを作るのを防ぎます。
+
+`translation-lsp/showTranslation` の欄は次のとおりです。
+
+| 欄 | 値 |
+| --- | --- |
+| `uri`、`range` | 訳文のいまの位置。 |
+| `version` | 訳文が属する文書の版。拡張は、ほかの版の訳文を見せません。 |
+| `failed` | 翻訳が失敗した理由を見せるとき `true`。 |
+| `markdown` | 見せるMarkdown。訳文ではホバーの本文（見出しなし）、失敗では理由。 |
+| `text` | コピーする文。届いたままの訳文、辞書の項目ではそのMarkdown、失敗では理由。 |
+| `actions` | ボタン。`id`（`retry` または `delete`）、`title` と、クライアントが `workspace/executeCommand` で返す `command` と `arguments`。 |
+| `targetLanguage` | 設定の `target_language` の書いたままの値。`ja` や `Japanese` など。拡張は、文の上の行に言語の名前を出します。 |
+
+`translation-lsp/choose` の欄は次のとおりです。クライアントは、選ばれた選択肢の `id` を `{"id": "1"}` の形で返し、選ばずに閉じたときは `null` を返します。
+
+| 欄 | 値 |
+| --- | --- |
+| `kind` | `menu` はユーザーが開いたメニューで、拡張はクイックピックで見せます。`confirm` はユーザーの操作を進める前の同意で、選択肢は同意の1つです。拡張はモーダルの警告で見せます。 |
+| `message` | 1行の文。メニューの題名か、問い。 |
+| `choices` | 選択肢。この要求の中で選択肢を見分ける `id` と、`title`。サーバーは `id` だけを読むので、題名が同じ選択肢があってもかまいません。 |
+
+サーバーは応答の `id` だけを読みます。選択肢の `title` など、ほかの項目があっても結果は変わりません。どの選択肢も指さない `id`、`id` の無い応答、`null` は、何も選ばなかったものとして扱います。
+
+拡張は、開く前に取り消された要求には、何も見せずに `null` を返します。サーバーが要求を取り消したときと、接続が終わったとき（拡張がサーバーを止めたときや再起動したとき、接続が切れたとき）は、クイックピックを閉じて `null` を返します。モーダルのダイアログは拡張から閉じられないので、ユーザーが閉じるまで残ります。そのときの答えは何も起こさず、同意が選ばれていれば、何も行わなかったことを1度知らせます。
+
 ## CIとリリース前の確認
 
-[CIワークフロー](../../../.github/workflows/ci.yml)には2つのジョブがあります。
+[CIワークフロー](../../../.github/workflows/ci.yml)には3つのジョブがあります。
 
 - **Verify** は、Windows、macOS、Linuxそれぞれで動きます。fmt、ワークスペース全体のテスト、Clippy、ネイティブとWASMのリリースビルドを実行します。テストは1つずつ実行します（`RUST_TEST_THREADS` が `1`）。時間を測るテストが、ほかのテストとランナーのCPUを取り合わないようにするためです。
 - **Distribution contracts and registry compiler** は、Linuxで動きます。Zedの登録先のコンパイラー（現在はRust 1.90）でWASM拡張をビルドし、下で説明する `xtask` の検査を実行します。
+- **VS Code extension** は、Linuxで動きます。VS Codeの拡張の型を検査し、リンターと整形の検査を実行し、テストを実行し、`.vsix` を作ります。
 
 拡張の依存が登録先より新しいコンパイラーを必要とするようになったら、登録先との互換性をどう保つかを改めて決めてください。
 
@@ -140,7 +211,7 @@ cargo run -p xtask --locked -- check-notices
 テストは実際のAPIを呼ばず、利用者の認証情報のディレクトリも読みません。HTTP/OIDCのテスト用環境は合成の認証情報を使うため、ChatGPTアカウントもAPIキーも不要です。
 
 - 言語サーバーをプロセスとして起動するテストは、モックのプロバイダーだけを起動するか、プロバイダーなしで起動します。サーバーにはテスト用のホームディレクトリを与えます。macOSとLinuxでは、[`disk_cache`](../configuration.md#ディスクキャッシュ) のフォルダーはその中になります。
-- Windowsは `disk_cache` のフォルダーを環境変数ではなくOSから得ます。そこでは、これらのテストは実行する利用者のキャッシュのフォルダーを使うことになります。このため、`disk_cache` を有効にするテストはmacOSとLinuxでだけ動きます。どのテストも `Delete all cached translations` を確定しません。
+- Windowsは `disk_cache` のフォルダーを環境変数ではなくOSから得ます。そこでは、これらのテストは実行する利用者のキャッシュのフォルダーを使うことになります。このため、`disk_cache` を有効にするテストはmacOSとLinuxでだけ動きます。どのテストも `Delete all cached translations` を確定せず、断ります。同意するサーバーの単体テストは、サーバーにテスト用のディレクトリを渡すか、何も渡しません。
 - 認証情報を読むプロバイダーのテストは、テスト用のディレクトリを使います。残した訳文のテストは、サーバーにテスト用のディレクトリを渡します。
 
 同じ実行ファイルを `anthropic-key` か `deepl-key`、またはサービスのアドレスを添えた `api-key` 付きで実行すると、エディターとは通信しません。端末でAPIキーを尋ねて保存します。この形で実行するテストは、テスト用のホームディレクトリと擬似端末を与え、macOSとLinuxでだけ動きます。Windowsは、認証情報のディレクトリを環境変数ではなくOSから得るためです。

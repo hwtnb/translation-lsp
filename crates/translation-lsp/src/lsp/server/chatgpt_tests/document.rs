@@ -154,7 +154,7 @@ async fn document_promotion_uses_original_start_and_survives_hover_expiry() {
     assert!(
         server
             .cache
-            .hover(&uri, Position::new(0, 3), |_| true)
+            .hover(&uri, Position::new(0, 3), |_| true, Default::default())
             .is_none()
     );
 }

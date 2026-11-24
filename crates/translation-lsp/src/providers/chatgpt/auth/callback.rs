@@ -53,7 +53,7 @@ pub(super) async fn wait_callback(
                         }
                         async move {
                             let message: &'static [u8] = if status == 200 {
-                                b"ChatGPT callback received. You can return to Zed."
+                                b"ChatGPT callback received. You can return to your editor."
                             } else {
                                 b"Invalid ChatGPT callback."
                             };

@@ -36,13 +36,27 @@ fn server(
     Connection,
     crossbeam_channel::Receiver<WorkerEvent<KeyId>>,
 ) {
+    server_for(provider, settings, UiCapabilities::default())
+}
+
+/// A server for an editor with `capabilities`.
+fn server_for(
+    provider: AnthropicProvider,
+    settings: Settings,
+    capabilities: UiCapabilities,
+) -> (
+    Server<AnthropicProvider>,
+    Connection,
+    Connection,
+    crossbeam_channel::Receiver<WorkerEvent<KeyId>>,
+) {
     let (connection, client) = Connection::memory();
     let (finished, completions) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
     let server = Server::configured(
         finished,
         provider,
         settings,
-        Ui::new(connection.sender.clone(), UiCapabilities::default()),
+        Ui::new(connection.sender.clone(), capabilities),
     )
     .unwrap();
     (server, connection, client, completions)

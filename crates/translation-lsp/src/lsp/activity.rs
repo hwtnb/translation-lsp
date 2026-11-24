@@ -252,7 +252,7 @@ impl Activity {
             })),
             Some(Problem::TimedOut) => Some(json!({
                 "health":"warning", "quiescent":!self.work.busy(),
-                "message":"Translation timed out. Try a shorter selection or adjust the timeout in Zed settings."
+                "message":"Translation timed out. Try a shorter selection or adjust the timeout in the settings."
             })),
             None => None,
         };

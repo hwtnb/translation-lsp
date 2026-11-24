@@ -1,4 +1,4 @@
-use super::{Preview, fenced_text, plain_text};
+use super::{Markup, Preview, fenced_text, header, plain_text, shown};
 use crate::{config::limits::TranslationLimits, providers::Output, store::Key};
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind, Position, Range, Uri};
 
@@ -235,10 +235,9 @@ impl<C: Clone + PartialEq> Cache<C> {
         .is_some_and(|stored| matches!(stored, Stored::SameLanguage { .. }))
     }
 
-    /// The message that shows the newest range translation or failure of
-    /// exactly `range`: `Ok` with a translation, `Err` with the reason of a
-    /// failure.
-    pub fn message(&mut self, uri: &Uri, range: Range) -> Option<Result<String, String>> {
+    /// The newest range translation or failure of exactly `range`: `Ok`
+    /// with a translation, `Err` with the reason of a failure.
+    pub fn result(&mut self, uri: &Uri, range: Range) -> Option<Result<&Preview<C>, &str>> {
         let stored = self.use_newest(uri, |stored| {
             stored.range() == range
                 && matches!(
@@ -247,10 +246,18 @@ impl<C: Clone + PartialEq> Cache<C> {
                 )
         })?;
         match stored {
-            Stored::Translation(_, preview) => Some(Ok(preview.message())),
-            Stored::Failure { message, .. } => Some(Err(plain_text(message))),
+            Stored::Translation(_, preview) => Some(Ok(preview)),
+            Stored::Failure { message, .. } => Some(Err(message)),
             Stored::SameLanguage { .. } => None,
         }
+    }
+
+    /// The message that shows the newest range translation or failure of
+    /// exactly `range`: `Ok` with a translation, `Err` with the reason of a
+    /// failure.
+    pub fn message(&mut self, uri: &Uri, range: Range) -> Option<Result<String, String>> {
+        self.result(uri, range)
+            .map(|result| result.map(Preview::message).map_err(plain_text))
     }
 
     /// The range translations and failures of a document, by their position.
@@ -324,21 +331,23 @@ impl<C: Clone + PartialEq> Cache<C> {
     }
 
     /// The Hover of the newest range translation at `position` that `eligible`
-    /// accepts.
+    /// accepts, for a client that reads Markdown as `markup` says.
     pub fn hover(
         &mut self,
         uri: &Uri,
         position: Position,
         eligible: impl Fn(&Preview<C>) -> bool,
+        markup: Markup,
     ) -> Option<Hover> {
         let index = self.newest_translation_at(uri, position, eligible)?;
         self.use_entry(index)
             .translation(Output::Range)?
-            .hover(position)
+            .hover(position, markup)
     }
 
-    /// The Hover of the newest failure at `position`.
-    pub fn failure_hover(&mut self, uri: &Uri, position: Position) -> Option<Hover> {
+    /// The Hover of the newest failure at `position`, in a client that draws
+    /// theme icons if `icons`.
+    pub fn failure_hover(&mut self, uri: &Uri, position: Position, icons: bool) -> Option<Hover> {
         let index = self.newest_failure_at(uri, position)?;
         let Stored::Failure { range, message, .. } = self.use_entry(index) else {
             return None;
@@ -348,8 +357,9 @@ impl<C: Clone + PartialEq> Cache<C> {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: format!(
-                    "> **Translation LSP: translation failed**\n\n{}\n\nTo retry, place the cursor in this range and run Retry translation of lines … from Code Actions.",
-                    fenced_text(message)
+                    "{}\n\n{}\n\nTo retry, place the cursor in this range and run Retry translation of lines … from Code Actions.",
+                    header("Translation LSP: translation failed", None, icons),
+                    shown(fenced_text(message), icons)
                 ),
             }),
         })
@@ -465,17 +475,37 @@ mod tests {
             5,
             Stored::Translation(Output::Document, preview(range(0, 30), "whole document")),
         );
-        assert!(value(cache.hover(&uri, Position::new(0, 3), |_| true).unwrap()).contains("new"));
         assert!(
-            value(cache.hover(&uri, Position::new(0, 15), |_| true).unwrap()).contains("second")
+            value(
+                cache
+                    .hover(&uri, Position::new(0, 3), |_| true, Markup::default())
+                    .unwrap()
+            )
+            .contains("new")
         );
-        assert!(cache.hover(&uri, Position::new(0, 25), |_| true).is_none());
+        assert!(
+            value(
+                cache
+                    .hover(&uri, Position::new(0, 15), |_| true, Markup::default())
+                    .unwrap()
+            )
+            .contains("second")
+        );
+        assert!(
+            cache
+                .hover(&uri, Position::new(0, 25), |_| true, Markup::default())
+                .is_none()
+        );
         cache.insert(
             uri.clone(),
             6,
             Stored::Translation(Output::Range, preview(range(0, 10), "retry")),
         );
-        assert!(cache.failure_hover(&uri, Position::new(0, 3)).is_none());
+        assert!(
+            cache
+                .failure_hover(&uri, Position::new(0, 3), false)
+                .is_none()
+        );
         assert_eq!(
             cache
                 .exact(&uri, range(0, 10), Output::Range)
@@ -544,7 +574,11 @@ mod tests {
         assert!(!cache.same_language(&uri, range(0, 9)));
         assert!(cache.lenses(&uri).is_empty());
         assert!(cache.message(&uri, range(0, 10)).is_none());
-        assert!(cache.hover(&uri, Position::new(0, 3), |_| true).is_none());
+        assert!(
+            cache
+                .hover(&uri, Position::new(0, 3), |_| true, Markup::default())
+                .is_none()
+        );
         assert!(cache.exact(&uri, range(0, 10), Output::Range).is_none());
         // A later translation of the range replaces it.
         cache.insert(
@@ -590,7 +624,11 @@ mod tests {
             Stored::failure(MockContext, range(12, 15), "failure"),
         );
         cache.insert(uri.clone(), 6, same(range(0, 20)));
-        assert!(cache.failure_hover(&uri, Position::new(0, 13)).is_none());
+        assert!(
+            cache
+                .failure_hover(&uri, Position::new(0, 13), false)
+                .is_none()
+        );
         assert_eq!(
             cache
                 .entries
@@ -621,7 +659,9 @@ mod tests {
                 cache.insert(uri.clone(), 2, same);
             }
             assert!(
-                cache.failure_hover(&uri, Position::new(0, 3)).is_none(),
+                cache
+                    .failure_hover(&uri, Position::new(0, 3), false)
+                    .is_none(),
                 "reverse={reverse}"
             );
             assert!(cache.lenses(&uri).is_empty());

@@ -15,7 +15,7 @@ use std::{
 use reqwest::{Url, header::HeaderValue};
 
 use crate::providers::{
-    Interaction,
+    ChoiceKind, Interaction,
     credential_directory::{self, Revision, check_path, inspect},
     error::{Cause, Error, credentials::CredentialError},
 };
@@ -435,7 +435,11 @@ impl KeyFile {
     pub async fn remove(&self, ui: &impl Interaction, question: &str) -> Result<String, Error> {
         let directory = self.directory()?;
         let name = self.spec.name;
-        if ui.choose(question, &[CONFIRM.into()]).await?.is_none() {
+        if ui
+            .choose(ChoiceKind::Confirm, question, &[CONFIRM.into()])
+            .await?
+            .is_none()
+        {
             return Ok(format!("The {name} was not removed."));
         }
         let removed =

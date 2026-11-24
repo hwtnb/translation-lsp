@@ -144,7 +144,7 @@ Zedの設定で `"code_lens": "on"` にすると、本文の上の行に短い�
 
 | 警告 | 原因 |
 | --- | --- |
-| `Reading comments in <file> timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in Zed settings.` | 読み取りが `comment_parse_timeout_ms` を超えた。 |
+| `Reading comments in <file> timed out. Comments in this file are not recognized until you reopen it. To allow more time, adjust comment_parse_timeout_ms in the settings.` | 読み取りが `comment_parse_timeout_ms` を超えた。 |
 | `Reading comments in <file> failed. Comments in this file are not recognized until you reopen it.` | 読み取りがサーバーの中で失敗した。 |
 
 ## 取り消しと再試行
@@ -212,3 +212,21 @@ DeepL APIとGoogle Cloud Translationは区切りごとに検出した言語を�
 ### ディスクに書くもの
 
 [`disk_cache`](configuration.md#ディスクキャッシュ) を有効にすると、サーバーは完了した訳文を、このコンピューターの暗号化しないファイルに書きます。送った文章と、その前後の行は書きません。単語の説明には、その単語と例文が入ります。訳文には、コードや識別子など、訳さずに残したものが入ります。ファイルの中身と場所は[ディスクキャッシュ](configuration.md#ディスクキャッシュ)で説明します。
+
+## VS Code
+
+VS Codeでも、拡張はこのページのとおりに動きます。違うのは次の点です。
+
+- ホバーは訳文の題名を、引用ではなく、地球のアイコンと `Translation LSP` で示します。
+- 訳文の1行目または `Translation failed` を押すと、カードではなく、その行の下に文が開きます。そのボタンで、文のコピー、翻訳のやり直し、削除、閉じる操作ができます。コピーするのは、書式のための文字を足していない、届いたままの訳文です。辞書の項目はMarkdownのままです。文書を編集するか、別の訳文を開くと閉じます。
+- `Settings` のメニューの `Open settings` と、Markdownとプレーンテキストの上の `Settings` は、拡張の設定を開きます。
+- 文の上の行は、`日本語への翻訳` や `日本語への翻訳に失敗` のように、それが何かを示します。
+- `Settings` やAPIキーのメニューは、ウィンドウの上部に一覧で開き、何のためのメニューかを題名に示します。キャッシュした訳文をすべて削除する前と、保存したキーを削除する前の問いは、`キャンセル` の付いたダイアログで開きます。
+
+行の下に開く文は、訳文のおよそ最初の100,000文字を見せます。コピーのボタンは全体を写します。
+
+変えた設定は、言語サーバーの再起動で反映されます。拡張は通知に「再起動」のボタンを出します。押すまでは、動いているサーバーが元の設定のまま、実行中の作業を続けます。コマンドパレットの `Translation LSP: 言語サーバーを再起動` で、いつでも再起動できます。
+
+拡張がサーバーを起動するのは、[対応言語](languages.md)のうち、VS Codeがほかの拡張なしで扱える言語です。Kotlin、Vue.js、TOMLなど、VS Codeで拡張が要る言語は、VS Codeでは翻訳しません。VS Codeは `.jsx` のファイルを別の言語として開きますが、`features.languages` のJavaScriptの設定がそのファイルにも効きます。
+
+拡張のボタン、設定、メッセージは、VS Codeの表示言語に合わせて英語か日本語になります。サーバーのメニュー、CodeLens、メッセージは英語のままです。

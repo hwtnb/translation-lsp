@@ -2,10 +2,11 @@
 /target/
 /dist/
 /crates/*/target/
+/zed-extension/target/
 **/*.rs.bk
 
 # Generated development extension.
-/crates/zed-extension/extension.wasm
+/zed-extension/extension.wasm
 
 # Local environment files; sanitized examples may be tracked.
 .env

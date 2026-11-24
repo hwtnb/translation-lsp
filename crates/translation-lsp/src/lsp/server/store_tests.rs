@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::{menu::DELETE_ALL, *};
 use crate::{
-    lsp::preview::Form,
+    lsp::{preview::Form, ui::CHOOSE},
     providers::{Intent, Kind},
     store::Identity,
 };
@@ -177,19 +177,26 @@ struct Editor {
 
 impl Editor {
     fn new(provider: Counter, settings: Value, directory: Option<PathBuf>) -> Self {
+        let capabilities = UiCapabilities {
+            show_document: true,
+            ..Default::default()
+        };
+        Self::with_capabilities(provider, settings, directory, capabilities)
+    }
+
+    fn with_capabilities(
+        provider: Counter,
+        settings: Value,
+        directory: Option<PathBuf>,
+        capabilities: UiCapabilities,
+    ) -> Self {
         let (connection, client) = Connection::memory();
         let (finished, events) = bounded(WORKER_EVENT_CHANNEL_CAPACITY);
         let server = Server::start(
             finished,
             provider,
             Settings::from_options(Some(settings)).unwrap(),
-            Ui::new(
-                connection.sender.clone(),
-                UiCapabilities {
-                    show_document: true,
-                    ..Default::default()
-                },
-            ),
+            Ui::new(connection.sender.clone(), capabilities),
             directory,
         )
         .unwrap();
@@ -444,6 +451,64 @@ fn a_dictionary_entry_is_stored_with_its_line() {
         assert!(matches!(&preview.form, Form::Entry(line) if line == "retain — 意味"));
     }
     assert_eq!(provider.sent(), ["retain | Keep retain here."]);
+}
+
+/// A client that draws theme icons sees an icon name of a translation read
+/// from disk as written, and the translation stays as it was stored.
+#[test]
+fn stored_icon_names_show_as_written_in_a_client_with_theme_icons() {
+    let scratch = Scratch::new();
+    let provider = Counter::default();
+    let settings = json!({"disk_cache": {"enabled": true}});
+    let code = "// Run $(sync) now.\nfn a() {}\n";
+    let prose = "Run $(sync) here.";
+    let term = Range::new(Position::new(0, 4), Position::new(0, 11));
+    let mut editor = Editor::new(
+        provider.clone(),
+        settings.clone(),
+        Some(scratch.translations()),
+    );
+    let uri = editor.open("a.rs", "rust", code);
+    assert_eq!(editor.comment(&uri, 0), "訳: Run $(sync) now.");
+    let markdown = editor.open("a.md", "markdown", prose);
+    editor.translate(&markdown, term, PendingReply::Command { notice: false });
+    drop(editor);
+
+    let capabilities = UiCapabilities {
+        theme_icons: true,
+        ..Default::default()
+    };
+    let mut editor = Editor::with_capabilities(
+        provider.clone(),
+        settings,
+        Some(scratch.translations()),
+        capabilities,
+    );
+    let uri = editor.open("a.rs", "rust", code);
+    let hover = editor.hover(&uri, FIRST);
+    let body = shown(&hover)
+        .strip_prefix("$(globe) Translation LSP\n\n---\n\n")
+        .unwrap_or_else(|| panic!("{hover}"));
+    assert!(body.contains("$\u{2060}"), "{body:?}");
+    assert!(!body.contains("$(") && !body.contains("$\\("), "{body:?}");
+    assert_eq!(editor.comment(&uri, 0), "訳: Run $(sync) now.");
+    let markdown = editor.open("a.md", "markdown", prose);
+    editor.translate(&markdown, term, PendingReply::Command { notice: false });
+    let entry = editor.hover(&markdown, term.start);
+    let body = shown(&entry)
+        .strip_prefix("$(globe) Translation LSP\n\n---\n\n")
+        .unwrap_or_else(|| panic!("{entry}"));
+    assert_eq!(body, "訳: $\u{2060}(sync) | Run $\u{2060}(sync) here.");
+    assert_eq!(
+        editor
+            .server
+            .cache
+            .exact(&markdown, term, Output::Range)
+            .unwrap()
+            .translation,
+        "訳: $(sync) | Run $(sync) here."
+    );
+    assert_eq!(provider.sent().len(), 2);
 }
 
 /// A Markdown document of `count` sections, each sent as a part with
@@ -714,6 +779,50 @@ fn deletion_is_offered_while_translations_are_stored() {
     );
     let uri = editor.open("a.md", "markdown", "First line.\n");
     assert_eq!(editor.delete_titles(&uri, cursor), titles);
+}
+
+/// A client that names `choose` agrees to delete every translation by the
+/// ID of its one choice. The server reads only the ID, so the title that
+/// comes with it changes nothing.
+#[test]
+fn every_translation_is_deleted_by_the_id_of_the_consent() {
+    let scratch = Scratch::new();
+    let capabilities = UiCapabilities {
+        choose: true,
+        ..Default::default()
+    };
+    let mut editor = Editor::with_capabilities(
+        Counter::default(),
+        json!({}),
+        Some(scratch.translations()),
+        capabilities,
+    );
+    let uri = editor.open("a.md", "markdown", "First line.\n");
+    let cursor = Position::new(0, 3);
+    editor.translate(&uri, line(0, 11), PendingReply::Command { notice: false });
+    assert!(!editor.delete_titles(&uri, cursor).is_empty());
+
+    editor.execute(DELETE_ALL_COMMAND, json!([]));
+    let consent = loop {
+        if let Message::Request(request) = editor.client.receiver.recv_timeout(WAIT).unwrap()
+            && request.method == CHOOSE
+        {
+            break request;
+        }
+    };
+    assert_eq!(consent.params["kind"], "confirm");
+    let answer = json!({"id": "0", "title": "Anything"});
+    if let Some((Purpose::Card, response)) = editor
+        .server
+        .ui
+        .response(Response::new_ok(consent.id, answer))
+    {
+        editor
+            .server
+            .card_response(&editor.connection, response)
+            .unwrap();
+    }
+    assert!(editor.delete_titles(&uri, cursor).is_empty());
 }
 
 /// The check of `docs/development/README.md` with `samples/long-document.md`.

@@ -3,10 +3,7 @@ use std::future::Future;
 use tokio::time::sleep_until;
 
 use crate::{
-    providers::{
-        Intent, Kind, Source,
-        unset::{NO_SETTINGS_FILE, settings_file},
-    },
+    providers::{Intent, Kind, Source},
     store::{Content, Key, Sent, Store},
 };
 
@@ -24,7 +21,7 @@ pub(super) struct Job<C> {
 }
 
 pub(super) enum Task<C> {
-    /// Opens Zed's settings file in the editor.
+    /// Opens the settings of the editor.
     OpenSettings {
         ui: Ui,
     },
@@ -207,9 +204,7 @@ pub(super) async fn run_job<P: TranslationProvider>(
         }
         Task::OpenSettings { ui } => {
             let result = until_deadline(&mut deadline, || true, async {
-                let unopened = || ProviderError::failed(NO_SETTINGS_FILE);
-                let path = settings_file().ok_or_else(unopened)?;
-                ui.edit(&path).await.map_err(|_| unopened())?;
+                ui.open_settings().await?;
                 Ok(Administered::Done)
             })
             .await;

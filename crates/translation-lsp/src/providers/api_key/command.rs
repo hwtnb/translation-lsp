@@ -54,7 +54,7 @@ const MALFORMED: &str =
     "\nThat is not a key: a key has no whitespace or non-ASCII characters. Nothing was saved.\n";
 const TOO_LONG: &str = "\nThat is not a key: it is longer than 4096 bytes. Nothing was saved.\n";
 const CANCELLED: &str = "\nNo key was saved.\n";
-const SAVED: &str = "\nThe key was saved. Return to Zed: the next translation uses it.\n";
+const SAVED: &str = "\nThe key was saved. Return to your editor: the next translation uses it.\n";
 const NOT_SAVED: &str = "\nThe key was not saved. ";
 const NO_DIRECTORY: &str = "The OS reported no local configuration directory for this user.";
 /// A window that the server opened may close when the process ends.

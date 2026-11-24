@@ -17,7 +17,7 @@ use super::{PAUSED, automatic, translate};
 use crate::{
     config::{AnthropicEffort, AnthropicModel, limits::TranslationLimits},
     providers::{
-        AccountChange, AuthUiState, Intent, Interaction, Output, OutputOptions,
+        AccountChange, AuthUiState, ChoiceKind, Intent, Interaction, Output, OutputOptions,
         TranslationProvider,
         anthropic::{
             AnthropicProvider, MENU as KEY_MENU, REMOVE, SAVE,
@@ -762,16 +762,22 @@ impl Interaction for Editor {
         panic!("The key commands open no page")
     }
 
-    async fn edit(&self, _path: &Path) -> Result<(), Error> {
-        panic!("The key commands open no file")
+    async fn open_settings(&self) -> Result<(), Error> {
+        panic!("The key commands open no settings")
     }
 
-    async fn choose(&self, message: &str, choices: &[String]) -> Result<Option<String>, Error> {
+    async fn choose(
+        &self,
+        kind: ChoiceKind,
+        message: &str,
+        choices: &[String],
+    ) -> Result<Option<usize>, Error> {
+        assert_eq!(kind, ChoiceKind::Confirm);
         self.asked
             .lock()
             .unwrap()
             .push((message.to_owned(), choices.to_vec()));
-        Ok(self.accepts.then(|| choices[0].clone()))
+        Ok(self.accepts.then_some(0))
     }
 }
 

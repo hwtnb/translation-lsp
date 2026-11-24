@@ -8,6 +8,9 @@
 //! Zed makes a link of every URL in text, and ends a URL where it sees fit.
 //! So the server makes the links itself, `<URL>` for the URLs of the original,
 //! and puts [`LINK_BREAK`] in every other URL so that Zed makes no link of it.
+//! In the translation of a Markdown document, whose text is not escaped, it
+//! also breaks `www.` and e-mail addresses for a client that reads Markdown
+//! with marked, as VS Code does, which makes links of them too.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -30,6 +33,15 @@ pub(super) const ZED_OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_GFM)
     .union(Options::ENABLE_SUPERSCRIPT)
     .union(Options::ENABLE_SUBSCRIPT);
+
+/// The options of marked as VS Code 1.147 uses it: GitHub Flavored Markdown,
+/// whose tables, strikethrough, and task lists these are, without the other
+/// extensions of Zed, such as footnotes, heading attributes, metadata blocks,
+/// and superscript and subscript. Its autolinks of `www.` and e-mail
+/// addresses are broken by [`marked_breaks`].
+const MARKED_OPTIONS: Options = Options::ENABLE_TABLES
+    .union(Options::ENABLE_STRIKETHROUGH)
+    .union(Options::ENABLE_TASKLISTS);
 
 /// The options that read the formatting a translation keeps. Every other
 /// extension is left out, so that its markup reads as text and is escaped.
@@ -54,6 +66,8 @@ pub(crate) struct Urls {
     written: HashSet<String>,
     /// The destinations of the links and images of a Markdown text.
     destinations: HashSet<String>,
+    /// Whether a link to a `#section` with `$(` may stay.
+    icon_names: bool,
 }
 
 impl Urls {
@@ -62,6 +76,7 @@ impl Urls {
         Self {
             written: written_urls(original),
             destinations: HashSet::new(),
+            icon_names: true,
         }
     }
 
@@ -78,6 +93,23 @@ impl Urls {
         Self {
             written: written_urls(original),
             destinations,
+            icon_names: true,
+        }
+    }
+
+    /// These URLs without those that have `$(`, which no link to a
+    /// `#section` may have either.
+    pub fn without_icon_names(&self) -> Self {
+        let kept = |urls: &HashSet<String>| {
+            urls.iter()
+                .filter(|url| !url.contains("$("))
+                .cloned()
+                .collect()
+        };
+        Self {
+            written: kept(&self.written),
+            destinations: kept(&self.destinations),
+            icon_names: false,
         }
     }
 
@@ -99,13 +131,126 @@ pub(crate) fn render(translation: &str, urls: &Urls) -> String {
 
 /// The translation of a Markdown document as its own Markdown, with links
 /// only to the URLs of the original, or `None` if it links elsewhere.
-pub(crate) fn document(translation: &str, urls: &Urls) -> Option<String> {
+///
+/// `marked`: for a client that reads Markdown with marked, which has no
+/// footnotes and reads one as a link and its definition. Its footnotes show
+/// as text, and the Markdown must then hold as both Zed and marked read it.
+pub(crate) fn document(translation: &str, urls: &Urls, marked: bool) -> Option<String> {
+    if marked {
+        checked(&footnotes_as_text(translation), urls, true)
+    } else {
+        checked(translation, urls, false)
+    }
+}
+
+/// `translation` with a backslash before the `[` of each footnote and each
+/// footnote definition that Zed reads, so that marked reads them as text.
+fn footnotes_as_text(translation: &str) -> String {
+    let mut starts: Vec<usize> = Parser::new_ext(translation, ZED_OPTIONS)
+        .into_offset_iter()
+        .filter_map(|(event, range)| match event {
+            Event::FootnoteReference(_) | Event::Start(Tag::FootnoteDefinition(_)) => translation
+                [range.clone()]
+            .find('[')
+            .map(|offset| range.start + offset),
+            _ => None,
+        })
+        .collect();
+    starts.sort_unstable();
+    starts.dedup();
+    let mut escaped = String::with_capacity(translation.len() + starts.len());
+    let mut copied = 0;
+    for start in starts {
+        escaped.push_str(&translation[copied..start]);
+        escaped.push('\\');
+        copied = start;
+    }
+    escaped.push_str(&translation[copied..]);
+    escaped
+}
+
+/// [`document`] for Markdown that must hold as Zed reads it, and as marked
+/// does if `marked`.
+fn checked(translation: &str, urls: &Urls, marked: bool) -> Option<String> {
+    let readings: &[Options] = if marked {
+        &[ZED_OPTIONS, MARKED_OPTIONS]
+    } else {
+        &[ZED_OPTIONS]
+    };
+    let read = readings
+        .iter()
+        .map(|options| read_kinds(translation, urls, *options))
+        .collect::<Option<Vec<_>>>()?;
     let bytes = translation.as_bytes();
-    let mut kinds = vec![Kind::Other; bytes.len()];
+    // Text in any reading, where a URL could be a link; a link of the server
+    // may only stand where every reading has text.
+    let kinds: Vec<Kind> = (0..bytes.len())
+        .map(|index| {
+            let mut each = read.iter().map(|kinds| kinds[index]);
+            if each.clone().any(|kind| kind == Kind::Text) {
+                Kind::Text
+            } else if each.any(|kind| kind == Kind::Inert) {
+                Kind::Inert
+            } else {
+                Kind::Other
+            }
+        })
+        .collect();
+    let linkable = |index: usize| read.iter().all(|kinds| kinds[index] == Kind::Text);
+    let mut links = Vec::new();
+    let mut breaks = Vec::new();
+    let starts = scheme_starts(translation);
+    for (colon, _) in translation.match_indices("://") {
+        match kinds[colon] {
+            Kind::Text => match starts.get(&colon).and_then(|&start| {
+                link_end(translation, start, colon, urls, linkable).map(|end| start..end)
+            }) {
+                Some(link) => links.push(link),
+                None => breaks.push(colon),
+            },
+            Kind::Inert => breaks.push(colon),
+            Kind::Other => (),
+        }
+    }
+    if marked {
+        breaks.extend(marked_breaks(bytes, &kinds));
+        breaks.sort_unstable();
+    }
+    let mut markdown = Writer::new(false);
+    let mut links = links.into_iter().peekable();
+    let mut index = 0;
+    while index < bytes.len() {
+        if let Some(link) = links.next_if(|link| link.start == index) {
+            markdown.added('<');
+            markdown.kept_str(&translation[link.clone()], link.start);
+            markdown.added('>');
+            index = link.end;
+            continue;
+        }
+        let character = translation[index..]
+            .chars()
+            .next()
+            .expect("index is a boundary");
+        markdown.kept(index, character);
+        if breaks.binary_search(&index).is_ok() {
+            markdown.added(LINK_BREAK);
+        }
+        index += character.len_utf8();
+    }
+    readings
+        .iter()
+        .all(|options| links_stay(&markdown.markdown, urls, false, *options))
+        .then_some(markdown.markdown)
+}
+
+/// What each byte of `translation` is when read with `options`, or `None` if
+/// it has a link or image that may not stay.
+fn read_kinds(translation: &str, urls: &Urls, options: Options) -> Option<Vec<Kind>> {
+    let mut kinds = vec![Kind::Other; translation.len()];
     let mut links = 0usize;
     let mut images = 0usize;
     let mut in_code = false;
-    for (event, range) in Parser::new_ext(translation, ZED_OPTIONS).into_offset_iter() {
+    for (event, range) in Parser::new_ext(translation, options).into_offset_iter() {
         match event {
             Event::Start(Tag::Link {
                 link_type,
@@ -138,46 +283,31 @@ pub(crate) fn document(translation: &str, urls: &Urls) -> Option<String> {
             _ => (),
         }
     }
-    let mut links = Vec::new();
-    let mut breaks = Vec::new();
-    let starts = scheme_starts(translation);
-    for (colon, _) in translation.match_indices("://") {
-        match kinds[colon] {
-            Kind::Text => match starts.get(&colon).and_then(|&start| {
-                link_end(translation, start, colon, urls, |index| {
-                    kinds[index] == Kind::Text
-                })
-                .map(|end| start..end)
-            }) {
-                Some(link) => links.push(link),
-                None => breaks.push(colon),
-            },
-            Kind::Inert => breaks.push(colon),
-            Kind::Other => (),
-        }
-    }
-    let mut markdown = Writer::new(false);
-    let mut links = links.into_iter().peekable();
-    let mut index = 0;
-    while index < bytes.len() {
-        if let Some(link) = links.next_if(|link| link.start == index) {
-            markdown.added('<');
-            markdown.kept_str(&translation[link.clone()], link.start);
-            markdown.added('>');
-            index = link.end;
-            continue;
-        }
-        let character = translation[index..]
-            .chars()
-            .next()
-            .expect("index is a boundary");
-        markdown.kept(index, character);
-        if character == ':' && breaks.binary_search(&index).is_ok() {
-            markdown.added(LINK_BREAK);
-        }
-        index += character.len_utf8();
-    }
-    links_stay(&markdown.markdown, urls, false).then_some(markdown.markdown)
+    Some(kinds)
+}
+
+/// The bytes of `text` after which [`LINK_BREAK`] keeps marked from making a
+/// link of text: the last `w` of each `www.`, whatever its case, and each
+/// `@` between characters of an e-mail address.
+fn marked_breaks(text: &[u8], kinds: &[Kind]) -> Vec<usize> {
+    let local = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'+' | b'-');
+    let domain = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-');
+    (0..text.len())
+        .filter(|&index| kinds[index] == Kind::Text)
+        .filter_map(|index| {
+            let www = text[index..].len() > 3
+                && text[index..index + 3].eq_ignore_ascii_case(b"www")
+                && text[index + 3] == b'.';
+            if www {
+                return Some(index + 2);
+            }
+            let address = text[index] == b'@'
+                && index > 0
+                && local(text[index - 1])
+                && text.get(index + 1).is_some_and(|b| domain(*b));
+            address.then_some(index)
+        })
+        .collect()
 }
 
 /// What Zed does with a byte of a Markdown document.
@@ -200,7 +330,8 @@ fn stays(link_type: LinkType, destination: &str, urls: &Urls, bare: bool) -> boo
     if bare {
         matches!(link_type, LinkType::Inline | LinkType::Autolink) && urls.written(destination)
     } else {
-        destination.starts_with('#') || urls.destination(destination)
+        (destination.starts_with('#') && (urls.icon_names || !destination.contains("$(")))
+            || urls.destination(destination)
     }
 }
 
@@ -219,7 +350,7 @@ fn formatted(translation: &str, urls: &Urls, trace: bool) -> Option<Writer> {
     let roles = roles(translation, urls);
     let (links, breaks) = bare_urls(translation, &roles, urls);
     let markdown = hard_breaks(escaped(translation, &roles, &links, &breaks, trace));
-    (links_stay(&markdown.markdown, urls, true)
+    (links_stay(&markdown.markdown, urls, true, ZED_OPTIONS)
         && shown(&markdown.markdown)? == expected(translation, &roles))
     .then_some(markdown)
 }
@@ -715,11 +846,11 @@ fn hard_breaks(markdown: Writer) -> Writer {
 /// links and code has a URL that Zed would make a link of. Zed looks for URLs
 /// in the text of consecutive text events, which escapes and character
 /// references divide. `bare`: as in [`stays`]; such Markdown has no images.
-fn links_stay(markdown: &str, urls: &Urls, bare: bool) -> bool {
+fn links_stay(markdown: &str, urls: &Urls, bare: bool, options: Options) -> bool {
     let mut links = 0usize;
     let mut in_code = false;
     let mut text = String::new();
-    for event in Parser::new_ext(markdown, ZED_OPTIONS) {
+    for event in Parser::new_ext(markdown, options) {
         if let Event::Text(part) = &event
             && links == 0
             && !in_code

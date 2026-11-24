@@ -121,7 +121,7 @@ impl<P: TranslationProvider> Server<P> {
         );
         match request {
             TranslationRequest::Reply(_, PendingReply::Hover(position, _)) => {
-                to_value(preview.hover(position)).map(Some)
+                to_value(preview.hover(position, self.ui.capabilities.markup())).map(Some)
             }
             TranslationRequest::Document => {
                 let markdown = self.documents[&target.uri].language == Some(Language::Markdown);
@@ -463,10 +463,11 @@ impl<P: TranslationProvider> Server<P> {
             _ => (),
         }
         self.ui.refresh_lenses()?;
+        let markup = self.ui.capabilities.markup();
         for (id, pending) in self.scheduler.take_waiters(ticket) {
             let response = match &result {
                 Err(error) => Err(error.clone()),
-                Ok(preview) => to_value(preview.hover(pending.position)),
+                Ok(preview) => to_value(preview.hover(pending.position, markup)),
             };
             respond(connection, id, response)?;
         }

@@ -74,7 +74,7 @@ impl Editor {
                 break request;
             }
         };
-        let Some(Card::Translation(target)) = self.server.cards.get(&card.id) else {
+        let Some((Card::Translation(target), _)) = self.server.cards.get(&card.id) else {
             panic!("not a translation card");
         };
         let target = target.clone();

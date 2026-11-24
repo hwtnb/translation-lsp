@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/zed-extension", "crates/translation-lsp", "xtask"]
-default-members = ["crates/zed-extension"]
+members = ["zed-extension", "crates/translation-lsp", "xtask"]
+default-members = ["zed-extension"]
 resolver = "3"
 
 # `unsafe` is not written here. An exception is allowed at the item that needs

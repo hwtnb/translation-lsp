@@ -185,6 +185,16 @@ impl Language {
         Self::ALL.into_iter().find(|language| language.id() == id)
     }
 
+    /// The language of a document that the editor opens with language ID
+    /// `id`. VS Code opens `.jsx` files as `javascriptreact`, which settings
+    /// do not name: the JavaScript settings apply to them.
+    pub fn of_document(id: &str) -> Option<Self> {
+        match id {
+            "javascriptreact" => Some(Self::JavaScript),
+            id => Self::from_id(id),
+        }
+    }
+
     /// Markdown and Plain Text hold prose, where the other languages hold code.
     pub fn is_prose(self) -> bool {
         matches!(self, Self::Markdown | Self::PlainText)

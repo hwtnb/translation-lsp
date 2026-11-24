@@ -1,13 +1,11 @@
 //! The provider in use while the settings choose none. It translates nothing
 //! and shows how to choose a provider.
 
-use std::{env, path::PathBuf};
-
 use crate::store::Identity;
 
 use super::{
-    AccountChange, AuthUiState, Capabilities, Interaction, Output, ProviderCommand, Translated,
-    TranslationProvider, error::Error,
+    AccountChange, AuthUiState, Capabilities, ChoiceKind, Interaction, Notice, Output,
+    ProviderCommand, Translated, TranslationProvider, error::Error,
 };
 
 macro_rules! menu {
@@ -28,43 +26,69 @@ const OPEN_GUIDE: ProviderCommand = ProviderCommand {
     changes_account: AccountChange::Never,
 };
 const COMMANDS: [ProviderCommand; 2] = [OPEN_SETTINGS, OPEN_GUIDE];
+/// The title of [`OPEN_SETTINGS`] for an editor that opens its own settings.
+const OPEN_OWN_SETTINGS: &str = "Open settings";
 
 /// The message of the prompt shown when the server starts.
 const PROMPT: &str =
     "Translation LSP has no provider and translates nothing. Choose one in Zed's settings.";
+/// [`PROMPT`] for an editor that opens its own settings.
+const OWN_PROMPT: &str =
+    "Translation LSP has no provider and translates nothing. Choose one in the settings.";
 const NEXT: &str = "Add lsp.translation-lsp.initialization_options.provider to Zed's settings, \
     save them, then run editor: restart language server.";
+/// [`NEXT`] for an editor that opens its own settings.
+const OWN_NEXT: &str = "Choose a provider in the settings, then restart the language server.";
 const NOT_SET_UP: &str = concat!(
     "Translation LSP has no provider. Run \"",
     menu!(),
     "\" from the code actions to choose one"
 );
-pub(crate) const NO_SETTINGS_FILE: &str =
-    "Could not open Zed's settings file. Run zed: open settings file from the Command Palette";
-/// The setup section of the README of this version.
-const GUIDE: &str = concat!(
+/// The README of this version.
+const README: &str = concat!(
     env!("CARGO_PKG_REPOSITORY"),
     "/blob/v",
     env!("CARGO_PKG_VERSION"),
-    "/README.md#set-up-a-provider"
+    "/README.md"
 );
+/// The section of the README that sets up a provider in Zed's settings.
+const GUIDE: &str = "set-up-a-provider";
+/// The section of the README that sets up VS Code, the editor that opens
+/// settings of its own.
+const OWN_GUIDE: &str = "install-in-vs-code";
 
 /// The context of the provider that translates nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UnsetContext;
 
 #[derive(Clone, Default)]
-pub(crate) struct UnsetProvider;
+pub(crate) struct UnsetProvider {
+    /// Whether the editor opens its own settings, so that no text names Zed.
+    own_settings: bool,
+}
 
 impl UnsetProvider {
+    pub fn new(own_settings: bool) -> Self {
+        Self { own_settings }
+    }
+
     /// Asks the user to choose a provider, and runs the command they pick.
     /// Gives the message to show after it, or none if they picked nothing.
     pub async fn prompt(&self, ui: &impl Interaction) -> Result<Option<String>, Error> {
-        let titles = COMMANDS.map(|command| command.title.to_owned());
+        let commands = self.account_commands();
+        let titles: Vec<_> = commands
+            .iter()
+            .map(|command| command.title.to_owned())
+            .collect();
+        let prompt = if self.own_settings {
+            OWN_PROMPT
+        } else {
+            PROMPT
+        };
         let Some(command) = ui
-            .choose(PROMPT, &titles)
+            .choose(ChoiceKind::Message, prompt, &titles)
             .await?
-            .and_then(|title| COMMANDS.iter().find(|command| command.title == title))
+            .and_then(|index| commands.get(index))
         else {
             return Ok(None);
         };
@@ -94,13 +118,27 @@ impl TranslationProvider for UnsetProvider {
             account_menu: Some(MENU),
             commands: &COMMANDS,
             hover_note: None,
-            comment_notice: Some(concat!(
-                "> **Translation LSP is not set up**\n\nTo choose a provider, run ",
-                menu!(),
-                " from Code Actions."
-            )),
+            comment_notice: Some(Notice {
+                title: "Translation LSP is not set up",
+                body: concat!("To choose a provider, run ", menu!(), " from Code Actions."),
+            }),
             range_output_bounded: false,
         }
+    }
+
+    fn account_commands(&self) -> Vec<ProviderCommand> {
+        COMMANDS
+            .map(|command| {
+                if self.own_settings && command.command == OPEN_SETTINGS.command {
+                    ProviderCommand {
+                        title: OPEN_OWN_SETTINGS,
+                        ..command
+                    }
+                } else {
+                    command
+                }
+            })
+            .to_vec()
     }
 
     async fn translate(
@@ -116,27 +154,95 @@ impl TranslationProvider for UnsetProvider {
 
     async fn administer(&self, command: &str, ui: &impl Interaction) -> Result<String, Error> {
         if command == OPEN_SETTINGS.command {
-            let path = settings_file().ok_or(Error::failed(NO_SETTINGS_FILE))?;
-            ui.edit(&path)
-                .await
-                .map_err(|_| Error::failed(NO_SETTINGS_FILE))?;
+            ui.open_settings().await?;
         } else {
-            ui.open(GUIDE).await?;
+            let section = if self.own_settings { OWN_GUIDE } else { GUIDE };
+            ui.open(&format!("{README}#{section}")).await?;
         }
-        Ok(NEXT.into())
+        Ok(if self.own_settings { OWN_NEXT } else { NEXT }.into())
     }
 }
 
-/// Where Zed keeps the user's settings, as Zed itself locates them.
-pub(crate) fn settings_file() -> Option<PathBuf> {
-    #[cfg(windows)]
-    let directory = dirs::config_dir()?.join("Zed");
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    let directory = env::var_os("FLATPAK_XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(dirs::config_dir)?
-        .join("zed");
-    #[cfg(not(any(windows, target_os = "linux", target_os = "freebsd")))]
-    let directory = dirs::home_dir()?.join(".config").join("zed");
-    Some(directory.join("settings.json"))
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    /// An editor that opens every page and records it.
+    #[derive(Default)]
+    struct Browser(Mutex<Vec<String>>);
+
+    impl Interaction for Browser {
+        async fn open(&self, uri: &str) -> Result<(), Error> {
+            self.0.lock().unwrap().push(uri.to_owned());
+            Ok(())
+        }
+
+        async fn open_settings(&self) -> Result<(), Error> {
+            unreachable!()
+        }
+
+        async fn choose(
+            &self,
+            _kind: ChoiceKind,
+            _message: &str,
+            _choices: &[String],
+        ) -> Result<Option<usize>, Error> {
+            unreachable!()
+        }
+    }
+
+    /// The anchor that GitHub gives a heading.
+    fn anchor(heading: &str) -> String {
+        heading
+            .trim()
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_'))
+            .map(|c| if c == ' ' { '-' } else { c })
+            .collect()
+    }
+
+    fn headings(readme: &str) -> Vec<&str> {
+        readme
+            .lines()
+            .filter_map(|line| {
+                line.trim_start_matches('#')
+                    .strip_prefix(' ')
+                    .filter(|_| line.starts_with('#'))
+            })
+            .collect()
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn the_guide_opens_the_section_for_the_editor() {
+        for (own_settings, section) in [(false, GUIDE), (true, OWN_GUIDE)] {
+            let browser = Browser::default();
+            UnsetProvider::new(own_settings)
+                .administer(OPEN_GUIDE.command, &browser)
+                .await
+                .unwrap();
+            assert_eq!(*browser.0.lock().unwrap(), [format!("{README}#{section}")]);
+        }
+    }
+
+    /// Both sections are in the README, and the Japanese README has them at
+    /// the same place, under its own names.
+    #[test]
+    fn the_sections_of_the_guide_are_in_both_readmes() {
+        let english = headings(include_str!("../../../../README.md"));
+        let japanese = headings(include_str!("../../../../README.ja.md"));
+        assert_eq!(english.len(), japanese.len());
+        for (section, translated) in [
+            (GUIDE, "プロバイダーの設定"),
+            (OWN_GUIDE, "VS Codeに入れる"),
+        ] {
+            let index = english
+                .iter()
+                .position(|heading| anchor(heading) == section)
+                .unwrap_or_else(|| panic!("{section}"));
+            assert_eq!(japanese[index], translated);
+        }
+    }
 }

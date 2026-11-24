@@ -60,6 +60,29 @@
 }
 ```
 
+## VS Codeの設定
+
+VS Codeでは、このページの設定はそれぞれ `translationLsp` の下の1つの設定になり、設定エディターではTranslation LSPの下に並びます。名前は、このページの名前の各部分をキャメルケースにして点でつないだものです。`target_language` は `translationLsp.targetLanguage`、`translation_limits.input_kib.hover` は `translationLsp.translationLimits.inputKib.hover` になります。`features.languages` だけは `settings.json` に書きます。中身はこのページの名前のオブジェクトです。
+
+`translationLsp.server.path` は、拡張が起動するサーバーの場所です。VS Codeはこの値をユーザー設定からだけ読み、ワークスペースの設定からは読みません。
+
+空のままの設定は送らないので、サーバーの既定値になります。プロバイダーの設定は、選んだプロバイダーが使うものだけを送ります。`provider.document` の設定は、`translationLsp.provider.document.model` があるときだけ送ります。thinkingの設定が `auto` のときも送りません。
+
+次の `settings.json` はChatGPTを選び、YAMLのコメントのホバーを切ります。パス、モデル、推論の強さは例です。
+
+```json
+{
+  "translationLsp.server.path": "/Users/you/src/translation-lsp/target/release/translation-lsp",
+  "translationLsp.targetLanguage": "ja",
+  "translationLsp.provider.name": "chatgpt",
+  "translationLsp.provider.model": "gpt-6-luna",
+  "translationLsp.provider.effort": "low",
+  "translationLsp.features.languages": { "yaml": { "comment_hover": false } }
+}
+```
+
+設定エラーは、`target_language` のように、このページの名前で設定を示します。変えた設定は、言語サーバーの再起動で反映されます。[VS Code](usage.md#vs-code)を参照してください。
+
 ## サーバーのパス
 
 ### 探す順序
