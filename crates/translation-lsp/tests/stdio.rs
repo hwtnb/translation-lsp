@@ -5781,6 +5781,28 @@ fn a_jsx_file_that_vs_code_sends_as_javascriptreact_follows_the_javascript_setti
 }
 
 #[test]
+fn a_proto_file_that_vs_code_sends_as_proto3_translates_its_comments_and_follows_proto_settings() {
+    let uri = "file:///comment.proto";
+    let document = sample!("comment.proto");
+    let comment = "// Retry only if the remote service\n  // reports a temporary failure.";
+    let range = range_for(document, comment);
+    let mut client = Client::new(&[]);
+    client.open(uri, "proto3", document, 1);
+    assert_preview(
+        &client.hover(uri, range["start"].clone()),
+        comment,
+        COMMENT_JA,
+        &range,
+    );
+    client.finish(true);
+    let features = json!({"features": {"languages": {"proto": {"comment_hover": false}}}});
+    let mut client = Client::configured(&[], false, false, features);
+    client.open(uri, "proto3", document, 1);
+    assert!(client.hover(uri, range["start"].clone()).is_null());
+    client.finish(true);
+}
+
+#[test]
 fn icon_names_of_a_translation_show_as_written_only_where_the_client_draws_icons() {
     let uri = "file:///icons.rs";
     let document = sample!("icons.rs");

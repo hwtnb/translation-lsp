@@ -227,6 +227,6 @@ The text under a line shows about the first 100,000 characters of a translation;
 
 Changed settings apply when the language server restarts. The extension offers `Restart` in a notification. Until you choose it, the running server keeps its settings and its work. `Translation LSP: Restart Language Server` in the Command Palette restarts it at any time.
 
-The extension starts the server for the languages of [Languages](languages.md) that VS Code supports without another extension. Kotlin, Vue.js, TOML, and the other languages that need an extension in VS Code get no translation there. VS Code opens `.jsx` files as their own language, and the JavaScript settings of `features.languages` apply to them.
+The extension starts the server for every language in [Languages](languages.md). For languages that VS Code does not support on its own, install an extension for that language so VS Code assigns its language ID. Settings for JavaScript, Kotlin, Proto, and HCL in `features.languages` also apply to the related language IDs that VS Code or those extensions assign, such as `.jsx` and `.kts` files.
 
 The buttons, settings, and messages of the extension follow the display language of VS Code, in English or Japanese. The server's menus, CodeLenses, and messages stay in English.

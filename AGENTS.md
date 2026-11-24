@@ -16,7 +16,8 @@ relative to the repository root.
   `src/text/` owns comment extraction and Markdown input eligibility;
   `src/store.rs` owns the translations kept by what was sent, in memory and
   with `disk_cache` on disk;
-  `src/language.rs` names the languages that `extension.toml` registers. Run with
+  `src/language.rs` names the languages that `extension.toml` registers and maps
+  editor language IDs that differ from them. Run with
   `anthropic-key` or `deepl-key`, or with `api-key` and the address of a service,
   the same executable asks for an API key in a terminal and saves it instead of
   serving an editor.

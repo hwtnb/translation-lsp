@@ -130,7 +130,7 @@ npm run package
 
 `test` は、VS Codeなしで動くテストをVitestで実行します。拡張が送る設定、マニフェストと拡張の翻訳した文言、拡張によるサーバーの起動と停止を確かめます。`package` はRolldownで拡張をビルドし、`translation-lsp.vsix` を作ります。
 
-拡張の設定は `package.json` に、プロバイダーごとに使う設定は `src/providers.json` にあります。サーバーのテストは両方を読みます。サーバーのどの設定にも、サーバーの既定値を持つVS Codeの設定が1つずつあること、各プロバイダーがその行の設定を受け付けてほかを断ることを確かめます。拡張がサーバーを起動する言語が、サーバーの読む言語だけであることも確かめます。
+拡張の設定は `package.json` に、プロバイダーごとに使う設定は `src/providers.json` にあります。サーバーのテストは両方を読みます。サーバーのどの設定にも、サーバーの既定値を持つVS Codeの設定が1つずつあること、各プロバイダーがその行の設定を受け付けてほかを断ることを確かめます。`activationEvents` が `zed-extension/extension.toml` のすべての言語と下の読み替え対象のVS Codeの言語IDだけに一致することも確かめます。
 
 VS Codeで拡張を確かめるときは、専用のユーザーデータのディレクトリーと拡張のディレクトリーを指定してVS Codeを起動します。ふだんの設定と拡張とは分けておけます。
 
@@ -139,6 +139,23 @@ code --user-data-dir <ディレクトリー> --extensions-dir <ディレクト�
 ```
 
 同じ2つのオプションとサンプルのフォルダーを付けてもう一度起動し、`settings.json` で `translationLsp.server.path` をビルドしたサーバーに、`translationLsp.provider.name` を `mock` にします。設定エディターには `mock` は出ません。
+
+### 読み替えるVS Codeの言語ID
+
+`crates/translation-lsp/src/language.rs` の `Language::of_document` は、次のVS Codeの言語IDを、コメントの読み取りと `features.languages` の設定を使う登録済みの言語へ読み替えます。設定のキーにはこれらのIDを使えません。
+
+| VS Codeの言語ID | 読み替え先の言語 |
+| --- | --- |
+| `javascriptreact` | `javascript` |
+| `kotlinscript` | `kotlin` |
+| `proto3` | `proto` |
+| `terraform-stack` | `hcl` |
+| `terraform-deploy` | `hcl` |
+| `terraform-test` | `hcl` |
+| `terraform-mock` | `hcl` |
+| `terraform-search` | `hcl` |
+| `terraform-policy` | `hcl` |
+| `terraform-policytest` | `hcl` |
 
 ### VS Codeの拡張のメッセージ
 

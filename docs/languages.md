@@ -56,6 +56,8 @@ Hover translates the comments of the following languages.
 
 Markdown and Plain Text have no comments to read. Select text and use the Code Actions to translate it, or translate the whole document in a tab. In Markdown, a stable selection of prose also starts a translation by itself, as described under [Markdown selection](usage.md#markdown-selection).
 
+In VS Code, languages that VS Code does not support on its own work once an extension for that language assigns its language ID; see [VS Code](usage.md#vs-code).
+
 ## When a comment is not translated
 
 The server reads a document as its language reads it, without running it. Text inside strings and other literals is not a comment. To translate a key or a string value, select it and use `Translate selection to …`.

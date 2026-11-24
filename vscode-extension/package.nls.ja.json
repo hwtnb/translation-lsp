@@ -22,7 +22,7 @@
   "setting.features.selectionAction": "コードアクション `Translate selection to …` を出します。",
   "setting.features.documentAction": "Markdownとプレーンテキストで、訳文をタブで開くコードアクションを出します。",
   "setting.features.commentLens": "訳文のないコメントにもCodeLensの行を出します。",
-  "setting.features.languages": "言語ごとの機能。言語IDの下にサーバーの名前で書きます。たとえば `{\"yaml\": {\"comment_hover\": false}}`。JavaScriptの設定は `.jsx` のファイルにも効きます。",
+  "setting.features.languages": "言語ごとの機能。言語IDの下にサーバーの名前で書きます。たとえば `{\"yaml\": {\"comment_hover\": false}}`。JavaScript、Kotlin、Proto、HCLの設定は、それぞれに読み替えるVS Codeの言語IDにも効きます。",
   "configuration.hover": "ホバー",
   "setting.hover.header": "訳文の上に、題名 `Translation LSP` とプロバイダーの注記を出します。",
   "setting.hover.format": "ホバーでの訳文の見せ方。",

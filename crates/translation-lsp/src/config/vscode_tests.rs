@@ -10,6 +10,22 @@ use crate::language::Language;
 
 const MANIFEST: &str = include_str!("../../../../vscode-extension/package.json");
 const PROVIDERS: &str = include_str!("../../../../vscode-extension/src/providers.json");
+const ZED_MANIFEST: &str = include_str!("../../../../zed-extension/extension.toml");
+
+/// The VS Code language IDs outside `extension.toml` that `Language::of_document`
+/// maps to a registered language.
+const REMAPPED_LANGUAGES: [&str; 10] = [
+    "javascriptreact",
+    "kotlinscript",
+    "proto3",
+    "terraform-stack",
+    "terraform-deploy",
+    "terraform-test",
+    "terraform-mock",
+    "terraform-search",
+    "terraform-policy",
+    "terraform-policytest",
+];
 /// The section of the VS Code settings of the extension.
 const SECTION: &str = "translationLsp.";
 /// The VS Code setting that names the server executable, which the server
@@ -287,12 +303,33 @@ fn the_extension_starts_the_server_only_for_languages_it_reads() {
         .iter()
         .filter_map(|event| event.as_str().unwrap().strip_prefix("onLanguage:"))
         .collect();
-    assert!(languages.contains(&"javascriptreact"));
-    assert_eq!(
-        languages.iter().collect::<BTreeSet<_>>().len(),
-        languages.len()
-    );
+    let unique: BTreeSet<_> = languages.iter().copied().collect();
+    assert_eq!(unique.len(), languages.len());
+
+    let zed_languages: BTreeSet<_> = ZED_MANIFEST
+        .lines()
+        .skip_while(|line| *line != "[language_servers.translation-lsp.language_ids]")
+        .skip(1)
+        .take_while(|line| !line.starts_with('['))
+        .filter_map(|line| line.split_once(" = "))
+        .map(|(_, language_id)| language_id.trim_matches('"'))
+        .collect();
+    for language in &zed_languages {
+        assert!(
+            unique.contains(language),
+            "missing from VS Code activationEvents: {language}"
+        );
+    }
+
+    let extra: BTreeSet<_> = unique.difference(&zed_languages).copied().collect();
+    let expected_remapped: BTreeSet<_> = REMAPPED_LANGUAGES.into_iter().collect();
+    assert_eq!(extra, expected_remapped);
+
     for language in languages {
+        assert!(Language::of_document(language).is_some(), "{language}");
+    }
+    for language in REMAPPED_LANGUAGES {
+        assert!(Language::from_id(language).is_none(), "{language}");
         assert!(Language::of_document(language).is_some(), "{language}");
     }
 }

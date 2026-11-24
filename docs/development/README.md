@@ -130,7 +130,7 @@ npm run package
 
 `test` runs the tests that need no VS Code with Vitest: the settings that the extension sends, the localized texts of the manifest and the extension, and how the extension starts and stops the server. `package` builds the extension with Rolldown and writes `translation-lsp.vsix`.
 
-The settings of the extension are listed in `package.json`, and the settings that each provider takes in `src/providers.json`. The server's tests read both: every server setting must have one VS Code setting with the server's default, and each provider must accept the settings of its row and refuse the others. They also check that the extension starts the server only for languages that the server reads.
+The settings of the extension are listed in `package.json`, and the settings that each provider takes in `src/providers.json`. The server's tests read both: every server setting must have one VS Code setting with the server's default, and each provider must accept the settings of its row and refuse the others. They also check that `activationEvents` matches every language in `zed-extension/extension.toml` plus the mapped VS Code language IDs below.
 
 To check the extension in VS Code, start VS Code with a user data directory and an extensions directory of their own, so that your usual settings and extensions stay apart:
 
@@ -139,6 +139,23 @@ code --user-data-dir <directory> --extensions-dir <directory> --install-extensio
 ```
 
 Start it again with the same two options and a folder of samples, set `translationLsp.server.path` to the server you built, and `translationLsp.provider.name` to `mock` in `settings.json`. The Settings editor does not list `mock`.
+
+### Mapped VS Code language IDs
+
+`Language::of_document` in `crates/translation-lsp/src/language.rs` maps the following VS Code language IDs to the registered language that reads their comments and supplies their `features.languages` settings. Settings do not accept these IDs as keys.
+
+| VS Code language ID | Registered language |
+| --- | --- |
+| `javascriptreact` | `javascript` |
+| `kotlinscript` | `kotlin` |
+| `proto3` | `proto` |
+| `terraform-stack` | `hcl` |
+| `terraform-deploy` | `hcl` |
+| `terraform-test` | `hcl` |
+| `terraform-mock` | `hcl` |
+| `terraform-search` | `hcl` |
+| `terraform-policy` | `hcl` |
+| `terraform-policytest` | `hcl` |
 
 ### Messages of the VS Code extension
 

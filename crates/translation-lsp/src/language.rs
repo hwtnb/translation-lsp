@@ -186,11 +186,21 @@ impl Language {
     }
 
     /// The language of a document that the editor opens with language ID
-    /// `id`. VS Code opens `.jsx` files as `javascriptreact`, which settings
-    /// do not name: the JavaScript settings apply to them.
+    /// `id`. Some VS Code extensions send language IDs that settings do not
+    /// name; those map to the corresponding language here so its comment
+    /// reader and settings apply.
     pub fn of_document(id: &str) -> Option<Self> {
         match id {
             "javascriptreact" => Some(Self::JavaScript),
+            "proto3" => Some(Self::Proto),
+            "kotlinscript" => Some(Self::Kotlin),
+            "terraform-stack"
+            | "terraform-deploy"
+            | "terraform-test"
+            | "terraform-mock"
+            | "terraform-search"
+            | "terraform-policy"
+            | "terraform-policytest" => Some(Self::Hcl),
             id => Self::from_id(id),
         }
     }
@@ -198,5 +208,91 @@ impl Language {
     /// Markdown and Plain Text hold prose, where the other languages hold code.
     pub fn is_prose(self) -> bool {
         matches!(self, Self::Markdown | Self::PlainText)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Language;
+
+    #[test]
+    fn javascriptreact_maps_to_javascript() {
+        assert_eq!(
+            Language::of_document("javascriptreact"),
+            Some(Language::JavaScript)
+        );
+        assert_eq!(Language::from_id("javascriptreact"), None);
+    }
+
+    #[test]
+    fn proto3_maps_to_proto() {
+        assert_eq!(Language::of_document("proto3"), Some(Language::Proto));
+        assert_eq!(Language::from_id("proto3"), None);
+    }
+
+    #[test]
+    fn kotlinscript_maps_to_kotlin() {
+        assert_eq!(
+            Language::of_document("kotlinscript"),
+            Some(Language::Kotlin)
+        );
+        assert_eq!(Language::from_id("kotlinscript"), None);
+    }
+
+    #[test]
+    fn terraform_stack_maps_to_hcl() {
+        assert_eq!(
+            Language::of_document("terraform-stack"),
+            Some(Language::Hcl)
+        );
+        assert_eq!(Language::from_id("terraform-stack"), None);
+    }
+
+    #[test]
+    fn terraform_deploy_maps_to_hcl() {
+        assert_eq!(
+            Language::of_document("terraform-deploy"),
+            Some(Language::Hcl)
+        );
+        assert_eq!(Language::from_id("terraform-deploy"), None);
+    }
+
+    #[test]
+    fn terraform_test_maps_to_hcl() {
+        assert_eq!(Language::of_document("terraform-test"), Some(Language::Hcl));
+        assert_eq!(Language::from_id("terraform-test"), None);
+    }
+
+    #[test]
+    fn terraform_mock_maps_to_hcl() {
+        assert_eq!(Language::of_document("terraform-mock"), Some(Language::Hcl));
+        assert_eq!(Language::from_id("terraform-mock"), None);
+    }
+
+    #[test]
+    fn terraform_search_maps_to_hcl() {
+        assert_eq!(
+            Language::of_document("terraform-search"),
+            Some(Language::Hcl)
+        );
+        assert_eq!(Language::from_id("terraform-search"), None);
+    }
+
+    #[test]
+    fn terraform_policy_maps_to_hcl() {
+        assert_eq!(
+            Language::of_document("terraform-policy"),
+            Some(Language::Hcl)
+        );
+        assert_eq!(Language::from_id("terraform-policy"), None);
+    }
+
+    #[test]
+    fn terraform_policytest_maps_to_hcl() {
+        assert_eq!(
+            Language::of_document("terraform-policytest"),
+            Some(Language::Hcl)
+        );
+        assert_eq!(Language::from_id("terraform-policytest"), None);
     }
 }

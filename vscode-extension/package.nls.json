@@ -22,7 +22,7 @@
   "setting.features.selectionAction": "Offers the `Translate selection to …` Code Action.",
   "setting.features.documentAction": "Offers the Code Actions that open a translation in a tab, in Markdown and Plain Text.",
   "setting.features.commentLens": "Shows a CodeLens line on comments with no translation.",
-  "setting.features.languages": "The features of one language, by its language ID, with the names of the server, such as `{\"yaml\": {\"comment_hover\": false}}`. JavaScript settings also apply to `.jsx` files.",
+  "setting.features.languages": "The features of one language, by its language ID, with the names of the server, such as `{\"yaml\": {\"comment_hover\": false}}`. JavaScript, Kotlin, Proto, and HCL settings also apply to the other VS Code language IDs mapped to them.",
   "configuration.hover": "Hover",
   "setting.hover.header": "Shows the title `Translation LSP` and the provider's note above a translation.",
   "setting.hover.format": "How Hover shows a translation.",
