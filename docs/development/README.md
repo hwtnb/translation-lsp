@@ -128,7 +128,7 @@ npm run package
 
 `check` checks the types. `lint` runs Oxlint, including its rules that use the types, such as one against a promise that nothing awaits, and fails on any warning. `format:check` checks that Oxfmt leaves `src` and `test` as they are; `npm run format` formats them.
 
-`test` runs the tests that need no VS Code with Vitest: the settings that the extension sends, the localized texts of the manifest and the extension, and how the extension starts and stops the server. `package` builds the extension with Rolldown and writes `translation-lsp.vsix`.
+`test` uses Vitest to check the settings the extension sends, localized text, translation comment author names, and how the extension starts and stops the server. These tests run without VS Code. `package` builds the extension with Rolldown and writes `translation-lsp.vsix`.
 
 The settings of the extension are listed in `package.json`, and the settings that each provider takes in `src/providers.json`. The server's tests read both: every server setting must have one VS Code setting with the server's default, and each provider must accept the settings of its row and refuse the others. They also check that `activationEvents` matches every language in `zed-extension/extension.toml` plus the mapped VS Code language IDs below.
 
@@ -163,7 +163,7 @@ The extension names the messages it takes under `capabilities.experimental.trans
 
 | Name | What changes |
 | --- | --- |
-| `showTranslation` | `translation-lsp.show-translation` sends the notification `translation-lsp/showTranslation` in place of a card. |
+| `showTranslation` | `translation-lsp.show-translation` sends the notification `translation-lsp/showTranslation` in place of a card. The extension uses `Translation LSP: <language name>` as the comment author for both translations and errors. The name comes from `targetLanguage` and the VS Code display language, with the original value as a fallback. |
 | `openSettings` | Opening the settings sends the request `translation-lsp/openSettings`, with `null` as its parameters, in place of opening Zed's settings file. A success means the settings opened. The texts that name Zed's settings name the settings instead. |
 | `choose` | A menu that the user opens, such as `Settings` or the account menu of the provider, and the question before every cached translation is deleted or a saved key is removed, send the request `translation-lsp/choose` in place of a message with buttons. The prompt that the server opens itself when no provider is set stays a message. |
 | `themeIcons` | The Hover header is `$(globe) Translation LSP`. In Hover and in `showTranslation`, the server puts a word joiner after each `$` before `(`, and makes no link to a URL or a `#section` with `$(`, so that VS Code draws no icon from a translation. In a CodeLens line, it puts a backslash before each icon name. |

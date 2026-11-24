@@ -81,9 +81,7 @@ export class TranslationThreads implements vscode.Disposable {
     const { start, end } = shown.range;
     const range = new vscode.Range(start.line, start.character, end.line, end.character);
     const body = new vscode.MarkdownString(shown.markdown, true);
-    // VS Code gives every comment a line for its author, which tells what
-    // the translation is.
-    const author = { name: describeTranslation(shown) };
+    const author = { name: describeTranslation(shown.targetLanguage) };
     const comment: vscode.Comment = { body, mode: vscode.CommentMode.Preview, author };
     const thread = this.controller.createCommentThread(uri, range, [comment]);
     thread.canReply = false;
@@ -147,12 +145,10 @@ export class TranslationThreads implements vscode.Disposable {
   }
 }
 
-/** What `shown` is: a translation into its target language, or a failure of one. */
-function describeTranslation(shown: Shown): string {
-  const language = nameLanguage(shown.targetLanguage ?? "", vscode.env.language);
-  return shown.failed
-    ? vscode.l10n.t("Translation to {0} failed", language)
-    : vscode.l10n.t("Translation to {0}", language);
+/** The comment author name with the target language in VS Code's display language. */
+function describeTranslation(targetLanguage: string): string {
+  const language = nameLanguage(targetLanguage ?? "", vscode.env.language);
+  return `Translation LSP: ${language}`;
 }
 
 /**

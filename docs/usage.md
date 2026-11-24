@@ -220,7 +220,7 @@ In VS Code, the extension works as described on this page, with these difference
 - Hover titles a translation with a globe icon and `Translation LSP`, without a quote.
 - Clicking the first line of a translation, or `Translation failed`, opens the text under that line in place of a card. Its buttons copy the text, translate it again, delete it, and close it. The copy holds the translation as it came, without the characters added to format it, and a dictionary entry as its Markdown. Editing the document, or opening another translation, closes it.
 - `Open settings` in the `Settings` menu, and `Settings` above Markdown and Plain Text, open the settings of the extension.
-- The line above the text names what it is, such as `Translation to Japanese` or `Translation to Japanese failed`.
+- The line above a translation or an error shows `Translation LSP: Japanese` for a Japanese target in an English VS Code window. The language name follows the VS Code display language. If the name cannot be resolved, the configured target appears as written.
 - Menus, such as `Settings` and the menu of an API key, open as a list at the top of the window, titled with what they are for. The questions before deleting all cached translations and before removing a saved key open as a dialog with `Cancel`.
 
 The text under a line shows about the first 100,000 characters of a translation; `Copy` holds all of it.

@@ -128,7 +128,7 @@ npm run package
 
 `check` は型を検査します。`lint` はOxlintを実行し、待たないPromiseを禁じる規則のような、型を使う規則も見ます。警告が1つでもあれば失敗します。`format:check` は `src` と `test` がOxfmtの整形のとおりであることを確かめます。整形は `npm run format` で行います。
 
-`test` は、VS Codeなしで動くテストをVitestで実行します。拡張が送る設定、マニフェストと拡張の翻訳した文言、拡張によるサーバーの起動と停止を確かめます。`package` はRolldownで拡張をビルドし、`translation-lsp.vsix` を作ります。
+`test` はVitestを使い、VS Codeを起動せずに、拡張が送る設定、翻訳した文言、訳文のコメント欄の書き手名、サーバーの起動と停止を確かめます。`package` はRolldownで拡張をビルドし、`translation-lsp.vsix` を作ります。
 
 拡張の設定は `package.json` に、プロバイダーごとに使う設定は `src/providers.json` にあります。サーバーのテストは両方を読みます。サーバーのどの設定にも、サーバーの既定値を持つVS Codeの設定が1つずつあること、各プロバイダーがその行の設定を受け付けてほかを断ることを確かめます。`activationEvents` が `zed-extension/extension.toml` のすべての言語と下の読み替え対象のVS Codeの言語IDだけに一致することも確かめます。
 
@@ -163,7 +163,7 @@ code --user-data-dir <ディレクトリー> --extensions-dir <ディレクト�
 
 | 名前 | 変わること |
 | --- | --- |
-| `showTranslation` | `translation-lsp.show-translation` は、カードの代わりに通知 `translation-lsp/showTranslation` を送ります。 |
+| `showTranslation` | `translation-lsp.show-translation` は、カードの代わりに通知 `translation-lsp/showTranslation` を送ります。拡張は訳文と失敗理由のどちらも、コメント欄の書き手名を `Translation LSP: <言語名>` にします。言語名は `targetLanguage` をVS Codeの表示言語で引き、名前が分からなければ元の値を使います。 |
 | `openSettings` | 設定を開くとき、Zedの設定ファイルを開く代わりに、要求 `translation-lsp/openSettings` を引数 `null` で送ります。成功の応答は、設定が開いたことを表します。Zedの設定を指す文言は、設定を指す文言になります。 |
 | `choose` | ユーザーが開くメニュー（`Settings` や、プロバイダーのアカウントのメニュー）と、キャッシュした訳文をすべて削除する前と保存したキーを削除する前の確認は、ボタン付きのメッセージの代わりに、要求 `translation-lsp/choose` を送ります。プロバイダーが未設定のときにサーバーが自分で出す案内は、メッセージのままです。 |
 | `themeIcons` | ホバーの見出しは `$(globe) Translation LSP` です。ホバーと `showTranslation` では、`(` の前の `$` の後ろに単語結合子を入れ、`$(` を含むURLと `#節` はリンクにしません。VS Codeが訳文からアイコンを描かないようにするためです。CodeLensの行では、アイコン名の前にバックスラッシュを入れます。 |
