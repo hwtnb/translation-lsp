@@ -310,10 +310,10 @@ Rustの字句解析器は、`unicode-ident` と `unicode-properties` のUnicode�
 
 ## 依存ライブラリのライセンス表示
 
-サーバーの各リリースアーカイブには `THIRD_PARTY_LICENSES.txt` が入っています。内容は、その配布対象でサーバーが依存するライブラリのライセンスと、それぞれのソースの取得先です。`xtask` は梱包のときにこのファイルを生成し、リポジトリには置きません。生成には、[cargo-about](https://github.com/EmbarkStudios/cargo-about) 0.9.2を、`about.toml` とテンプレート `xtask/notices.hbs` で実行します。このバージョンは次のコマンドで導入します。
+サーバーの各リリースアーカイブには `THIRD_PARTY_LICENSES.txt` が入っています。内容は、その配布対象でサーバーが依存するライブラリのライセンスと、それぞれのソースの取得先です。`xtask` は梱包のときにこのファイルを生成し、リポジトリには置きません。生成には、[cargo-about](https://github.com/EmbarkStudios/cargo-about) 0.9.3を、`about.toml` とテンプレート `xtask/notices.hbs` で実行します。このバージョンは次のコマンドで導入します。
 
 ```sh
-cargo install --locked --features cli cargo-about@0.9.2
+cargo install --locked --features cli cargo-about@0.9.3
 ```
 
 `about.toml` には、受け入れるライセンスを列挙しています。そのどれも選べない依存があると、`check-notices` と梱包が失敗します。ライセンスを確認してから、一覧に追加してください。

@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::source::{self, Target};
 
 /// The version the workflows install. Another version may read licenses differently.
-const CARGO_ABOUT: &str = "0.9.2";
+const CARGO_ABOUT: &str = "0.9.3";
 
 /// The crates that may stand under the standard text of a license, which names
 /// no copyright holder, each with why no text of its authors can be given.

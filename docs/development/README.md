@@ -310,10 +310,10 @@ The Rust lexer does not compile unless `unicode-ident` and `unicode-properties` 
 
 ## Dependency notices
 
-Each release archive of the server contains `THIRD_PARTY_LICENSES.txt`: the licenses of the server's dependencies on that target, and where to download the source of each. `xtask` generates the file while packaging and does not keep it in the repository. It runs [cargo-about](https://github.com/EmbarkStudios/cargo-about) 0.9.2 with `about.toml` and the template `xtask/notices.hbs`. Install that version with:
+Each release archive of the server contains `THIRD_PARTY_LICENSES.txt`: the licenses of the server's dependencies on that target, and where to download the source of each. `xtask` generates the file while packaging and does not keep it in the repository. It runs [cargo-about](https://github.com/EmbarkStudios/cargo-about) 0.9.3 with `about.toml` and the template `xtask/notices.hbs`. Install that version with:
 
 ```sh
-cargo install --locked --features cli cargo-about@0.9.2
+cargo install --locked --features cli cargo-about@0.9.3
 ```
 
 `about.toml` lists the accepted licenses. A dependency that offers none of them makes `check-notices` and packaging fail; review its license before adding it to the list.

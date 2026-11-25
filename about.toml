@@ -162,10 +162,6 @@ git = [{ path = "LICENSE", checksum = "95ced5ecf1133fbf41d409b5555c86c344f83f3b0
 license = "MIT"
 git = [{ path = "LICENSE", checksum = "95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3" }]
 
-[oxc_index.clarify]
-license = "MIT"
-git = [{ path = "LICENSE", checksum = "95ced5ecf1133fbf41d409b5555c86c344f83f3b019926057ddbc07cfdcc27b3" }]
-
 [tree-sitter-cpp.clarify]
 license = "MIT"
 git = [{ path = "LICENSE", checksum = "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1" }]
