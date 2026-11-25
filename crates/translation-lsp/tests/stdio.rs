@@ -4780,7 +4780,7 @@ fn without_a_provider_the_server_translates_nothing_and_shows_how_to_choose_one(
     assert_eq!(
         guide.params["uri"],
         format!(
-            "https://github.com/hwtnb/zed-translation-lsp/blob/v{}/README.md#set-up-a-provider",
+            "https://github.com/hwtnb/translation-lsp/blob/v{}/README.md#set-up-a-provider",
             env!("CARGO_PKG_VERSION")
         )
     );

@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub const REPOSITORY: &str = "https://github.com/hwtnb/zed-translation-lsp";
+pub const REPOSITORY: &str = "https://github.com/hwtnb/translation-lsp";
 
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

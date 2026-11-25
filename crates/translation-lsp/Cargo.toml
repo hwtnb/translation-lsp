@@ -4,7 +4,7 @@ version = "0.9.0"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
-repository = "https://github.com/hwtnb/zed-translation-lsp"
+repository = "https://github.com/hwtnb/translation-lsp"
 publish = false
 
 [lints]

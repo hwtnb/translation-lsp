@@ -25,7 +25,7 @@ Translation LSPは、Zedでコードのコメントと、Markdownの文章を翻
 Translation LSPは、開発用拡張として導入します。Zedがチェックアウトから拡張をビルドし、拡張が言語サーバーを取得します。
 
 1. Zedと、[rustup経由のRust](https://www.rust-lang.org/tools/install)を導入します。Zedは、開発用拡張のビルドにRustを使います。
-2. このリポジトリをクローンし、[公開済みリリース](https://github.com/hwtnb/zed-translation-lsp/releases)のタグをチェックアウトします。
+2. このリポジトリをクローンし、[公開済みリリース](https://github.com/hwtnb/translation-lsp/releases)のタグをチェックアウトします。
 3. Zedの拡張画面で `Install Dev Extension` を選び、チェックアウト内の **`zed-extension`** を指定します。v0.9.0までのタグでは `crates/zed-extension` です。[Zedの開発用拡張の導入手順](https://zed.dev/docs/extensions/developing-extensions)も参照してください。
 
 Zedの設定で言語の言語サーバーを列挙している場合は、その一覧に `"translation-lsp"` を加えてください。[言語サーバーの設定](docs/ja/languages.md#言語サーバーの設定)を参照してください。

@@ -97,7 +97,7 @@ The extension starts the first server it finds, in this order:
 
 ### Automatic download and cache
 
-When the first two give no server, the extension downloads one from this repository's [GitHub Releases](https://github.com/hwtnb/zed-translation-lsp/releases) and keeps it in its work directory. It downloads the server of its own version, which is not always the latest release. Later starts use the kept server and need no network access. After the extension is updated, it downloads the server of its new version and removes the servers of other versions.
+When the first two give no server, the extension downloads one from this repository's [GitHub Releases](https://github.com/hwtnb/translation-lsp/releases) and keeps it in its work directory. It downloads the server of its own version, which is not always the latest release. Later starts use the kept server and need no network access. After the extension is updated, it downloads the server of its new version and removes the servers of other versions.
 
 A download that does not complete is discarded, and the next start tries again. The extension never starts a partly downloaded server. The download goes through Zed's HTTPS downloader; the extension does not compare the archive with the release's `SHA256SUMS`.
 

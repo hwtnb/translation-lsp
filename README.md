@@ -25,7 +25,7 @@ You can translate with ChatGPT using your plan, the Anthropic API, the OpenAI AP
 Install Translation LSP as a development extension: Zed builds the extension from a checkout, and the extension downloads the language server.
 
 1. Install Zed and [Rust through rustup](https://www.rust-lang.org/tools/install). Zed builds development extensions with Rust.
-2. Clone this repository and check out the tag of a [published release](https://github.com/hwtnb/zed-translation-lsp/releases).
+2. Clone this repository and check out the tag of a [published release](https://github.com/hwtnb/translation-lsp/releases).
 3. In Zed's Extensions view, choose `Install Dev Extension` and select **`zed-extension`** in the checkout; in tags up to v0.9.0, it is `crates/zed-extension`. See [Zed's development extension instructions](https://zed.dev/docs/extensions/developing-extensions).
 
 If your Zed settings list the language servers of a language, add `"translation-lsp"` to that list; see [Language server settings](docs/languages.md#language-server-settings).

@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hwtnb/zed-translation-lsp"
+    "url": "https://github.com/hwtnb/translation-lsp"
   },
   "engines": {
     "vscode": "^1.123.0"
