@@ -162,10 +162,11 @@ fn a_package_holds_the_server_of_its_archive_and_nothing_else() -> Result<()> {
                 .0 = b"other".to_vec();
         })?;
         assert!(error.contains("differs"), "{error}");
+        let current = source::version()?;
         for (publisher, name, version) in [
             (PUBLISHER, NAME, "0.0.1"),
-            ("other", NAME, "0.9.0"),
-            (PUBLISHER, "other", "0.9.0"),
+            ("other", NAME, current.as_str()),
+            (PUBLISHER, "other", current.as_str()),
         ] {
             let error = rejected(&|files| {
                 files.get_mut("extension/package.json").unwrap().0 = serde_json::to_vec(
