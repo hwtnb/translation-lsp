@@ -1809,13 +1809,15 @@ fn progress_registration_does_not_block_hover_or_coalesced_waiter_cancellation()
     client.send(Response::new_ok(create.id, Value::Null).into());
     let begin = client.progress_kind("begin");
     assert_eq!(begin["token"], create.params["token"]);
-    assert_eq!(
-        begin["value"],
-        json!({
-            "kind":"begin", "title":"Translation LSP", "cancellable":true,
-            "message":"Translating: 1, queued: 0"
-        })
-    );
+    assert_eq!(begin["value"]["title"], "Translation LSP");
+    assert_eq!(begin["value"]["cancellable"], true);
+    // The worker reports that it started the job on its own thread, so the
+    // progress may begin before the job counts as running.
+    let running = "Translating: 1, queued: 0";
+    if begin["value"]["message"] != running {
+        assert_eq!(begin["value"]["message"], "Queued: 1");
+        assert_eq!(client.progress_kind("report")["value"]["message"], running);
+    }
     assert_preview(
         &client.receive(second, TIMEOUT).unwrap(),
         COMMENT,
