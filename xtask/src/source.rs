@@ -114,7 +114,10 @@ impl Target {
         format!("translation-lsp-v{version}-{}.{suffix}", self.target)
     }
     pub fn vsix_name(&self, version: &str) -> String {
-        format!("translation-lsp-v{version}-{}.vsix", self.vscode_target())
+        format!(
+            "vscode-translation-lsp-v{version}-{}.vsix",
+            self.vscode_target()
+        )
     }
 }
 

@@ -150,7 +150,7 @@ code --user-data-dir <ディレクトリー> --extensions-dir <ディレクト�
 
 ### リリースのパッケージ
 
-リリースには、配布対象ごとに拡張のパッケージがあります。名前は `translation-lsp-v<バージョン>-<対象>.vsix` で、対象は `darwin-arm64` のような `vsce` の対象の名前です。配布対象ごとのその名前は、`xtask/src/source.rs` の `vscode_target` が決めます。各パッケージは `server/` に、その配布対象のリリースのアーカイブのサーバーと、アーカイブの `LICENSE` と `THIRD_PARTY_LICENSES.txt` を持ちます。
+リリースには、配布対象ごとに拡張のパッケージがあります。名前は `vscode-translation-lsp-v<バージョン>-<対象>.vsix` で、対象は `darwin-arm64` のような `vsce` の対象の名前です。配布対象ごとのその名前は、`xtask/src/source.rs` の `vscode_target` が決めます。各パッケージは `server/` に、その配布対象のリリースのアーカイブのサーバーと、アーカイブの `LICENSE` と `THIRD_PARTY_LICENSES.txt` を持ちます。
 
 `package-vscode` は、サーバーをビルドし直さずに、`dist` のアーカイブからパッケージを作ります。先に `vscode-extension` で `npm ci` を実行しておきます。`--target` で対象を絞れます。繰り返して複数の対象を指定できます。
 

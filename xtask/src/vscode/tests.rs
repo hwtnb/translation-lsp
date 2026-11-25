@@ -109,7 +109,7 @@ fn each_release_target_has_its_own_vsce_target() -> Result<()> {
     let version = source::version()?;
     assert_eq!(
         source::target("x86_64-pc-windows-msvc")?.vsix_name(&version),
-        format!("translation-lsp-v{version}-win32-x64.vsix")
+        format!("vscode-translation-lsp-v{version}-win32-x64.vsix")
     );
     Ok(())
 }

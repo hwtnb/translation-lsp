@@ -150,7 +150,7 @@ To use a package for development in your usual VS Code, run `Extensions: Install
 
 ### Packages of a release
 
-A release has a package of the extension for each release target, named `translation-lsp-v<version>-<target>.vsix` with the target name of `vsce`, such as `darwin-arm64`. `vscode_target` in `xtask/src/source.rs` gives that name for each release target. In `server/`, each package holds the server of its target's release archive, with the archive's `LICENSE` and `THIRD_PARTY_LICENSES.txt`.
+A release has a package of the extension for each release target, named `vscode-translation-lsp-v<version>-<target>.vsix` with the target name of `vsce`, such as `darwin-arm64`. `vscode_target` in `xtask/src/source.rs` gives that name for each release target. In `server/`, each package holds the server of its target's release archive, with the archive's `LICENSE` and `THIRD_PARTY_LICENSES.txt`.
 
 `package-vscode` makes the packages from the archives in `dist`, without building the server again. It needs `npm ci` in `vscode-extension` first. `--target` limits it to a target, and may be repeated:
 
