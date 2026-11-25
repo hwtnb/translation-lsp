@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use zip::{ZipWriter, write::SimpleFileOptions};
+use zip::{System, ZipWriter, write::SimpleFileOptions};
 
 use super::*;
 use crate::archive::tests::{binary, source};
@@ -54,7 +54,12 @@ fn list_package_files(archive: &Path) -> Result<Files> {
 fn write_files(path: &Path, files: &Files) -> Result<()> {
     let mut package = ZipWriter::new(File::create(path)?);
     for (name, (data, mode)) in files {
-        package.start_file(name, SimpleFileOptions::default().unix_permissions(*mode))?;
+        // As vsce writes it on macOS and Linux; on Windows the archive would
+        // otherwise give its files no Unix permissions.
+        let options = SimpleFileOptions::default()
+            .system(System::Unix)
+            .unix_permissions(*mode);
+        package.start_file(name, options)?;
         package.write_all(data)?;
     }
     package.finish()?;
