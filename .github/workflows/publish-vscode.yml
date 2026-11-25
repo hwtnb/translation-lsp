@@ -1,0 +1,113 @@
+name: Publish VS Code extension
+
+# Publishes the VS Code packages of a published GitHub release to the Visual
+# Studio Marketplace. The Marketplace trusts this workflow by its file name
+# through Trusted Publishing, so it needs no secret; renaming the file needs
+# a new policy there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag of a published release, such as v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# A second run waits for the first instead of publishing beside it.
+concurrency:
+  group: publish-vscode
+  cancel-in-progress: false
+
+jobs:
+  # Checks the release with the code of its tag. This job cannot publish:
+  # only the next one may request a token for the Marketplace, and it runs
+  # no code of the tag.
+  check:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check the tag
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected the tag of a release, such as v1.2.3"
+            exit 1
+          fi
+      # A draft release is not readable with this token, and the packages
+      # must not reach the Marketplace before the release does.
+      - name: Download the assets of the published release
+        run: |
+          if ! draft=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .draft); then
+            echo "::error::No published release has the tag $TAG. Publish the draft release first."
+            exit 1
+          fi
+          if [ "$draft" != false ]; then
+            echo "::error::The release $TAG is still a draft. Publish it first."
+            exit 1
+          fi
+          gh release download "$TAG" --dir release \
+            --pattern '*.tar.gz' --pattern '*.zip' --pattern '*.vsix' --pattern SHA256SUMS
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          path: source
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Check the assets against SHA256SUMS and the tag
+        working-directory: source
+        run: cargo +stable run -p xtask --locked -- check-release --directory ../release --tag "$TAG"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vscode-packages
+          path: release/*.vsix
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # The commit that the run started from, not the tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # No install script runs where a Marketplace token can be requested.
+      # vsce publishes a package without signing it, which is all that the
+      # scripts would prepare.
+      - name: Install vsce
+        working-directory: vscode-extension
+        run: npm ci --ignore-scripts
+      # Outside the checkout, so that no file of the repository is published.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vscode-packages
+          path: ${{ runner.temp }}/vscode-packages
+      - name: Count the packages
+        run: |
+          files=$(find "$RUNNER_TEMP/vscode-packages" -mindepth 1 | wc -l)
+          packages=$(find "$RUNNER_TEMP/vscode-packages" -mindepth 1 -maxdepth 1 -type f -name '*.vsix' | wc -l)
+          if [ "$files" -ne 6 ] || [ "$packages" -ne 6 ]; then
+            echo "::error::Expected the six checked VS Code packages, found $files files"
+            exit 1
+          fi
+      # Each package whose version the Marketplace already has for its target
+      # is skipped, so a run that failed partway can be started again.
+      - name: Publish to the Visual Studio Marketplace
+        working-directory: vscode-extension
+        run: npx --no vsce publish --oidc --skip-duplicate --packagePath "$RUNNER_TEMP"/vscode-packages/*.vsix

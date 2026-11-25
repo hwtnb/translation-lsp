@@ -19,7 +19,7 @@ import {
   SECTION,
   SERVER_PATH,
   buildInitializationOptions,
-  checkServerPath,
+  locateServer,
   pickUserValue,
 } from "./settings";
 import { SHOW_TRANSLATION, type Shown, TranslationThreads, tellUntold } from "./translation";
@@ -154,7 +154,7 @@ function reportServerPath(message: string): undefined {
  * server to answer, or tells why none starts.
  */
 async function start(context: vscode.ExtensionContext): Promise<Server | undefined> {
-  const command = readServerPath();
+  const command = readServerPath(context.extensionPath);
   if (command === undefined) {
     return undefined;
   }
@@ -174,10 +174,17 @@ async function start(context: vscode.ExtensionContext): Promise<Server | undefin
   return server;
 }
 
-/** The path of the server in the settings, or `undefined` after telling why the server cannot start from it. */
-function readServerPath(): string | undefined {
+/**
+ * The path of the server to start, from the settings or the extension, or
+ * `undefined` after telling why none starts.
+ */
+function readServerPath(extensionPath: string): string | undefined {
   const path = vscode.workspace.getConfiguration(SECTION).get<unknown>(SERVER_PATH, "");
-  switch (checkServerPath(path)) {
+  const server = locateServer(path, extensionPath);
+  if ("path" in server) {
+    return server.path;
+  }
+  switch (server.problem) {
     case "not text":
       return reportServerPath(
         vscode.l10n.t(
@@ -187,7 +194,9 @@ function readServerPath(): string | undefined {
       );
     case "empty":
       return reportServerPath(
-        vscode.l10n.t("Set the path of the Translation LSP server to start it."),
+        vscode.l10n.t(
+          "This copy of the extension holds no Translation LSP server. Set the path of a server that you built to start it.",
+        ),
       );
     case "relative":
       return reportServerPath(
@@ -206,7 +215,6 @@ function readServerPath(): string | undefined {
         vscode.l10n.t("The path of the Translation LSP server cannot be read: {0}", String(path)),
       );
   }
-  return path as string;
 }
 
 /** The options of the client of `server`, which they read only once the client runs. */

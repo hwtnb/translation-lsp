@@ -9,7 +9,9 @@ relative to the repository root.
   Select this directory when using **Install Dev Extension**.
 - `vscode-extension`: the VS Code extension (TypeScript, npm), a client of the
   same server. Its settings table and the languages it starts the server for
-  are checked by the server's tests.
+  are checked by the server's tests. Each release package of it holds the
+  server of one release target; `xtask` makes the packages from the release
+  archives, and `.github/workflows/publish-vscode.yml` publishes them.
 - `crates/translation-lsp`: native language server. `src/config.rs` owns settings;
   `src/lsp/` owns requests, scheduling, previews, and activity;
   `src/providers/` owns translation providers and authentication;
@@ -25,7 +27,8 @@ relative to the repository root.
 - `crates/translation-lsp/tests/key_command.rs`: integration tests for the
   `anthropic-key`, `deepl-key`, and `api-key` commands on a pseudo-terminal, for
   macOS and Linux.
-- `xtask`: development-only native packaging, license collection, and artifact checks.
+- `xtask`: development-only packaging of the server and the VS Code extension,
+  license collection, and artifact checks.
 - `README.md` and `docs/`: canonical English usage and development documentation.
   `README.md` is the entry point; `docs/` holds the details. `README.ja.md` and
   `docs/ja/` provide the Japanese version under the same file names. Consult the

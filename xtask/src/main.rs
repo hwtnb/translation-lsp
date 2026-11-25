@@ -1,12 +1,13 @@
 use std::{env, path::PathBuf, slice};
 
-use anyhow::Result;
+use anyhow::{Context, Result, ensure};
 use clap::Parser;
 
 mod archive;
 mod notices;
 mod smoke;
 mod source;
+mod vscode;
 
 /// Packages the native server and checks what a release is made from.
 #[derive(Parser)]
@@ -39,7 +40,30 @@ enum Command {
         #[arg(long, value_name = "PATH")]
         archive: PathBuf,
     },
-    /// Checks the archives of all release targets and writes `SHA256SUMS`.
+    /// Creates and checks the VS Code extension packages from the release
+    /// archives, and tests the server of the package for this machine.
+    PackageVscode {
+        /// One of the release targets that `matrix` prints; may be repeated.
+        /// Defaults to all of them.
+        #[arg(long, value_name = "TRIPLE")]
+        target: Vec<String>,
+        /// Holds the archives and receives the packages. Defaults to `dist`
+        /// in the repository.
+        #[arg(long, value_name = "PATH")]
+        directory: Option<PathBuf>,
+    },
+    /// Checks the assets downloaded from a published release against its
+    /// `SHA256SUMS` and, as `checksums` does, against the checkout of its
+    /// tag, before its VS Code packages are published.
+    CheckRelease {
+        #[arg(long, value_name = "PATH")]
+        directory: PathBuf,
+        /// The tag of the release, such as `v1.2.3`.
+        #[arg(long)]
+        tag: String,
+    },
+    /// Checks the archives and VS Code packages of all release targets and
+    /// writes `SHA256SUMS`.
     Checksums {
         /// Defaults to `dist` in the repository.
         #[arg(long, value_name = "PATH")]
@@ -88,6 +112,46 @@ fn main() -> Result<()> {
             println!("{}", path.display());
         }
         Command::Smoke { archive } => smoke::archive(&archive)?,
+        Command::PackageVscode { target, directory } => {
+            source::check()?;
+            let directory = directory.unwrap_or_else(|| root.join("dist"));
+            let targets = if target.is_empty() {
+                source::targets()?
+            } else {
+                target
+                    .iter()
+                    .map(|name| source::target(name))
+                    .collect::<Result<_>>()?
+            };
+            let version = source::version()?;
+            let missing: Vec<_> = targets
+                .iter()
+                .map(|t| t.archive_name(&version))
+                .filter(|name| !directory.join(name).is_file())
+                .collect();
+            ensure!(
+                missing.is_empty(),
+                "Missing release archives in {}: {missing:?}",
+                directory.display()
+            );
+            for target in targets {
+                println!("{}", vscode::package(&target, &directory)?.display());
+            }
+        }
+        Command::CheckRelease { directory, tag } => {
+            let commit = source::git(&["rev-parse", "HEAD"])?;
+            let tagged = source::git(&[
+                "rev-parse",
+                "--verify",
+                &format!("refs/tags/{tag}^{{commit}}"),
+            ])
+            .with_context(|| format!("Reading the commit of the tag {tag}"))?;
+            ensure!(
+                tagged == commit,
+                "The checkout is not the commit of the tag {tag}"
+            );
+            archive::check_release(&directory, &tag, &commit)?;
+        }
         Command::Checksums { directory } => {
             let directory = directory.unwrap_or_else(|| root.join("dist"));
             archive::checksums(&directory, &source::git(&["rev-parse", "HEAD"])?)?;

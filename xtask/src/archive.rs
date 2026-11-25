@@ -11,9 +11,12 @@ use sha2::{Digest, Sha256};
 use tar::{Archive, Builder, Header};
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
-use crate::source::{self, Arch, Os, Source, Target};
+use crate::{
+    source::{self, Arch, Os, Source, Target},
+    vscode,
+};
 
-type Files = BTreeMap<String, Vec<u8>>;
+pub type Files = BTreeMap<String, Vec<u8>>;
 
 pub fn check_binary(path: &Path, target: &Target) -> Result<()> {
     let mut file = File::open(path)?;
@@ -93,11 +96,14 @@ fn write(path: &Path, files: &Files, executable: &str, epoch: u64) -> Result<()>
     Ok(())
 }
 
-fn read(path: &Path) -> Result<Files> {
+pub fn read(path: &Path) -> Result<Files> {
     let mut files = Files::new();
     let file = File::open(path)?;
     if path.extension().is_some_and(|e| e == "zip") {
         let mut archive = ZipArchive::new(file)?;
+        // The archive keeps only one of the files of a name, so the check
+        // below never sees a name twice.
+        ensure!(!archive.has_duplicate_names(), "Duplicate archive entry");
         for index in 0..archive.len() {
             let mut entry = archive.by_index(index)?;
             ensure!(
@@ -245,42 +251,132 @@ pub fn unpack(path: &Path, directory: &Path) -> Result<(PathBuf, Source)> {
     Ok((binary, source))
 }
 
-pub fn checksums(directory: &Path, commit: &str) -> Result<()> {
-    let version = source::version()?;
-    let expected: BTreeSet<_> = source::targets()?
-        .iter()
-        .map(|t| t.archive_name(&version))
-        .collect();
+/// The names of the release archives and the VS Code packages of all
+/// release targets, in the order that `SHA256SUMS` lists them.
+fn list_assets(version: &str) -> Result<Vec<String>> {
+    let targets = source::targets()?;
+    let archives: BTreeSet<_> = targets.iter().map(|t| t.archive_name(version)).collect();
+    Ok(archives
+        .into_iter()
+        .chain(targets.iter().map(|t| t.vsix_name(version)))
+        .collect())
+}
+
+/// The digest of each asset in `directory`, by name, in the order of `list_assets`.
+fn digest_assets(directory: &Path, version: &str) -> Result<Vec<(String, String)>> {
+    list_assets(version)?
+        .into_iter()
+        .map(|name| {
+            let sum = digest(&directory.join(&name)).with_context(|| format!("Reading {name}"))?;
+            Ok((name, sum))
+        })
+        .collect()
+}
+
+/// Checks that `directory` holds the release archives and the VS Code packages
+/// of all release targets and no other archive or package.
+fn check_names(directory: &Path, version: &str) -> Result<()> {
+    let expected: BTreeSet<_> = list_assets(version)?.into_iter().collect();
     let actual: BTreeSet<_> = fs::read_dir(directory)?
         .map(|e| e.map(|e| e.file_name().to_string_lossy().into_owned()))
         .collect::<io::Result<Vec<_>>>()?
         .into_iter()
-        .filter(|n| n.ends_with(".zip") || n.ends_with(".tar.gz"))
+        .filter(|n| n.ends_with(".zip") || n.ends_with(".tar.gz") || n.ends_with(".vsix"))
         .collect();
     ensure!(
         actual == expected,
-        "Expected exactly all six release archives"
+        "Expected exactly the six release archives and the six VS Code packages; missing: {:?}, unexpected: {:?}",
+        expected.difference(&actual).collect::<Vec<_>>(),
+        actual.difference(&expected).collect::<Vec<_>>()
     );
-    let mut sums = String::new();
-    for name in expected {
-        let path = directory.join(&name);
-        let sum = format!("{}  {name}\n", digest(&path)?);
-        ensure!(
-            fs::read_to_string(directory.join(format!("{name}.sha256")))?.replace("\r\n", "\n")
-                == sum,
-            "Checksum mismatch for {name}"
-        );
+    Ok(())
+}
+
+/// Checks that each archive in `directory` was built from clean source at
+/// `commit`, and that each package holds the server of its archive.
+fn check_builds(directory: &Path, version: &str, commit: &str) -> Result<()> {
+    for target in source::targets()? {
+        let name = target.archive_name(version);
+        let archive = directory.join(&name);
         let temporary = tempfile::tempdir()?;
-        let (_, source) = unpack(&path, temporary.path())?;
+        let (_, source) = unpack(&archive, temporary.path())?;
         ensure!(
             !source.dirty && source.commit == commit,
-            "Only clean archives from the current commit may be collected"
+            "{name} must be built from clean source at commit {commit}"
         );
-        sums.push_str(&sum);
+        vscode::check(&directory.join(target.vsix_name(version)), &archive)?;
     }
-    fs::write(directory.join("SHA256SUMS"), sums)?;
+    Ok(())
+}
+
+/// Checks the archives and the VS Code packages of all release targets in
+/// `directory`, and writes `SHA256SUMS` for them.
+pub fn checksums(directory: &Path, commit: &str) -> Result<()> {
+    let version = source::version()?;
+    check_names(directory, &version)?;
+    let sums = digest_assets(directory, &version)?;
+    // Each archive must match the checksum that `package` wrote next to it
+    // before it is opened.
+    for (name, sum) in sums.iter().filter(|(name, _)| !name.ends_with(".vsix")) {
+        ensure!(
+            fs::read_to_string(directory.join(format!("{name}.sha256")))?.replace("\r\n", "\n")
+                == format!("{sum}  {name}\n"),
+            "Checksum mismatch for {name}"
+        );
+    }
+    check_builds(directory, &version, commit)?;
+    let text: String = sums
+        .iter()
+        .map(|(name, sum)| format!("{sum}  {name}\n"))
+        .collect();
+    fs::write(directory.join("SHA256SUMS"), text)?;
+    Ok(())
+}
+
+/// The digests that a `SHA256SUMS` file lists, by name. Fails for a line
+/// without a digest and a name, and for a name listed twice.
+fn read_sums(path: &Path) -> Result<BTreeMap<String, String>> {
+    let text = fs::read_to_string(path).with_context(|| format!("Reading {}", path.display()))?;
+    let mut sums = BTreeMap::new();
+    for line in text.lines() {
+        let (sum, name) = line
+            .split_once("  ")
+            .with_context(|| format!("Invalid line in SHA256SUMS: {line:?}"))?;
+        ensure!(
+            sums.insert(name.to_owned(), sum.to_owned()).is_none(),
+            "SHA256SUMS lists {name} twice"
+        );
+    }
+    Ok(sums)
+}
+
+/// Checks the assets that were downloaded from the release of `tag` into
+/// `directory`, before its VS Code packages are published: that the release's
+/// `SHA256SUMS` lists exactly the assets of the tag's version, that each asset
+/// matches it, and then what `checksums` checks, against `commit`.
+pub fn check_release(directory: &Path, tag: &str, commit: &str) -> Result<()> {
+    let version = source::version()?;
+    ensure!(
+        tag == format!("v{version}"),
+        "The tag {tag} does not name version {version} of the checkout"
+    );
+    let listed = read_sums(&directory.join("SHA256SUMS"))?;
+    let expected: BTreeSet<_> = list_assets(&version)?.into_iter().collect();
+    let names: BTreeSet<_> = listed.keys().cloned().collect();
+    ensure!(
+        names == expected,
+        "SHA256SUMS must list the assets of version {version}; missing: {:?}, unexpected: {:?}",
+        expected.difference(&names).collect::<Vec<_>>(),
+        names.difference(&expected).collect::<Vec<_>>()
+    );
+    check_names(directory, &version)?;
+    for (name, sum) in digest_assets(directory, &version)? {
+        ensure!(listed[&name] == sum, "{name} does not match SHA256SUMS");
+    }
+    check_builds(directory, &version, commit)?;
+    println!("The assets of {tag} match SHA256SUMS and the checkout");
     Ok(())
 }
 
 #[cfg(test)]
-mod tests;
+pub mod tests;

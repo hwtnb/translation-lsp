@@ -61,6 +61,33 @@ export function checkServerPath(
   return stat.isFile() ? undefined : "not a file";
 }
 
+/** Why the server cannot start, as `checkServerPath` tells it. */
+export type ServerProblem = NonNullable<ReturnType<typeof checkServerPath>>;
+
+/**
+ * The server to start: the one the setting names whenever it holds a value,
+ * so that a path the user wrote is never passed over, or else the one in the
+ * `server` folder of the extension. `problem` tells why neither starts, with
+ * `empty` for an extension that holds no server.
+ */
+export function locateServer(
+  setting: unknown,
+  extensionPath: string,
+  platform: NodeJS.Platform = process.platform,
+): { path: string } | { problem: ServerProblem } {
+  if (setting !== "") {
+    const problem = checkServerPath(setting);
+    return problem ? { problem } : { path: setting as string };
+  }
+  const bundled = path.join(extensionPath, "server", nameServerExecutable(platform));
+  return checkServerPath(bundled) ? { problem: "empty" } : { path: bundled };
+}
+
+/** The file name of the server executable on `platform`. */
+export function nameServerExecutable(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "translation-lsp.exe" : "translation-lsp";
+}
+
 /** The name of a server setting as VS Code names it: each part in camelCase, joined with dots. */
 export function toVscodeName(serverName: string): string {
   return serverName.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());

@@ -4,7 +4,7 @@
   "Restart the language server to apply the changed Translation LSP settings.": "変更したTranslation LSPの設定は、言語サーバーを再起動すると反映されます。",
   "Open Settings": "設定を開く",
   "The Translation LSP server is not found at {0}.": "Translation LSPのサーバーが {0} にありません。",
-  "Set the path of the Translation LSP server to start it.": "Translation LSPのサーバーを起動するには、その場所を設定してください。",
+  "This copy of the extension holds no Translation LSP server. Set the path of a server that you built to start it.": "この拡張機能にはTranslation LSPのサーバーが入っていません。起動するには、自分でビルドしたサーバーの場所を設定してください。",
   "Choose an action": "操作を選んでください",
   "The path of the Translation LSP server must be absolute: {0}": "Translation LSPのサーバーの場所は、絶対パスで書いてください: {0}",
   "The path of the Translation LSP server is not a file: {0}": "Translation LSPのサーバーの場所がファイルではありません: {0}",

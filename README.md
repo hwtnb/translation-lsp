@@ -62,14 +62,14 @@ Set `lsp.translation-lsp.binary.path` to the absolute path of the executable you
 
 ## Install in VS Code
 
-The same server also works in VS Code 1.123 or later, through an extension that you build and install by hand. It starts the server named in its settings and downloads nothing.
+The same server also works in VS Code 1.123 or later, through the Translation LSP extension of the Visual Studio Marketplace. The extension holds the server for your system and downloads nothing.
 
-1. Build the server as described under [Build the server from source](#build-the-server-from-source).
-2. Install [Node.js](https://nodejs.org/) 22.12 or later. In `vscode-extension` in the checkout, run `npm ci`, then `npm run package`, which writes `translation-lsp.vsix`.
-3. In VS Code, run `Extensions: Install from VSIX…` from the Command Palette and choose that file.
-4. Open the Settings editor, search for `Translation LSP`, and set `Server: Path` to the absolute path of the server.
+1. In VS Code's Extensions view, search for `Translation LSP` and install the extension of the publisher `hwtnb`.
+2. Open the Settings editor, search for `Translation LSP`, and choose a provider in `Provider: Name`. Connect it as described under [Set up a provider](#set-up-a-provider), with the Code Actions of VS Code.
 
-Choose a provider in the same settings, under `Provider`; the settings and their names are described under [VS Code settings](docs/configuration.md#vs-code-settings). What works differently in VS Code is described under [VS Code](docs/usage.md#vs-code).
+The extension holds the servers of the systems in the table above, which are not signed or notarized either. In a remote window, such as over SSH, in a container, or in WSL, the extension and its server run on the remote machine by default, and VS Code installs the package for that machine's system.
+
+To start a server that you built, set `Server: Path` to its absolute path; the extension then starts it in place of its own. The settings and their names are described under [VS Code settings](docs/configuration.md#vs-code-settings), and what works differently in VS Code under [VS Code](docs/usage.md#vs-code). Building the extension yourself is described under [VS Code extension](docs/development/README.md#vs-code-extension).
 
 ## Set up a provider
 

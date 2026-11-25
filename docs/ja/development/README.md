@@ -115,7 +115,7 @@ stdioのテストは、実行ファイルを `--mock-delay-ms <ミリ秒>`、`--
 
 ## VS Codeの拡張
 
-`vscode-extension` には、TypeScriptで書いたVS Codeの拡張があります。設定に書いた場所のサーバーを起動し、サーバーが送るものをVS Codeの部品で見せます。Node.js 22.12以降で、そのディレクトリーで次のコマンドを実行します。
+`vscode-extension` には、TypeScriptで書いたVS Codeの拡張があります。設定に書いた場所のサーバーを、書いていなければ自分の `server` フォルダーのサーバーを起動し、サーバーが送るものをVS Codeの部品で見せます。Node.js 22.18以降で、そのディレクトリーで次のコマンドを実行します。
 
 ```sh
 npm ci
@@ -126,9 +126,9 @@ npm test
 npm run package
 ```
 
-`check` は型を検査します。`lint` はOxlintを実行し、待たないPromiseを禁じる規則のような、型を使う規則も見ます。警告が1つでもあれば失敗します。`format:check` は `src` と `test` がOxfmtの整形のとおりであることを確かめます。整形は `npm run format` で行います。
+`check` は型を検査します。`lint` はOxlintを実行し、待たないPromiseを禁じる規則のような、型を使う規則も見ます。警告が1つでもあれば失敗します。`format:check` は `src`、`test`、`scripts` がOxfmtの整形のとおりであることを確かめます。整形は `npm run format` で行います。
 
-`test` はVitestを使い、VS Codeを起動せずに、拡張が送る設定、翻訳した文言、訳文のコメント欄の書き手名、サーバーの起動と停止を確かめます。`package` はRolldownで拡張をビルドし、`translation-lsp.vsix` を作ります。
+`test` はVitestを使い、VS Codeを起動せずに、拡張が送る設定、翻訳した文言、訳文のコメント欄の書き手名、サーバーの見つけ方と起動と停止、下で説明するライセンスの表示を確かめます。`package` はRolldownで拡張をビルドし、ライセンスの表示を書き、`translation-lsp.vsix` を作ります。これは開発用のパッケージで、サーバーを含みません。リリースのパッケージは[リリースのパッケージ](#リリースのパッケージ)で説明します。
 
 拡張の設定は `package.json` に、プロバイダーごとに使う設定は `src/providers.json` にあります。サーバーのテストは両方を読みます。サーバーのどの設定にも、サーバーの既定値を持つVS Codeの設定が1つずつあること、各プロバイダーがその行の設定を受け付けてほかを断ることを確かめます。`activationEvents` が `zed-extension/extension.toml` のすべての言語と下の読み替え対象のVS Codeの言語IDだけに一致することも確かめます。
 
@@ -139,6 +139,32 @@ code --user-data-dir <ディレクトリー> --extensions-dir <ディレクト�
 ```
 
 同じ2つのオプションとサンプルのフォルダーを付けてもう一度起動し、`settings.json` で `translationLsp.server.path` をビルドしたサーバーに、`translationLsp.provider.name` を `mock` にします。設定エディターには `mock` は出ません。
+
+開発用のパッケージをふだんのVS Codeで使うときは、コマンドパレットで `Extensions: Install from VSIX…` を実行し、`translation-lsp.vsix` を選びます。続けて、設定エディターで `Server: Path` に、ビルドしたサーバーの絶対パスを書きます。
+
+### 拡張のライセンスの表示
+
+`out/extension.js` には、Rolldownが足す補助のコードに続いて、`vscode-languageclient` と、それが使うnpmのパッケージのコードが入っています。ビルドはソースマップも書きます。ソースマップはパッケージには入りません。それらのnpmのパッケージのファイルは載りますが、Rolldownの補助のコードは載りません。`vsce` がビルドのあとに実行する `npm run notices` は、これを読み、それぞれのパッケージとRolldownのライセンスのファイルと表示を `THIRD_PARTY_LICENSES.txt` に書きます。このファイルは生成するもので、リポジトリには置きません。
+
+`notices` は、ライセンスのファイルを持たないパッケージ、`scripts/notices.mts` の `ACCEPTED` にないライセンスを掲げるパッケージ、`node_modules`、`src`、`package.json` のどれでもないソースマップのファイルで失敗します。そのライセンスを読んで確かめてから、そこに足してください。CIのジョブは `npm run package` の中で `notices` を実行します。
+
+### リリースのパッケージ
+
+リリースには、配布対象ごとに拡張のパッケージがあります。名前は `translation-lsp-v<バージョン>-<対象>.vsix` で、対象は `darwin-arm64` のような `vsce` の対象の名前です。配布対象ごとのその名前は、`xtask/src/source.rs` の `vscode_target` が決めます。各パッケージは `server/` に、その配布対象のリリースのアーカイブのサーバーと、アーカイブの `LICENSE` と `THIRD_PARTY_LICENSES.txt` を持ちます。
+
+`package-vscode` は、サーバーをビルドし直さずに、`dist` のアーカイブからパッケージを作ります。先に `vscode-extension` で `npm ci` を実行しておきます。`--target` で対象を絞れます。繰り返して複数の対象を指定できます。
+
+```sh
+cargo run -p xtask --locked -- package-vscode --target aarch64-apple-darwin
+```
+
+対象ごとに、アーカイブを一時的なフォルダーに取り出し、サーバーと2つのライセンスのファイルを `vscode-extension/server` に写し、`vsce package --target` を実行し、そのフォルダーを消します。`.vscodeignore` は `server/` を除き、`package-vscode` が `vsce` に渡すときだけ足します。そのため、途中で止まった実行が残したフォルダーは、開発用のパッケージには入りません。2つの `package-vscode` を同時に実行しないでください。同じフォルダーを使います。
+
+続けてパッケージを検査します。パッケージのファイル、アーカイブと比べたサーバーとライセンスのファイル、macOSとLinuxのサーバーの実行の許可を見ます。マニフェストが発行者、名前、バージョン、対象を示し、プレリリースの印を持たないことも確かめます。実行しているマシン用のパッケージは、アーカイブと同じようにサーバーを起動して確かめます。検査を通ったパッケージだけが、同じ名前のものを置き換えます。
+
+パッケージはmacOSかLinuxで作ってください。Windowsでは、macOSとLinuxのサーバーが実行の許可を失い、そのパッケージは検査で失敗します。
+
+`checksums` は、6つのパッケージもアーカイブと照らして検査し、`SHA256SUMS` に載せます。
 
 ### 読み替えるVS Codeの言語ID
 
@@ -208,7 +234,17 @@ code --user-data-dir <ディレクトリー> --extensions-dir <ディレクト�
 
 拡張の依存が登録先より新しいコンパイラーを必要とするようになったら、登録先との互換性をどう保つかを改めて決めてください。
 
-[配布物を用意するワークフロー](../../../.github/workflows/release-assets.yml)は、配布対象ごとに梱包用のコマンドを実行します。`draft-release` を有効にして起動すると、6本のアーカイブと `SHA256SUMS` を付けた下書きのリリースを作ります。拡張は、自分と同じバージョンのGitHubリリースからサーバーを取得します。そのため、そのリリースを公開してから、そのバージョンをZedに登録してください。
+[配布物を用意するワークフロー](../../../.github/workflows/release-assets.yml)は、配布対象ごとに梱包用のコマンドを実行し、続けて `package-vscode` でアーカイブからVS Codeのパッケージを作ります。`draft-release` を有効にして起動すると、6本のアーカイブ、6つのVS Codeのパッケージ、`SHA256SUMS` を付けた下書きのリリースを作ります。拡張は、自分と同じバージョンのGitHubリリースからサーバーを取得します。そのため、そのリリースを公開してから、そのバージョンをZedに登録してください。
+
+[公開のワークフロー](../../../.github/workflows/publish-vscode.yml)は、公開済みのリリースのVS Codeのパッケージを、Visual Studio Marketplaceに公開します。下書きを公開してから、`v1.2.3` のようなリリースのタグを指定して手で起動します。下書きのままなら失敗します。
+
+1つ目の作業は公開できず、リリースからアーカイブ、パッケージ、`SHA256SUMS` を取得します。タグをチェックアウトし、`check-release` で、それぞれが `SHA256SUMS` と合うことを確かめ、`checksums` と同じ検査をします。検査するのは、公開するタグのソースの `xtask` です。
+
+2つ目の作業だけが、Marketplaceのトークンを求められます。この作業はタグのコードを実行しません。起動したときのチェックアウトで、インストールのスクリプトを動かさずにnpmのパッケージを入れ、検査を通った6つのパッケージをチェックアウトの外のフォルダーに受け取り、それに `vsce publish --oidc` を実行します。2つ目の実行は、1つ目が終わるまで待ちます。
+
+公開のワークフローは秘密の値を使いません。MarketplaceはTrusted Publishingでこのワークフローを受け入れます。最初に起動する前に、発行者 `hwtnb` の[発行者の管理ページ](https://marketplace.visualstudio.com/manage)で、Trusted Publishingのポリシーを1度作ってください。リポジトリの持ち主に `hwtnb`、リポジトリに `translation-lsp`、ワークフローに `publish-vscode.yml` を入れ、環境は空にします。リポジトリかワークフローのファイルの名前を変えたら、ポリシーを作り直す必要があります。
+
+途中で失敗したら、もう一度起動してください。`--skip-duplicate` により、`vsce` は、Marketplaceがその対象でそのバージョンを持っているパッケージを飛ばし、残りを公開します。
 
 1 OSでの成功だけを他OSの成功とは扱いません。リリース前には、3 OSのCI結果を確かめてください。さらに各OSのZedで、拡張を入れる、ネイティブの言語サーバーを見つける、接続する、コメントを翻訳する、文書の翻訳を開いて保存する、を確かめてください。
 
@@ -221,7 +257,7 @@ cargo run -p xtask --locked -- check-source
 cargo run -p xtask --locked -- check-notices
 ```
 
-`check-source` は、バージョン、ライセンス、配布対象が互いに合っていることを検査します。`check-notices` は、[依存ライブラリのライセンス表示](#依存ライブラリのライセンス表示)で説明する文書を生成します。梱包用のコマンドは `cargo run -p xtask --locked -- --help` で一覧できます。
+`check-source` は、`vscode-extension` のバージョン、発行者、名前も含めて、バージョン、ライセンス、配布対象が互いに合っていることと、`zed-extension/extension.toml` のダウンロードの許可がそのリポジトリのリリースを許すことを検査します。`check-notices` は、[依存ライブラリのライセンス表示](#依存ライブラリのライセンス表示)で説明する文書を生成します。梱包用のコマンドは `cargo run -p xtask --locked -- --help` で一覧できます。
 
 ### テストが触れるもの
 

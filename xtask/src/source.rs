@@ -3,6 +3,8 @@ use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use crate::vscode;
+
 pub const REPOSITORY: &str = "https://github.com/hwtnb/translation-lsp";
 
 pub fn root() -> PathBuf {
@@ -65,6 +67,37 @@ impl Target {
             (Os::Windows, Arch::X86_64) => "windows-2025",
         }
     }
+    /// The target that `vsce` names this one by, for the VS Code extension package.
+    pub fn vscode_target(&self) -> &'static str {
+        match (self.os, self.arch) {
+            (Os::Mac, Arch::Aarch64) => "darwin-arm64",
+            (Os::Mac, Arch::X86_64) => "darwin-x64",
+            (Os::Linux, Arch::Aarch64) => "linux-arm64",
+            (Os::Linux, Arch::X86_64) => "linux-x64",
+            (Os::Windows, Arch::Aarch64) => "win32-arm64",
+            (Os::Windows, Arch::X86_64) => "win32-x64",
+        }
+    }
+    /// Whether this is the target that runs `xtask` itself.
+    pub fn is_host(&self) -> bool {
+        let os = if cfg!(target_os = "macos") {
+            Os::Mac
+        } else if cfg!(target_os = "linux") {
+            Os::Linux
+        } else if cfg!(windows) {
+            Os::Windows
+        } else {
+            return false;
+        };
+        let arch = if cfg!(target_arch = "aarch64") {
+            Arch::Aarch64
+        } else if cfg!(target_arch = "x86_64") {
+            Arch::X86_64
+        } else {
+            return false;
+        };
+        (self.os, self.arch) == (os, arch)
+    }
     pub fn executable(&self) -> &'static str {
         if self.os == Os::Windows {
             "translation-lsp.exe"
@@ -79,6 +112,9 @@ impl Target {
             "tar.gz"
         };
         format!("translation-lsp-v{version}-{}.{suffix}", self.target)
+    }
+    pub fn vsix_name(&self, version: &str) -> String {
+        format!("translation-lsp-v{version}-{}.vsix", self.vscode_target())
     }
 }
 
@@ -154,6 +190,45 @@ struct ExtensionMetadata {
     id: String,
     repository: String,
     authors: Vec<String>,
+    #[serde(default)]
+    capabilities: Vec<Capability>,
+}
+
+/// A capability that `extension.toml` grants; Zed checks the URL of each download against it.
+#[derive(Deserialize)]
+struct Capability {
+    kind: String,
+    host: Option<String>,
+    path: Option<Vec<String>>,
+}
+
+impl ExtensionMetadata {
+    /// Whether the downloads that Zed allows are the release assets of `repository`,
+    /// from which the extension builds the URL of the server.
+    fn allows_release_downloads(&self) -> bool {
+        let Some(("github.com", owner_name)) = self
+            .repository
+            .strip_prefix("https://")
+            .and_then(|rest| rest.split_once('/'))
+        else {
+            return false;
+        };
+        let expected: Vec<_> = owner_name
+            .split('/')
+            .chain(["releases", "download", "**"])
+            .collect();
+        let downloads: Vec<_> = self
+            .capabilities
+            .iter()
+            .filter(|c| c.kind == "download_file")
+            .collect();
+        downloads.len() == 1
+            && downloads[0].host.as_deref() == Some("github.com")
+            && downloads[0]
+                .path
+                .as_deref()
+                .is_some_and(|path| path == expected)
+    }
 }
 
 fn manifest<T: DeserializeOwned>(path: &str) -> Result<T> {
@@ -206,6 +281,11 @@ pub fn check() -> Result<()> {
         m.id == "translation-lsp" && m.repository == REPOSITORY && !m.authors.is_empty(),
         "Invalid extension metadata"
     );
+    ensure!(
+        m.allows_release_downloads(),
+        "The download_file capability of extension.toml must allow exactly the release downloads of its repository"
+    );
+    vscode::check_manifest(&version()?)?;
     Ok(())
 }
 
@@ -235,3 +315,6 @@ impl Source {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

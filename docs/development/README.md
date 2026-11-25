@@ -115,7 +115,7 @@ The stdio tests start the executable with `--mock-delay-ms <milliseconds>`, `--m
 
 ## VS Code extension
 
-`vscode-extension` holds the VS Code extension, written in TypeScript. It starts the server named in its settings and shows what the server sends with VS Code's own parts. Run these commands in that directory, with Node.js 22.12 or later:
+`vscode-extension` holds the VS Code extension, written in TypeScript. It starts the server named in its settings, or else the server in its own `server` folder, and shows what the server sends with VS Code's own parts. Run these commands in that directory, with Node.js 22.18 or later:
 
 ```sh
 npm ci
@@ -126,9 +126,9 @@ npm test
 npm run package
 ```
 
-`check` checks the types. `lint` runs Oxlint, including its rules that use the types, such as one against a promise that nothing awaits, and fails on any warning. `format:check` checks that Oxfmt leaves `src` and `test` as they are; `npm run format` formats them.
+`check` checks the types. `lint` runs Oxlint, including its rules that use the types, such as one against a promise that nothing awaits, and fails on any warning. `format:check` checks that Oxfmt leaves `src`, `test`, and `scripts` as they are; `npm run format` formats them.
 
-`test` uses Vitest to check the settings the extension sends, localized text, translation comment author names, and how the extension starts and stops the server. These tests run without VS Code. `package` builds the extension with Rolldown and writes `translation-lsp.vsix`.
+`test` uses Vitest to check the settings the extension sends, localized text, translation comment author names, how the extension finds, starts, and stops the server, and the license notices described below. These tests run without VS Code. `package` builds the extension with Rolldown, writes its license notices, and writes `translation-lsp.vsix`. That package is for development and holds no server; the packages of a release are described under [Packages of a release](#packages-of-a-release).
 
 The settings of the extension are listed in `package.json`, and the settings that each provider takes in `src/providers.json`. The server's tests read both: every server setting must have one VS Code setting with the server's default, and each provider must accept the settings of its row and refuse the others. They also check that `activationEvents` matches every language in `zed-extension/extension.toml` plus the mapped VS Code language IDs below.
 
@@ -139,6 +139,32 @@ code --user-data-dir <directory> --extensions-dir <directory> --install-extensio
 ```
 
 Start it again with the same two options and a folder of samples, set `translationLsp.server.path` to the server you built, and `translationLsp.provider.name` to `mock` in `settings.json`. The Settings editor does not list `mock`.
+
+To use a package for development in your usual VS Code, run `Extensions: Install from VSIX…` from the Command Palette and choose `translation-lsp.vsix`. Then set `Server: Path` in the Settings editor to the absolute path of the server you built.
+
+### License notices of the extension
+
+`out/extension.js` holds the code of `vscode-languageclient` and of the npm packages it uses, after helpers that Rolldown adds. The build also writes a source map, which is not packaged. It lists the files of those npm packages, but not Rolldown's helpers. `npm run notices`, which `vsce` runs after the build, reads it and writes `THIRD_PARTY_LICENSES.txt` with the license files and notices of each of those packages and of Rolldown. The file is generated and not kept in the repository.
+
+`notices` fails for a package without a license file, for one that declares a license outside `ACCEPTED` in `scripts/notices.mts`, and for a file of the source map outside `node_modules`, `src`, and `package.json`. Review such a license before adding it there. The CI job runs `notices` as part of `npm run package`.
+
+### Packages of a release
+
+A release has a package of the extension for each release target, named `translation-lsp-v<version>-<target>.vsix` with the target name of `vsce`, such as `darwin-arm64`. `vscode_target` in `xtask/src/source.rs` gives that name for each release target. In `server/`, each package holds the server of its target's release archive, with the archive's `LICENSE` and `THIRD_PARTY_LICENSES.txt`.
+
+`package-vscode` makes the packages from the archives in `dist`, without building the server again. It needs `npm ci` in `vscode-extension` first. `--target` limits it to a target, and may be repeated:
+
+```sh
+cargo run -p xtask --locked -- package-vscode --target aarch64-apple-darwin
+```
+
+For each target, it extracts the archive into a temporary folder, copies the server and the two license files into `vscode-extension/server`, runs `vsce package --target`, and removes that folder again. `.vscodeignore` leaves `server/` out, and `package-vscode` adds it for `vsce` only, so a folder that an interrupted run leaves never reaches a package for development. Do not run two `package-vscode` at once, since they share that folder.
+
+It then checks the package: its files, the server and license files against the archive, the permission to run the server on macOS and Linux, and that its manifests give the publisher, name, version, and target and mark no pre-release. It also starts the server of the package for the machine it runs on, as the archives are tested. Only a package that passes replaces one of the same name.
+
+Make the packages on macOS or Linux. On Windows, the macOS and Linux servers lose the permission to run, and their packages fail the check.
+
+`checksums` checks the six packages against their archives as well, and lists them in `SHA256SUMS`.
 
 ### Mapped VS Code language IDs
 
@@ -208,7 +234,17 @@ The [CI workflow](../../.github/workflows/ci.yml) has three jobs:
 
 When a dependency of the extension needs a newer compiler than the registry's, decide again how to stay compatible with the registry.
 
-The [release assets workflow](../../.github/workflows/release-assets.yml) runs the packaging commands for every release target. When started with `draft-release` enabled, it creates a draft release that holds the six archives and `SHA256SUMS`. The extension downloads the server from the GitHub release of its own version, so publish that release before registering the version with Zed.
+The [release assets workflow](../../.github/workflows/release-assets.yml) runs the packaging commands for every release target, then makes the VS Code packages from the archives with `package-vscode`. When started with `draft-release` enabled, it creates a draft release that holds the six archives, the six VS Code packages, and `SHA256SUMS`. The extension downloads the server from the GitHub release of its own version, so publish that release before registering the version with Zed.
+
+The [publish workflow](../../.github/workflows/publish-vscode.yml) publishes the VS Code packages of a published release to the Visual Studio Marketplace. Start it by hand with the tag of the release, such as `v1.2.3`, after publishing the draft; it refuses a draft.
+
+Its first job, which cannot publish, downloads the archives, the packages, and `SHA256SUMS` from the release. With the checkout of the tag, `check-release` checks that each matches `SHA256SUMS`, and checks them as `checksums` does. These checks are made by the `xtask` in the source of the tag that is published.
+
+The second job alone may request a token for the Marketplace, and runs no code of the tag. With the checkout that the run started from, it installs the npm packages without their install scripts, takes the six checked packages into a folder outside the checkout, and runs `vsce publish --oidc` on them. A second run waits until the first has ended.
+
+The publish workflow uses no secret: the Marketplace accepts it through Trusted Publishing. Before its first run, create a Trusted Publishing policy once on the [publisher management page](https://marketplace.visualstudio.com/manage) of the publisher `hwtnb`. Enter the repository owner `hwtnb`, the repository `translation-lsp`, the workflow `publish-vscode.yml`, and no environment. Renaming the repository or the workflow file needs a new policy.
+
+If a run fails partway, start it again. `--skip-duplicate` makes `vsce` skip each package whose version the Marketplace already has for its target, and publish the others.
 
 Local success on one OS does not establish success on the others. Before releasing, check the CI results for all three OSes and test the Zed flow on each: install the extension, locate the native server, connect, translate a comment, and open and save a document translation.
 
@@ -221,7 +257,7 @@ cargo run -p xtask --locked -- check-source
 cargo run -p xtask --locked -- check-notices
 ```
 
-`check-source` checks that the versions, licenses, and release targets agree. `check-notices` generates the dependency notices described under [Dependency notices](#dependency-notices). `cargo run -p xtask --locked -- --help` lists the packaging commands.
+`check-source` checks that the versions, licenses, and release targets agree, including the version, publisher, and name in `vscode-extension`, and that the download capability of `zed-extension/extension.toml` allows the releases of its repository. `check-notices` generates the dependency notices described under [Dependency notices](#dependency-notices). `cargo run -p xtask --locked -- --help` lists the packaging commands.
 
 ### What the tests touch
 

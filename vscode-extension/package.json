@@ -5,6 +5,11 @@
   "version": "0.9.0",
   "publisher": "hwtnb",
   "license": "MIT",
+  "icon": "images/icon.png",
+  "homepage": "https://github.com/hwtnb/translation-lsp#readme",
+  "bugs": {
+    "url": "https://github.com/hwtnb/translation-lsp/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/hwtnb/translation-lsp"
@@ -14,6 +19,22 @@
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "translation",
+    "translate",
+    "comments",
+    "hover",
+    "markdown",
+    "dictionary",
+    "language server",
+    "chatgpt",
+    "openai",
+    "anthropic",
+    "deepl",
+    "google translate",
+    "ollama",
+    "plamo"
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
@@ -567,12 +588,13 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "lint": "oxlint --type-aware --deny-warnings src test",
-    "format": "oxfmt src test",
-    "format:check": "oxfmt --check src test",
-    "build": "rolldown src/extension.ts --file out/extension.js --format cjs --platform node --external vscode",
+    "lint": "oxlint --type-aware --deny-warnings src test scripts",
+    "format": "oxfmt src test scripts",
+    "format:check": "oxfmt --check src test scripts",
+    "build": "rolldown src/extension.ts --file out/extension.js --format cjs --platform node --external vscode --sourcemap hidden --sourcemapExcludeSources",
     "test": "vitest run",
-    "vscode:prepublish": "npm run build",
+    "notices": "node scripts/notices.mts",
+    "vscode:prepublish": "npm run build && npm run notices",
     "package": "vsce package --out translation-lsp.vsix"
   },
   "dependencies": {

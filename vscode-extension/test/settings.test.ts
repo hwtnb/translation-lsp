@@ -6,6 +6,8 @@ import {
   PROVIDER_FIELDS,
   checkServerPath,
   buildInitializationOptions,
+  locateServer,
+  nameServerExecutable,
   toServerName,
   listServerSettings,
   pickUserValue,
@@ -218,5 +220,50 @@ test("the server path must be the absolute path of a file", () => {
     }
   } finally {
     fs.rmSync(directory, { recursive: true });
+  }
+});
+
+test("the server of the setting is started whenever the setting holds a value", () => {
+  const extension = fs.mkdtempSync(path.join(os.tmpdir(), "translation-lsp-extension-"));
+  try {
+    const bundled = path.join(extension, "server", nameServerExecutable(process.platform));
+    const built = path.join(extension, "built");
+    fs.writeFileSync(built, "");
+
+    // An extension packaged for development holds no server.
+    expect(locateServer("", extension)).toStrictEqual({ problem: "empty" });
+    expect(locateServer(built, extension)).toStrictEqual({ path: built });
+
+    fs.mkdirSync(path.dirname(bundled));
+    fs.writeFileSync(bundled, "");
+    expect(locateServer("", extension)).toStrictEqual({ path: bundled });
+    expect(locateServer(built, extension)).toStrictEqual({ path: built });
+
+    // A path that the user wrote is never passed over for the bundled server.
+    expect(locateServer(path.join(extension, "missing"), extension)).toStrictEqual({
+      problem: "missing",
+    });
+    expect(locateServer("translation-lsp", extension)).toStrictEqual({ problem: "relative" });
+    expect(locateServer(123, extension)).toStrictEqual({ problem: "not text" });
+  } finally {
+    fs.rmSync(extension, { recursive: true });
+  }
+});
+
+test("the bundled server is looked for under the executable name of the system", () => {
+  expect(nameServerExecutable("win32")).toBe("translation-lsp.exe");
+  expect(nameServerExecutable("darwin")).toBe("translation-lsp");
+  expect(nameServerExecutable("linux")).toBe("translation-lsp");
+
+  const extension = fs.mkdtempSync(path.join(os.tmpdir(), "translation-lsp-extension-"));
+  try {
+    fs.mkdirSync(path.join(extension, "server"));
+    fs.writeFileSync(path.join(extension, "server", "translation-lsp.exe"), "");
+    expect(locateServer("", extension, "win32")).toStrictEqual({
+      path: path.join(extension, "server", "translation-lsp.exe"),
+    });
+    expect(locateServer("", extension, "linux")).toStrictEqual({ problem: "empty" });
+  } finally {
+    fs.rmSync(extension, { recursive: true });
   }
 });

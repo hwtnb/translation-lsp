@@ -1,7 +1,7 @@
 {
   "description": "Translates comments, selections, and documents with a language model or a translation service.",
   "configuration.server": "Server",
-  "setting.server.path": "The absolute path of the `translation-lsp` executable, including `.exe` on Windows. The extension does not start without it.",
+  "setting.server.path": "The absolute path of the `translation-lsp` executable, including `.exe` on Windows. Leave it empty to start the server included in the extension; set it to start a server that you built.",
   "configuration.languages": "Languages",
   "setting.targetLanguage": "The language to translate into: an ISO 639 language code such as `ja` or `pt-BR`, or a name such as `Japanese`.",
   "setting.sourceLanguage": "The language of the text, or `auto` to let the translation identify it.",

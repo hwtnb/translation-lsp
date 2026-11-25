@@ -1,6 +1,7 @@
 use tempfile::NamedTempFile;
 
 use super::*;
+use crate::vscode::tests::write_package;
 
 #[test]
 fn checksum_matches_the_sha256_known_vector() -> Result<()> {
@@ -13,7 +14,8 @@ fn checksum_matches_the_sha256_known_vector() -> Result<()> {
     Ok(())
 }
 
-fn binary(target: &Target) -> Vec<u8> {
+/// Bytes that `check_binary` takes for an executable of `target`.
+pub fn binary(target: &Target) -> Vec<u8> {
     let mut bytes = vec![0; 128];
     let arm = target.arch == Arch::Aarch64;
     match target.os {
@@ -36,7 +38,8 @@ fn binary(target: &Target) -> Vec<u8> {
     bytes
 }
 
-fn source(target: &Target) -> Source {
+/// The source of a clean archive of `target` from commit `aaaa…`.
+pub fn source(target: &Target) -> Source {
     Source {
         version: source::version().unwrap(),
         commit: "a".repeat(40),
@@ -107,35 +110,56 @@ fn unexpected_paths_are_rejected_before_writing() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn collection_rejects_damage_dirty_sources_wrong_commits_and_missing_targets() -> Result<()> {
-    let temporary = tempfile::tempdir()?;
-    let directory = temporary.path();
+/// Writes the clean archives of all release targets from commit `aaaa…`
+/// into `directory`, with the packages that `vsce` would make from them
+/// if `packages`.
+fn write_release(directory: &Path, packages: bool) -> Result<()> {
     for target in source::targets()? {
         let input = directory.join(target.executable());
         fs::write(&input, binary(&target))?;
-        package(
+        let archive = package(
             &target,
             &input,
             directory,
             &source(&target),
             b"license".to_vec(),
         )?;
+        if packages {
+            write_package(&archive)?;
+        }
     }
+    Ok(())
+}
+
+#[test]
+fn collection_rejects_damage_dirty_sources_wrong_commits_and_missing_targets_or_packages()
+-> Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let directory = temporary.path();
+    write_release(directory, false)?;
     let commit = "a".repeat(40);
+    assert!(checksums(directory, &commit).is_err());
+    write_release(directory, true)?;
     checksums(directory, &commit)?;
     assert_eq!(
         fs::read_to_string(directory.join("SHA256SUMS"))?
             .lines()
             .count(),
-        6
+        12
     );
+    let vsix = directory.join(source::targets()?[2].vsix_name(&source::version()?));
+    let original = fs::read(&vsix)?;
+    fs::write(&vsix, b"damaged")?;
+    assert!(checksums(directory, &commit).is_err());
+    fs::write(&vsix, original)?;
     assert!(checksums(directory, &"b".repeat(40)).is_err());
     let target = source::targets()?.remove(0);
     let archive = directory.join(target.archive_name(&source::version()?));
     let original = fs::read(&archive)?;
     fs::write(&archive, b"damaged")?;
-    assert!(checksums(directory, &commit).is_err());
+    // Its checksum fails it before it is opened.
+    let error = checksums(directory, &commit).unwrap_err().to_string();
+    assert!(error.contains("Checksum mismatch"), "{error}");
     fs::write(&archive, original)?;
     let input = directory.join(target.executable());
     fs::write(&input, binary(&target))?;
@@ -145,5 +169,83 @@ fn collection_rejects_damage_dirty_sources_wrong_commits_and_missing_targets() -
     assert!(checksums(directory, &commit).is_err());
     fs::remove_file(archive)?;
     assert!(checksums(directory, &commit).is_err());
+    Ok(())
+}
+
+#[test]
+fn a_release_must_match_its_checksums_its_tag_and_the_checkout_before_publishing() -> Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let directory = temporary.path();
+    write_release(directory, true)?;
+    let commit = "a".repeat(40);
+    checksums(directory, &commit)?;
+    let tag = format!("v{}", source::version()?);
+    check_release(directory, &tag, &commit)?;
+    assert!(check_release(directory, "v0.0.1", &commit).is_err());
+    let error = check_release(directory, &tag, &"b".repeat(40)).unwrap_err();
+    assert!(error.to_string().contains("clean source"), "{error}");
+
+    // A package of the same version from another build, listed with its
+    // own digest, is told by the commit of its archive.
+    let target = source::targets()?.remove(0);
+    let other = tempfile::tempdir()?;
+    let input = other.path().join(target.executable());
+    fs::write(&input, binary(&target))?;
+    let mut built = source(&target);
+    built.commit = "c".repeat(40);
+    let archive = package(&target, &input, other.path(), &built, b"license".to_vec())?;
+    let vsix = write_package(&archive)?;
+    let sums = directory.join("SHA256SUMS");
+    let original = fs::read_to_string(&sums)?;
+    let replace = |name: &str, from: &Path| -> Result<()> {
+        let listed = original
+            .lines()
+            .find(|line| line.ends_with(name))
+            .unwrap()
+            .to_owned();
+        let text =
+            fs::read_to_string(&sums)?.replace(&listed, &format!("{}  {name}", digest(from)?));
+        fs::write(&sums, text)?;
+        fs::copy(from, directory.join(name))?;
+        Ok(())
+    };
+    let backup = tempfile::tempdir()?;
+    for path in [&archive, &vsix] {
+        let name = path.file_name().unwrap();
+        fs::copy(directory.join(name), backup.path().join(name))?;
+        replace(name.to_str().unwrap(), path)?;
+    }
+    let error = check_release(directory, &tag, &commit).unwrap_err();
+    assert!(error.to_string().contains("clean source"), "{error}");
+    for path in [&archive, &vsix] {
+        let name = path.file_name().unwrap();
+        fs::copy(backup.path().join(name), directory.join(name))?;
+    }
+    fs::write(&sums, &original)?;
+    check_release(directory, &tag, &commit)?;
+
+    let package = directory.join(target.vsix_name(&source::version()?));
+    let unchanged = fs::read(&package)?;
+    let mut changed = unchanged.clone();
+    changed.push(0);
+    fs::write(&package, &changed)?;
+    let error = check_release(directory, &tag, &commit).unwrap_err();
+    assert!(error.to_string().contains("SHA256SUMS"), "{error}");
+    fs::remove_file(&package)?;
+    assert!(check_release(directory, &tag, &commit).is_err());
+    fs::write(&package, &unchanged)?;
+
+    let first = original.lines().next().unwrap();
+    for text in [
+        original.replacen(&format!("{first}\n"), "", 1),
+        format!("{original}{first}\n"),
+        format!("{original}{}  other.vsix\n", "0".repeat(64)),
+    ] {
+        fs::write(&sums, text)?;
+        assert!(check_release(directory, &tag, &commit).is_err());
+    }
+    fs::write(&sums, format!("{original}{first}\n"))?;
+    let error = check_release(directory, &tag, &commit).unwrap_err();
+    assert!(error.to_string().contains("twice"), "{error}");
     Ok(())
 }

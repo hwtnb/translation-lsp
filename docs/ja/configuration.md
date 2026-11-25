@@ -64,15 +64,14 @@
 
 VS Codeでは、このページの設定はそれぞれ `translationLsp` の下の1つの設定になり、設定エディターではTranslation LSPの下に並びます。名前は、このページの名前の各部分をキャメルケースにして点でつないだものです。`target_language` は `translationLsp.targetLanguage`、`translation_limits.input_kib.hover` は `translationLsp.translationLimits.inputKib.hover` になります。`features.languages` だけは `settings.json` に書きます。中身はこのページの名前のオブジェクトです。
 
-`translationLsp.server.path` は、拡張が起動するサーバーの場所です。VS Codeはこの値をユーザー設定からだけ読み、ワークスペースの設定からは読みません。
+`translationLsp.server.path` は、自分でビルドしたサーバーの場所です。書くと、拡張は含んでいるサーバーの代わりにそれを起動します。空のままなら、拡張は自分のサーバーを起動します。書いた場所からサーバーを起動できないときは、そのことを知らせ、どのサーバーも起動しません。VS Codeはこの値をユーザー設定からだけ読み、ワークスペースの設定からは読みません。
 
 空のままの設定は送らないので、サーバーの既定値になります。プロバイダーの設定は、選んだプロバイダーが使うものだけを送ります。`provider.document` の設定は、`translationLsp.provider.document.model` があるときだけ送ります。thinkingの設定が `auto` のときも送りません。
 
-次の `settings.json` はChatGPTを選び、YAMLのコメントのホバーを切ります。パス、モデル、推論の強さは例です。
+次の `settings.json` はChatGPTを選び、YAMLのコメントのホバーを切ります。モデルと推論の強さは例です。
 
 ```json
 {
-  "translationLsp.server.path": "/Users/you/src/translation-lsp/target/release/translation-lsp",
   "translationLsp.targetLanguage": "ja",
   "translationLsp.provider.name": "chatgpt",
   "translationLsp.provider.model": "gpt-6-luna",

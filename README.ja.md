@@ -62,14 +62,14 @@ cargo build -p translation-lsp --release --locked
 
 ## VS Codeに入れる
 
-同じサーバーはVS Code 1.123以降でも使えます。その拡張は、自分でビルドして手で入れます。拡張は設定に書いた場所のサーバーを起動し、何もダウンロードしません。
+同じサーバーはVS Code 1.123以降でも使えます。Visual Studio MarketplaceのTranslation LSPの拡張を入れます。拡張は利用者のシステム用のサーバーを含んでいて、何もダウンロードしません。
 
-1. [サーバーをソースからビルドする](#サーバーをソースからビルドする)の手順でサーバーをビルドします。
-2. [Node.js](https://nodejs.org/) 22.12以降を導入します。チェックアウトの `vscode-extension` で `npm ci` を実行し、続けて `npm run package` を実行します。`translation-lsp.vsix` ができます。
-3. VS Codeのコマンドパレットで `Extensions: Install from VSIX…` を実行し、そのファイルを選びます。
-4. 設定エディターで `Translation LSP` を検索し、`Server: Path` にサーバーの絶対パスを書きます。
+1. VS Codeの拡張機能ビューで `Translation LSP` を検索し、発行者が `hwtnb` の拡張を入れます。
+2. 設定エディターで `Translation LSP` を検索し、`Provider: Name` でプロバイダーを選びます。続けて、[プロバイダーの設定](#プロバイダーの設定)のとおりに、VS Codeのコードアクションから接続します。
 
-プロバイダーは同じ設定の `Provider` で選びます。設定とその名前は[VS Codeの設定](docs/ja/configuration.md#vs-codeの設定)で説明します。VS Codeで動きが違うところは[VS Code](docs/ja/usage.md#vs-code)で説明します。
+拡張が含むサーバーは上の表のシステム用で、署名と公証がないことも同じです。SSH、コンテナー、WSLなどのリモートのウィンドウでは、拡張とそのサーバーは、既定では接続先のマシンで動きます。VS Codeは接続先のシステム用のパッケージを入れます。
+
+自分でビルドしたサーバーを起動するには、`Server: Path` にその絶対パスを書きます。拡張は自分のサーバーの代わりにそれを起動します。設定とその名前は[VS Codeの設定](docs/ja/configuration.md#vs-codeの設定)で、VS Codeで動きが違うところは[VS Code](docs/ja/usage.md#vs-code)で説明します。拡張を自分でビルドする手順は[VS Codeの拡張](docs/ja/development/README.md#vs-codeの拡張)にあります。
 
 ## プロバイダーの設定
 

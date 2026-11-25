@@ -64,15 +64,14 @@ Add the following entry to `lsp` in your existing Zed settings. Choose a model a
 
 In VS Code, each setting on this page is a setting of its own under `translationLsp`, which the Settings editor lists under Translation LSP. Its name is the name on this page with each part in camelCase, joined with dots: `target_language` is `translationLsp.targetLanguage`, and `translation_limits.input_kib.hover` is `translationLsp.translationLimits.inputKib.hover`. Only `features.languages` is written in `settings.json`, as an object with the names of this page inside it.
 
-`translationLsp.server.path` names the server that the extension starts. VS Code reads it only from the user settings, not from a workspace.
+`translationLsp.server.path` names a server that you built, which the extension then starts in place of the server it holds. Left empty, the extension starts its own server. When the path names no server that can start, the extension says so and starts none. VS Code reads it only from the user settings, not from a workspace.
 
 A setting left empty is not sent, so the server uses its default. Of the provider settings, only those that the chosen provider takes are sent, and those of `provider.document` only when `translationLsp.provider.document.model` is set. A thinking setting left at `auto` is not sent either.
 
-The following `settings.json` selects ChatGPT and turns comment Hover off in YAML. The path, model, and effort are examples.
+The following `settings.json` selects ChatGPT and turns comment Hover off in YAML. The model and effort are examples.
 
 ```json
 {
-  "translationLsp.server.path": "/Users/you/src/translation-lsp/target/release/translation-lsp",
   "translationLsp.targetLanguage": "ja",
   "translationLsp.provider.name": "chatgpt",
   "translationLsp.provider.model": "gpt-6-luna",

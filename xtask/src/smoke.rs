@@ -32,7 +32,7 @@ pub fn archive(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn run(binary: &Path, version: &str) -> Result<()> {
+pub fn run(binary: &Path, version: &str) -> Result<()> {
     let stderr = NamedTempFile::new()?;
     let mut command = Command::new(binary);
     for name in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] {
